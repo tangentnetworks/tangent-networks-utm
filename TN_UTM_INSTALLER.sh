@@ -239,7 +239,7 @@ run_stage_source 2 "Token substitution"    TN_SUBSTITUTE.sh
 run_stage_exec   3 "Package installation"  TN_PKG_INSTALL.sh
 guard "Packages installed. Review smoke test results before building chroot."
 
-run_stage_source 4 "Chroot setup"          TN_CHROOT_SETUP.sh
+run_stage_exec	 4 "Chroot setup"          TN_CHROOT_SETUP.sh
 
 _int_ip4=""
 [ -f /etc/tn-interfaces ] && \

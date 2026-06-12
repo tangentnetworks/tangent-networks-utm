@@ -1839,6 +1839,15 @@ for _if in $_spare_ifs; do
 done
 printf "\n"
 
+# Initialise LAN variables before selection logic.
+# set -u is active -- every variable referenced later must be set here
+# regardless of which branch (single/bridge, wired/wireless) is taken.
+INT_IF=""
+INT_IFS=""
+INT_IS_WIRELESS=0
+INT_IS_BRIDGE=0
+INT_BRIDGE_MEMBERS=""
+
 # Logic for selection
 if [ "$_spare_count" -eq 1 ]; then
   INT_IF="$_spare_ifs"
@@ -1997,7 +2006,7 @@ if [ "${INT_IS_BRIDGE:-0}" -eq 1 ] && [ -n "$INT_BRIDGE_MEMBERS" ]; then
       info "Bridge member $_bm is wireless -- configuring as AP (IP stays on $INT_IF)"
       eval "${_bm_pfx}_WIFI_ROLE=\"ap\""
       WIFI_LAN_ROLE="ap"
-      WIFI_LAN_IF="$_bm"
+      WIFI_LAN_IF="${WIFI_LAN_IF:+$WIFI_LAN_IF }$_bm"
       WIFI_IS_BRIDGE_MEMBER=1
       _prompt_wireless_config "$_bm_pfx" "$_bm" "bridge member AP" "ap"
     elif is_wireless "$_bm" && [ "$_VIRT_NO_WIFI" -eq 1 ]; then
@@ -2741,14 +2750,16 @@ EXT_IF_BUNDLE="$EXT_IF"
   printf 'WIFI_LAN_IP6="%s"\n' "${WIFI_LAN_IP6:-}"
   printf 'WIFI_LAN_NET6="%s"\n' "${WIFI_LAN_NET6:-}"
   if [ -n "$WIFI_LAN_IF" ]; then
-    _WFP=$(iface_prefix "$WIFI_LAN_IF")
-    for _wft in WIFI_ROLE WIFI_SSID WIFI_BAND WIFI_CHANNEL WIFI_HW_MODE \
-      WIFI_ISOLATION WIFI_HIDDEN WIFI_MAX_CLIENTS WIFI_DRIVER WIFI_SECURITY; do
-      eval _wfv="\${${_WFP}_${_wft}:-}"
-      printf '%s_%s="%s"\n' "$_WFP" "$_wft" "$_wfv"
+    for _wfi in $WIFI_LAN_IF; do
+      _WFP=$(iface_prefix "$_wfi")
+      for _wft in WIFI_ROLE WIFI_SSID WIFI_BAND WIFI_CHANNEL WIFI_HW_MODE \
+        WIFI_ISOLATION WIFI_HIDDEN WIFI_MAX_CLIENTS WIFI_DRIVER WIFI_SECURITY; do
+        eval _wfv="\${${_WFP}_${_wft}:-}"
+        printf '%s_%s="%s"\n' "$_WFP" "$_wft" "$_wfv"
+      done
+      printf '%s_WIFI_BRIDGE=""\n' "$_WFP"
+      printf '%s_WIFI_PASS="(stored in hostname file)"\n' "$_WFP"
     done
-    printf '%s_WIFI_BRIDGE=""\n' "$_WFP"
-    printf '%s_WIFI_PASS="(stored in hostname file)"\n' "$_WFP"
   fi
 
   printf '\n# ----------------------------------------------------------------------------\n'

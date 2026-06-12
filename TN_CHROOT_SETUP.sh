@@ -416,7 +416,7 @@ if [ "$VERIFY_ONLY" -eq 0 ] && [ -f "$STATUS_OK" ]; then
   cat "$STATUS_OK"
   echo ""
   printf "  ${MAGENTA}Re-run anyway? [y/N]: ${NC}"
-  read -r _ans < /dev/tty
+  read -r _ans
   case "$_ans" in
     [Yy]*) info "Re-running by operator request." ;;
     *)

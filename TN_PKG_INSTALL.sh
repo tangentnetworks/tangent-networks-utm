@@ -1449,6 +1449,19 @@ else
     info "Skipping /usr/local/etc: Source directory not found in payload."
   fi
 
+  # If /etc/doas.conf is absent, the installer copies the default configuration from
+  # /etc/examples/doas.conf. Doas command logging is also enabled, allowing future
+  # privilege-escalation events to be recorded and reviewed.
+  if [ ! -f /etc/doas.conf ]; then
+      info "/etc/doas.conf not found. Copying example configuration..."
+      cp /etc/examples/doas.conf /etc/
+
+      # Optional: Secure the file permissions right away
+      chmod 0600 /etc/doas.conf
+  else
+      ok "/etc/doas.conf already exists. No action taken."
+  fi
+
   # -------------------------------------------------------------------------
   # STEP 4: Webroot deploy
   # -------------------------------------------------------------------------
