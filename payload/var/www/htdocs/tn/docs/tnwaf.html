@@ -1,0 +1,421 @@
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    TNWAF is the web application firewall and HTTP router. Every request to the
+    system enters through router.pl, which loads TNWAF and calls
+    <code>route_request()</code>. TNWAF validates the request, checks the rate
+    limit, routes to the correct handler, serves static files with server-side
+    SRI tamper detection, and emits the full security header set. This document
+    covers the routing table, each serve function, the SRI tamper detection
+    mechanism, the CSP policy, rate limiting, and the DEVEL production guard.
+    SRI hash values in <code>TNWAF.pm</code> are written at install time by
+    <code>TN_SUBSTITUTE.sh</code> and must not be edited by hand.
+  </p>
+</div>
+
+<h1>TNWAF</h1>
+
+<p>
+  <strong>Location:</strong>
+  <code>/var/www/htdocs/tn/data/lib/TNWAF.pm</code><br>
+  <strong>Version:</strong> 1.0.2<br>
+  <strong>Entry point:</strong> <code>TNWAF::route_request()</code>
+</p>
+
+<h2>Request Flow</h2>
+
+<p>
+  Every incoming HTTP request follows this path:
+</p>
+
+<ol>
+  <li>router.pl receives the request from slowcgi and calls <code>TNWAF::route_request()</code>.</li>
+  <li>URI validation: checks length limit (2048 bytes) and pattern blocklist.</li>
+  <li>Method validation: allows GET, POST, HEAD, OPTIONS only.</li>
+  <li>Rate limit check: per-IP request counting against a 60-second sliding window.</li>
+  <li>Access log write.</li>
+  <li>Route dispatch to the appropriate serve function or CGI proxy.</li>
+</ol>
+
+<p>
+  If any step fails, <code>error_response()</code> is called and the function
+  returns 0. If routing succeeds, <code>serve_file()</code> or
+  <code>proxy_to_cgi()</code> handles the rest and the process exits.
+</p>
+
+<h2>Routing Table</h2>
+
+<p>
+  Routes are matched in order. The first match wins.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>URI Pattern                               Handler
+--------------------------------------------  -----------------------
+/cgi-bin/SCRIPT.pl[/path]                     proxy_to_cgi
+/index.html                                   serve_static_html
+/ or /view.html                               serve_html (view.html)
+/documentation.html                           serve_static_html
+/pwreset.html                                 serve_static_html
+/register.html                                serve_static_html
+/privacy.html                                 serve_static_html
+/legal.html                                   serve_static_html
+/license.html                                 serve_static_html
+/view/NAME                                    serve_view
+/docs/FRAGMENT.html                           serve_doc_fragment
+/assets/(js|css|fonts|img|images)/FILE        serve_asset
+/data/PATH                                    serve_data
+/favicon*.ico                                 serve_root_file (image/x-icon)
+/favicon*.png                                 serve_root_file (image/png)
+/apple-*.png                                  serve_root_file (image/png)
+/manifest.json                                serve_root_file (application/json)
+/sw.js                                        serve_root_file (application/javascript)
+(no match)                                    error_response(404)</code></pre>
+</div>
+
+<h2>CGI Proxy</h2>
+
+<p>
+  <code>proxy_to_cgi($script, $path_info)</code> resolves the script path as
+  <code>BASE_DIR/cgi-bin/SCRIPT.pl</code>, verifies the file exists and is
+  executable, sets <code>$ENV{PATH_INFO}</code>, and calls
+  <code>exec($script_path)</code>. The current router.pl process is replaced
+  by the CGI script. After exec, the CGI script is a fresh process and must
+  set up its own pledge and unveil.
+</p>
+
+<div class="callout callout-warning">
+  <p>
+    router.pl itself currently does not implement pledge or unveil. This is a
+    known gap. The WAF calls <code>system(logger)</code> in
+    <code>log_security()</code> and <code>exec()</code> in
+    <code>proxy_to_cgi()</code>, both of which require
+    <code>proc exec</code> in the pledge promises. A future router.pl pledge
+    block should use <code>pledge("stdio rpath wpath cpath flock proc exec")</code>
+    with unveil covering the BASE_DIR tree, waf log directories, /tmp,
+    /usr/bin/logger, cgi-bin scripts, and Perl library paths.
+  </p>
+</div>
+
+<h2>Serve Functions</h2>
+
+<h3>serve_html</h3>
+
+<p>
+  Serves <code>BASE_DIR/view.html</code> with CSP headers included
+  (<code>include_csp = 1</code>). This is the main SPA entry point.
+</p>
+
+<h3>serve_static_html</h3>
+
+<p>
+  Validates the filename against <code>/^([\w.-]+\.html)$/</code>, then serves
+  the file from BASE_DIR with CSP headers.
+</p>
+
+<h3>serve_asset</h3>
+
+<p>
+  Routes to <code>BASE_DIR/assets/TYPE/FILE</code>. Validates both the type
+  component (matched by the routing regex to js, css, fonts, img, or images)
+  and the file path against <code>/^([\w./-]+)$/</code>. Rejects any path
+  containing <code>..</code>. Content type is determined by file extension via
+  <code>get_content_type()</code>. No CSP headers for assets (they are
+  sub-resources, not documents).
+</p>
+
+<h3>serve_data</h3>
+
+<p>
+  Routes to <code>BASE_DIR/data/FILE</code>. Applies a denylist of top-level
+  subdirectory names that must not be served:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>Blocked: keys  config  lib  lib-bak  scripts  session  run  queue</code></pre>
+</div>
+
+<p>
+  The <code>db/</code> directory is partially blocked: any path matching
+  <code>db/NAME.db</code>, <code>db/NAME.db-wal</code>, or
+  <code>db/NAME.db-shm</code> is blocked (SQLite database files). Subdirectories
+  of <code>db/</code> such as <code>db/GeoIP/</code> and <code>db/pf/</code>
+  are served normally because they contain UI-readable lookup data, not database
+  files.
+</p>
+
+<h3>serve_doc_fragment</h3>
+
+<p>
+  Routes to <code>BASE_DIR/docs/FRAGMENT.html</code>. The filename is validated
+  against <code>/^([\w-]+\.html)$/</code>. Serves with CSP headers. These are
+  the HTML fragment files loaded by the documentation SPA.
+</p>
+
+<h3>serve_root_file</h3>
+
+<p>
+  Serves favicon, apple touch icon, manifest.json, and sw.js from BASE_DIR
+  root. Validates the filename against <code>/^([\w.-]+)$/</code>. No CSP
+  headers for these files.
+</p>
+
+<h2>Server-Side SRI Tamper Detection</h2>
+
+<p>
+  Before serving any JavaScript file, <code>serve_file()</code> computes the
+  SHA-384 of the file content and compares it against the known-good hash in
+  <code>%CONFIG{sri_hashes}</code>. If the hashes do not match, the file is
+  refused and an HTTP 500 is returned. The browser never receives the
+  compromised file regardless of what the HTML <code>integrity=</code> attribute
+  says.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>my $actual   = 'sha384-' . encode_base64(sha384($content), '');
+my $expected = $CONFIG{sri_hashes}{$relative_path};
+
+unless ($actual eq $expected) {
+    log_security('SRI_TAMPER', "Hash mismatch for $relative_path ...");
+    return error_response(500, 'Internal Server Error');
+}</code></pre>
+</div>
+
+<p>
+  The <code>sri_hashes</code> table in <code>%CONFIG</code> maps relative asset
+  paths (e.g. <code>/assets/js/auth.js</code>) to their expected
+  <code>sha384-</code> hash strings. The table is populated at install time by
+  <code>TN_SUBSTITUTE.sh</code>, which computes the SHA-384 of every asset file,
+  writes the hashes into the <code>sri_hashes</code> block in
+  <code>TNWAF.pm</code>, and updates all <code>integrity=</code> attributes in
+  the HTML files in a single pass. No manual hash generation step is required
+  after deployment; re-run <code>TN_SUBSTITUTE.sh</code> after any asset change.
+</p>
+
+<div class="callout callout-tip">
+  <p>
+    When the serve function returns an unexpected 500 on a JS asset, the first
+    thing to check is whether the asset file was modified after the last
+    <code>TN_SUBSTITUTE.sh</code> run. Check the WAF security log at
+    <code>data/logs/waf/security.log</code> for <code>SRI_TAMPER</code> events.
+  </p>
+</div>
+
+<h2>Security Headers</h2>
+
+<p>
+  <code>print_headers($content_type, $include_csp, $file_path)</code> emits
+  the security header set for all file responses. It is the TNWAF counterpart
+  to <code>TNSecurity::print_secure_headers()</code>, which covers JSON API
+  responses.
+</p>
+
+<p>Standard headers emitted on every response:</p>
+
+<dl>
+  <dt><code>X-Frame-Options: DENY</code></dt>
+  <dd>Belt-and-suspenders alongside CSP <code>frame-ancestors 'none'</code>.</dd>
+  <dt><code>X-Content-Type-Options: nosniff</code></dt>
+  <dd>Prevents MIME sniffing.</dd>
+  <dt><code>X-XSS-Protection: 1; mode=block</code></dt>
+  <dd>Legacy XSS auditor signal for older browsers.</dd>
+  <dt><code>Referrer-Policy: strict-origin-when-cross-origin</code></dt>
+  <dt><code>Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()</code></dt>
+  <dt><code>Strict-Transport-Security: max-age=31536000; includeSubDomains</code></dt>
+  <dd>Effective over HTTPS only. Harmless over HTTP.</dd>
+  <dt><code>Cache-Control: no-cache, no-store, must-revalidate, private</code></dt>
+</dl>
+
+<p>
+  When <code>$include_csp = 1</code> (HTML documents only), the full
+  Content-Security-Policy header is added via <code>build_csp()</code>.
+</p>
+
+<p>
+  When serving a JS file that has a known SRI hash, an
+  <code>X-Content-Digest</code> header is added containing the expected hash.
+  This is informational only -- it is not enforced by browsers.
+</p>
+
+<h2>Content Security Policy</h2>
+
+<p>
+  The CSP is assembled from the <code>%CONFIG{csp}</code> hash by
+  <code>build_csp()</code>, which sorts directive names and joins them with
+  <code>; </code>. The policy applied to all HTML documents:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>default-src 'self';
+script-src 'self';
+style-src 'self';
+img-src 'self' data:;
+font-src 'self';
+connect-src 'self';
+object-src 'none';
+form-action 'self';
+base-uri 'self';
+frame-ancestors 'none';
+upgrade-insecure-requests</code></pre>
+</div>
+
+<p>Key policy decisions:</p>
+
+<dl>
+  <dt><code>script-src 'self'</code></dt>
+  <dd>No <code>unsafe-inline</code> or <code>unsafe-eval</code>. All JavaScript is served as external files. Server-side tamper detection in <code>serve_file()</code> ensures only files whose SHA-384 matches the <code>sri_hashes</code> table are served; hashes are written into that table by <code>TN_SUBSTITUTE.sh</code> at install time.</dd>
+  <dt><code>img-src 'self' data:</code></dt>
+  <dd>The <code>data:</code> allowance is required for inline SVG data URIs generated by Tailwind/Flowbite CSS (custom selects, checkboxes, form elements).</dd>
+  <dt><code>object-src 'none'</code></dt>
+  <dd>Blocks Flash and all plugin content entirely.</dd>
+  <dt><code>frame-ancestors 'none'</code></dt>
+  <dd>Prevents the application being embedded in an iframe on any origin.</dd>
+  <dt><code>upgrade-insecure-requests</code></dt>
+  <dd>Instructs browsers to upgrade HTTP sub-resource requests to HTTPS. Effective when HTTPS is in use; harmless otherwise.</dd>
+</dl>
+
+<h2>Rate Limiting</h2>
+
+<p>
+  TNWAF maintains two in-memory hashes: <code>%RATE_LIMITS</code> (per-IP
+  request counters) and <code>%IP_BLOCKS</code> (blocked IPs with expiry
+  epochs). These are process-local and reset on every request under the CGI
+  model -- slowcgi spawns a fresh process for each request. The rate limiting
+  is therefore effective only within a single CGI process lifetime, which is a
+  single request.
+</p>
+
+<div class="callout callout-note">
+  <p>
+    In the slowcgi CGI model, each request is a separate process. The in-memory
+    rate limit counters in TNWAF do not persist between requests. For persistent
+    per-IP rate limiting, see the rate_limits table in auth.db, which is used
+    by TNAuth for password reset throttling. The TNWAF rate limiter provides
+    per-request pattern validation and basic flood detection within a single
+    connection window only.
+  </p>
+</div>
+
+<p>
+  Rate limit parameters are read from <code>security.conf [rate_limit]</code>:
+  <code>MAX_REQUESTS_PER_MINUTE</code> (floor 10) and
+  <code>LOCKOUT_DURATION</code> (floor 60 seconds).
+</p>
+
+<h2>Request Validation</h2>
+
+<p>
+  <code>validate_request($uri)</code> applies two checks:
+</p>
+
+<dl>
+  <dt>URI length</dt>
+  <dd>Rejected if longer than 2048 bytes.</dd>
+  <dt>Pattern blocklist</dt>
+  <dd>
+    The following patterns trigger an immediate block and a security log entry:
+    <code>..</code> (path traversal), <code>&lt;&gt;'"</code> (injection
+    characters), <code>union.*select</code> (SQL injection), <code>script.*src</code>
+    (XSS), <code>javascript:</code> (protocol injection),
+    <code>data:text/html</code> (data URI XSS).
+  </dd>
+</dl>
+
+<h2>Logging</h2>
+
+<p>
+  Three log files are written under <code>BASE_DIR/data/logs/waf/</code>:
+</p>
+
+<dl>
+  <dt><code>waf/access.log</code></dt>
+  <dd>One line per request: timestamp, IP, method, URI, User-Agent.</dd>
+  <dt><code>waf/security.log</code></dt>
+  <dd>Security events: rate limit blocks, pattern blocks, SRI tamper detections. Also written to syslog via <code>logger -t tnwaf -p security.warning</code>.</dd>
+  <dt><code>waf/error.log</code></dt>
+  <dd>HTTP error responses (4xx, 5xx). Also mirrored to <code>data/logs/httpd/httpd_error.log</code> for the httpd error log viewer in the UI.</dd>
+</dl>
+
+<p>
+  Log directories are created automatically if absent. Log writes are not
+  flock-protected in TNWAF (unlike TNSecurity's security.log). Under the CGI
+  model each request is a single process with a single log write, so
+  interleaving is unlikely, but it is possible under very high concurrent load.
+</p>
+
+<h2>DEVEL Production Guard</h2>
+
+<p>
+  router.pl checks DEVEL mode status before calling
+  <code>TNWAF::route_request()</code>. If DEVEL mode is active and the server
+  is bound to a non-loopback address (<code>SERVER_ADDR</code> or
+  <code>HTTP_HOST</code> is not 127.0.0.1, localhost, or ::1), router.pl
+  returns HTTP 503 and refuses to route the request:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>if (TNConfig::is_devel_mode()) {
+    my $addr = $ENV{SERVER_ADDR} // $ENV{HTTP_HOST} // '';
+    $addr =~ s/:\d+$//;
+
+    my $is_loopback = ($addr eq '127.0.0.1' || $addr eq 'localhost'
+                    || $addr eq '::1'        || $addr =~ /^127\./);
+
+    unless ($is_loopback) {
+        # return 503, log, exit
+    }
+}</code></pre>
+</div>
+
+<p>
+  This guard catches the most common deployment accident: enabling DEVEL mode
+  for local testing and then forgetting to disable it before making the system
+  accessible on the LAN interface. Any request arriving on the LAN IP
+  (192.168.122.25 in this documentation's reference configuration) while DEVEL
+  is active will receive a 503.
+</p>
+
+<div class="callout callout-warning">
+  <p>
+    The production guard is a safety net, not a substitute for correct
+    configuration. Always verify that <code>DEVEL = 0</code> in
+    <code>security.conf</code> before any deployment. The 503 response body
+    explicitly states that the system is in development mode, which is
+    information disclosure. Disable DEVEL mode before exposing the system to
+    any untrusted network.
+  </p>
+</div>
+
+<!-- SUMMARY -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Every request enters through router.pl, which calls <code>TNWAF::route_request()</code>. TNWAF validates, rate-checks, logs, then routes to a serve function or exec's a CGI script.</li>
+    <li>Server-side SRI tamper detection in <code>serve_file()</code> rejects any JS asset whose SHA-384 does not match the <code>sri_hashes</code> table in <code>%CONFIG</code>. A tampered file returns 500 before the browser sees it. Hashes in the table are written by <code>TN_SUBSTITUTE.sh</code> at install time.</li>
+    <li>The CSP applied to all HTML documents has no <code>unsafe-inline</code> or <code>unsafe-eval</code>. All script is served as external files; <code>serve_file()</code> enforces tamper detection server-side. <code>data:</code> is allowed only in <code>img-src</code> for Tailwind/Flowbite SVG data URIs.</li>
+    <li>TNWAF in-memory rate limiting is process-local and does not persist across requests under the CGI model. It provides per-request flood detection only.</li>
+    <li>router.pl refuses to route any request to a non-loopback address while DEVEL mode is active, returning 503.</li>
+    <li>router.pl does not currently implement pledge or unveil. This is a known gap. A full pledge block requires <code>proc exec</code> in addition to the standard file I/O promises, because TNWAF calls both <code>exec()</code> and <code>system(logger)</code>.</li>
+  </ul>
+</div>

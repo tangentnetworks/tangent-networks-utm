@@ -1,0 +1,658 @@
+#!/bin/ksh
+set -euo pipefail
+PATH="/sbin:/usr/sbin:/bin:/usr/bin:/usr/X11R6/bin:/usr/local/sbin:/usr/local/bin"
+
+#----------------------------------------------------------------------------------------------------
+# Test truncate and install if unavailable
+#----------------------------------------------------------------------------------------------------
+
+if ! command -v truncate > /dev/null 2>&1; then
+  echo "$(date) [WARN] truncate not found -- installing via pkg_add"
+  pkg_add -Iv truncate
+  if command -v truncate > /dev/null 2>&1; then
+    echo "$(date) [INFO] truncate successfully installed and verified"
+  else
+    echo "$(date) [ERROR] truncate installation attempt completed but binary not in PATH"
+  fi
+fi
+
+#----------------------------------------------------------------------------------------------------
+# GLOBAL
+#----------------------------------------------------------------------------------------------------
+
+SERVICE_LOG_DIR="/var/www/htdocs/tn/data/logs/bootlog"
+RCLOGFILE="/var/www/htdocs/tn/data/logs/bootlog/rc.local.log"
+
+install -d -o root -g wheel -m 750 "$SERVICE_LOG_DIR"
+
+exec > "$RCLOGFILE" 2>&1
+
+log() {
+  local service="$1"
+  local level="$2"
+  local message="$3"
+  local logfile="${4:-$RCLOGFILE}"
+  printf "[$(date '+%Y-%m-%d %H:%M:%S')] %s: [%s] %s\n" "$service" "$level" "$message" | tee -a "$logfile"
+}
+
+log "RC.LOCAL" "INFO" "Truncating all PID files in /var/www/htdocs/tn/data/" "$RCLOGFILE"
+find /var/www/htdocs/tn/data/ -type f -name "*.pid" -exec truncate -s 0 {} \;
+
+## Clean /var/www/tmp
+find /var/www/tmp -type f -name 'control-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].log' -exec rm -f {} \;
+find /var/www/tmp -type f -name "*.log" -exec truncate -s 0 {} +
+
+# ===================================================================
+# Snort IDS and IPS (Network Intrusion Detection/Prevention)
+# ===================================================================
+
+SNORT_LOGFILE="/var/www/htdocs/tn/data/logs/snort/snort.log"
+SNORTINLINE_LOGFILE="/var/www/htdocs/tn/data/logs/snort/snortinline.log"
+
+if [ -x /usr/local/bin/snort ]; then
+  # Ensure directories exist with correct permissions
+  mkdir -p /var/www/htdocs/tn/data/run/snort
+  mkdir -p /var/www/htdocs/tn/data/logs/snort
+  chown _snort:www /var/www/htdocs/tn/data/run/snort
+  chmod 2755 /var/www/htdocs/tn/data/run/snort
+  find /var/www/htdocs/tn/data/run/snort -type f -exec rm -f {} +
+
+  # Start IDS
+  if [ -f /etc/snort/snort.conf ]; then
+    log "SNORT" "INFO" "Starting Network Intrusion Detection System" "$SNORT_LOGFILE"
+    {
+      umask 0022
+      /usr/local/bin/snort -i %%INT_IF%% -d -c /etc/snort/snort.conf \
+        -u _snort -g _snort -b -l /var/www/htdocs/tn/data/logs/snort \
+        --pid-path /var/www/htdocs/tn/data/run/snort \
+        2>&1 | logger -t snort_ids -p daemon.info
+    } &
+
+    # Verify startup and fix permissions
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+      if [ -f /var/www/htdocs/tn/data/run/snort/snort_%%INT_IF%%.pid ]; then
+        SNORT_PID=$(cat /var/www/htdocs/tn/data/run/snort/snort_%%INT_IF%%.pid 2> /dev/null)
+        if [ -n "$SNORT_PID" ]; then
+          chmod 0644 /var/www/htdocs/tn/data/run/snort/snort_%%INT_IF%%.pid 2> /dev/null
+          log "SNORT" "INFO" "Started successfully (PID: $SNORT_PID)" "$SNORT_LOGFILE"
+          break
+        fi
+      fi
+      sleep 1
+    done
+
+    # Final check
+    if [ ! -f /var/www/htdocs/tn/data/run/snort/snort_%%INT_IF%%.pid ]; then
+      log "SNORT" "ERROR" "Failed to start - PID file not created" "$SNORT_LOGFILE"
+    fi
+  else
+    log "SNORT" "ERROR" "Config file /etc/snort/snort.conf not found" "$SNORT_LOGFILE"
+  fi
+
+  # Start IPS
+  if [ -f /etc/snort/snortinline.conf ]; then
+    log "SNORTINLINE" "INFO" "Starting Network Intrusion Prevention System" "$SNORTINLINE_LOGFILE"
+    {
+      umask 0022
+      /usr/local/bin/snort -d -Q -c /etc/snort/snortinline.conf \
+        -u _snort -g _snort -b -l /var/www/htdocs/tn/data/logs/snort \
+        --pid-path /var/www/htdocs/tn/data/run/snort \
+        2>&1 | logger -t snort_ips -p daemon.info
+    } &
+
+    # Verify startup and fix permissions
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+      if [ -f /var/www/htdocs/tn/data/run/snort/snort_.pid ]; then
+        SNORTINLINE_PID=$(cat /var/www/htdocs/tn/data/run/snort/snort_.pid 2> /dev/null)
+        if [ -n "$SNORTINLINE_PID" ]; then
+          chmod 0644 /var/www/htdocs/tn/data/run/snort/snort_.pid 2> /dev/null
+          log "SNORTINLINE" "INFO" "Started successfully (PID: $SNORTINLINE_PID)" "$SNORTINLINE_LOGFILE"
+          break
+        fi
+      fi
+      sleep 1
+    done
+
+    # Final check
+    if [ ! -f /var/www/htdocs/tn/data/run/snort/snort_.pid ]; then
+      log "SNORTINLINE" "ERROR" "Failed to start - PID file not created" "$SNORTINLINE_LOGFILE"
+    fi
+  else
+    log "SNORTINLINE" "ERROR" "Config file /etc/snort/snortinline.conf not found" "$SNORTINLINE_LOGFILE"
+  fi
+else
+  echo "ERROR: Snort binary not found at /usr/local/bin/snort"
+fi
+
+#----------------------------------------------------------------------------------------------------
+# SNORTSENTRY
+#----------------------------------------------------------------------------------------------------
+
+SNORTSENTRY_LOGFILE="/var/www/htdocs/tn/data/logs/snortsentry/snortsentry.log"
+log "SNORTSENTRY" "INFO" "Starting Intrusion Prevention System" "$SNORTSENTRY_LOGFILE"
+if [ -x /usr/local/sbin/snortsentry ]; then
+  /usr/local/sbin/snortsentry -f /etc/snort/snortsentry.conf >> "$SNORTSENTRY_LOGFILE" 2>&1 &
+  for i in 1 2 3 4 5; do
+    if [ -f /var/www/htdocs/tn/data/run/snortsentry/snortsentry.pid ]; then
+      SNORTSENTRY_PID=$(cat /var/www/htdocs/tn/data/run/snortsentry/snortsentry.pid 2> /dev/null)
+      if [ -n "$SNORTSENTRY_PID" ]; then
+        log "SNORTSENTRY" "INFO" "Started successfully (PID: $SNORTSENTRY_PID)" "$SNORTSENTRY_LOGFILE"
+        break
+      fi
+    fi
+    sleep 1
+  done
+  if [ -z "$SNORTSENTRY_PID" ]; then
+    log "SNORTSENTRY" "ERROR" "Failed to start - PID file not created" "$SNORTSENTRY_LOGFILE"
+  fi
+fi
+
+#----------------------------------------------------------------------------------------------------
+# E2GUARDIAN
+#----------------------------------------------------------------------------------------------------
+
+E2GUARDIAN_LOGFILE="/var/www/htdocs/tn/data/logs/e2guardian/e2guardian.log"
+log "E2GUARDIAN" "INFO" "Starting Web Content Filter" "$E2GUARDIAN_LOGFILE"
+if [ -x /usr/local/sbin/e2guardian ]; then
+  [[ ! -d /var/www/htdocs/tn/data/tmp/e2guardian ]] && mkdir -p /var/www/htdocs/tn/data/tmp/e2guardian
+  chown -R _e2guardian:_clamav /var/www/htdocs/tn/data/tmp/e2guardian
+  /usr/local/sbin/e2guardian >> "$E2GUARDIAN_LOGFILE" 2>&1 &
+fi
+
+#----------------------------------------------------------------------------------------------------
+# COLLECTD
+#----------------------------------------------------------------------------------------------------
+
+COLLECTD_CONF="/etc/collectd.conf"
+COLLECTD_LOGFILE="/var/www/htdocs/tn/data/logs/collectd/collectd.log"
+
+# Cleanup collectd socket and let cllectd create a new one
+if [ -e /var/www/htdocs/tn/data/sockets/collectd/collectd.sock ]; then
+  rm -f /var/www/htdocs/tn/data/sockets/collectd/collectd.sock
+fi
+
+log "COLLECTD" "INFO" "Starting System Statistics Collection Daemon" "$COLLECTD_LOGFILE"
+if [ -x /usr/local/sbin/collectd ]; then
+  /usr/local/sbin/collectd -C "$COLLECTD_CONF" >> "$COLLECTD_LOGFILE" 2>&1 &
+fi
+sleep 2
+
+#----------------------------------------------------------------------------------------------------
+# P3SCAN
+#----------------------------------------------------------------------------------------------------
+
+P3SCAN_LOGFILE="/var/www/htdocs/tn/data/logs/p3scan/p3scan.log"
+log "P3SCAN" "INFO" "Starting content scanning transparent POP3 proxy" "$P3SCAN_LOGFILE"
+if [ -x /usr/local/sbin/p3scan ]; then
+  [[ ! -d /var/www/htdocs/tn/data/run/p3scan ]] && mkdir -p /var/www/htdocs/tn/data/run/p3scan
+  chown _p3scan:wheel /var/www/htdocs/tn/data/run/p3scan
+  if [ -f /var/www/htdocs/tn/data/run/p3scan/p3scan.pid ]; then
+    rm /var/www/htdocs/tn/data/run/p3scan/p3scan.pid
+  fi
+  /usr/local/sbin/p3scan -f /etc/p3scan/p3scan.conf >> "$P3SCAN_LOGFILE" 2>&1 &
+fi
+
+#----------------------------------------------------------------------------------------------------
+# ClamAV
+#----------------------------------------------------------------------------------------------------
+
+CLAMAV_LOGFILE="/var/www/htdocs/tn/data/logs/clamd/clamd.log"
+CLAMRUN="/var/www/htdocs/tn/data/run/clamav"
+CLAMTMP="/var/www/htdocs/tn/data/tmp/clamav"
+PIDFILE="${CLAMRUN}/clamd.pid"
+SOCKET="${CLAMTMP}/clamd.socket"
+log "CLAMAV" "INFO" "Starting Antivirus Program" "$CLAMAV_LOGFILE"
+
+if [ -d /var/www/htdocs/tn/data/tmp ]; then
+  chmod 0755 /var/www/htdocs/tn/data/tmp
+fi
+
+for dir in "$CLAMRUN" "$CLAMTMP"; do
+  [ -d "$dir" ] || mkdir -p "$dir"
+done
+if [ "$(stat -f '%Su' "$CLAMRUN")" != "_clamav" ] || [ "$(stat -f '%Sg' "$CLAMRUN")" != "_clamav" ]; then
+  chown _clamav:_clamav "$CLAMRUN"
+fi
+if [ "$(stat -f '%Su' "$CLAMTMP")" != "_clamav" ] || [ "$(stat -f '%Sg' "$CLAMTMP")" != "wheel" ]; then
+  chown _clamav:wheel "$CLAMTMP"
+fi
+if [ -f "$PIDFILE" ]; then
+  if pgrep -F "$PIDFILE" > /dev/null 2>&1; then
+    log "CLAMAV" "INFO" "Existing clamd process found, not starting another" "$CLAMAV_LOGFILE"
+  else
+    log "CLAMAV" "INFO" "Removing stale PID file" "$CLAMAV_LOGFILE"
+    rm -f "$PIDFILE"
+  fi
+fi
+if [ -x /usr/local/sbin/clamd ]; then
+  /usr/local/sbin/clamd -c /etc/clamd.conf >> "$CLAMAV_LOGFILE" 2>&1 &
+  SOCKET="/var/www/htdocs/tn/data/tmp/clamav/clamd.socket"
+  log "CLAMAV" "INFO" "(waiting for socket)" "$CLAMAV_LOGFILE"
+  SECS=0
+  MAX_WAIT=90
+  while [ $SECS -lt $MAX_WAIT ]; do
+    if [ -S "$SOCKET" ]; then
+      log "CLAMAV" "INFO" "ready" "$CLAMAV_LOGFILE"
+      break
+    fi
+    SECS=$((SECS + 1))
+    if [ $((SECS % 10)) -eq 0 ]; then
+      log "CLAMAV" "INFO" "." "$CLAMAV_LOGFILE"
+    fi
+    sleep 1
+  done
+  if [ ! -S "$SOCKET" ]; then
+    log "CLAMAV" "ERROR" "FAILED: clamd.socket not found after $MAX_WAIT seconds" "$CLAMAV_LOGFILE"
+  else
+    if [ -x /usr/local/bin/freshclam ]; then
+      /usr/local/bin/freshclam -d >> "$CLAMAV_LOGFILE" 2>&1 &
+    fi
+  fi
+else
+  log "CLAMAV" "ERROR" "/usr/local/sbin/clamd not found or not executable" "$CLAMAV_LOGFILE"
+fi
+
+#----------------------------------------------------------------------------------------------------
+# PMACCT
+#----------------------------------------------------------------------------------------------------
+
+PMACCT_LOGFILE="/var/www/htdocs/tn/data/logs/pmacct/pmacct.log"
+PMACCT_LOG_DIR="/var/www/htdocs/tn/data/logs/pmacct"
+PMACCT_STATUS_LOG_DIR="/var/www/htdocs/tn/data/services/pmacct"
+PMACCT_EXT_IF_DIR="/var/www/htdocs/tn/data/network/pmacct/ext"
+PMACCT_MFS_DIR="/var/www/htdocs/tn/data/pipes/pmacct"
+PMACCT_LOG_FILE="${PMACCT_LOG_DIR}/pmacct.log"
+
+log "PMACCT" "INFO" "Starting IP Network Monitoring" "$PMACCT_LOGFILE"
+
+# Ensure directories exist
+for dir in "$PMACCT_LOG_DIR" "$PMACCT_STATUS_LOG_DIR" "$PMACCT_MFS_DIR" "$PMACCT_EXT_IF_DIR"; do
+  if [ ! -d "$dir" ]; then
+    if ! mkdir -p "$dir"; then
+      log "PMACCT" "ERROR" "Failed to create directory: $dir" "$PMACCT_LOGFILE"
+      exit 1
+    fi
+  fi
+done
+
+# MFS log paths
+PMACCT_MFS_EXT_JSON="$PMACCT_MFS_DIR/ext_if_json.log"
+PMACCT_MFS_INT_JSON="$PMACCT_MFS_DIR/int_if_json.log"
+
+# Start pmacctd instances
+# Pre-create with good perms
+touch "$PMACCT_MFS_EXT_JSON" "$PMACCT_MFS_INT_JSON"
+chmod 644 "$PMACCT_MFS_EXT_JSON" "$PMACCT_MFS_INT_JSON"
+
+for conf in "ext_if_json_mfs" "int_if_json_mfs"; do
+  log "PMACCT" "INFO" "Starting pmacctd for ${conf}.conf" "$PMACCT_LOGFILE"
+  (
+    umask 022
+    exec /usr/local/sbin/pmacctd -f "/etc/pmacct/${conf}.conf"
+  ) >> "$PMACCT_LOGFILE" 2>&1 &
+  sleep 2
+  PIDFILE="/var/www/htdocs/tn/data/run/pmacct/pmacct-${conf}.pid"
+  if [ -f "$PIDFILE" ]; then
+    PMACCT_PID=$(cat "$PIDFILE")
+    if kill -0 "$PMACCT_PID" 2> /dev/null; then
+      echo "$PMACCT_PID /usr/local/sbin/pmacctd -f /etc/pmacct/${conf}.conf" > "${PMACCT_STATUS_LOG_DIR}/${conf}-status.log"
+      log "PMACCT" "INFO" "Successfully started pmacctd (PID: $PMACCT_PID) for ${conf}.conf" "$PMACCT_LOGFILE"
+    else
+      log "PMACCT" "ERROR" "pmacctd for ${conf}.conf is not running (PID file exists but process is dead)" "$PMACCT_LOGFILE"
+    fi
+  else
+    log "PMACCT" "ERROR" "Failed to start pmacctd for ${conf}.conf (PID file not created)" "$PMACCT_LOGFILE"
+  fi
+done
+
+# Wait for quarter-hour boundary and start log-based pmacctd
+(
+  PMACCT_MIN=$(date +%M)
+  PMACCT_SEC=$(date +%S)
+  PMACCT_OFFSET=$((15 - (10#$PMACCT_MIN % 15)))
+  [ "$PMACCT_OFFSET" -eq 15 ] && PMACCT_OFFSET=0
+  PMACCT_SLEEP_FOR=$((PMACCT_OFFSET * 60 - 10#$PMACCT_SEC))
+  [ "$PMACCT_SLEEP_FOR" -lt 0 ] && PMACCT_SLEEP_FOR=0
+  PMACCT_MINS=$((PMACCT_SLEEP_FOR / 60))
+  PMACCT_SECS=$((PMACCT_SLEEP_FOR % 60))
+  if [ "$PMACCT_SLEEP_FOR" -gt 0 ]; then
+    log "PMACCT" "INFO" "Waiting ${PMACCT_MINS}m${PMACCT_SECS}s for next quarter-hour boundary..." "$PMACCT_LOGFILE"
+    sleep "$PMACCT_SLEEP_FOR"
+  else
+    log "PMACCT" "INFO" "Already on quarter-hour boundary - starting immediately" "$PMACCT_LOGFILE"
+  fi
+  for log_conf in "ext_if_json_log"; do
+    log "PMACCT" "INFO" "Starting pmacctd for ${log_conf}.conf" "$PMACCT_LOGFILE"
+    (
+      umask 022
+      exec /usr/local/sbin/pmacctd -f "/etc/pmacct/${log_conf}.conf"
+    ) >> "$PMACCT_LOGFILE" 2>&1 &
+    sleep 2
+    PIDFILE="/var/www/htdocs/tn/data/run/pmacct/pmacct-${log_conf}.pid"
+    if [ -f "$PIDFILE" ]; then
+      PMACCT_PID=$(cat "$PIDFILE")
+      if kill -0 "$PMACCT_PID" 2> /dev/null; then
+        echo "$PMACCT_PID /usr/local/sbin/pmacctd -f /etc/pmacct/${log_conf}.conf" > "${PMACCT_STATUS_LOG_DIR}/${log_conf}-status.log"
+        log "PMACCT" "INFO" "Successfully started pmacctd (PID: $PMACCT_PID) for ${log_conf}.conf" "$PMACCT_LOGFILE"
+      else
+        log "PMACCT" "ERROR" "pmacctd for ${log_conf}.conf is not running (PID file exists but process is dead)" "$PMACCT_LOGFILE"
+      fi
+    else
+      log "PMACCT" "ERROR" "Failed to start pmacctd for ${log_conf}.conf (PID file not created)" "$PMACCT_LOGFILE"
+    fi
+  done
+  find "${PMACCT_EXT_IF_DIR}" -maxdepth 1 -name "*.json" -exec chmod 644 {} + 2> /dev/null
+) &
+
+# Background permission fixer for pmacct files
+(
+  PMACCT_MFS_DIR="/var/www/htdocs/tn/data/pipes/pmacct"
+  PMACCT_EXT_IF_DIR="/var/www/htdocs/tn/data/network/pmacct/ext"
+
+  while true; do
+    sleep 8
+    find "$PMACCT_MFS_DIR" -type f -name "*.log" -exec chmod 644 {} + 2> /dev/null
+    find "$PMACCT_EXT_IF_DIR" -type f -name "*.json" -exec chmod 644 {} + 2> /dev/null
+  done
+) &
+
+# Rotate log files
+PMACCT_YESTERDAY="$(perl -e '@t=localtime(time - 86400); printf("%4d%02d%02d\n", $t[5]+1900, $t[4]+1, $t[3]);')"
+PMACCT_OLD_DATE="$(perl -e '@t=localtime(time - 86400); printf("%4d-%02d-%02d\n", $t[5]+1900, $t[4]+1, $t[3]);')"
+cd "$PMACCT_EXT_IF_DIR" || {
+  log "PMACCT" "ERROR" "Cannot change to directory '$PMACCT_EXT_IF_DIR'" "$PMACCT_LOGFILE"
+  exit 1
+}
+log "PMACCT" "INFO" "Processing files for date: $PMACCT_OLD_DATE" "$PMACCT_LOGFILE"
+PMACCT_TXT_FILES=$(find . -maxdepth 1 -name "*${PMACCT_YESTERDAY}*.txt" -type f | sort)
+PMACCT_JSON_FILES=$(find . -maxdepth 1 -name "*${PMACCT_YESTERDAY}*.json" -type f | sort)
+if [ -n "$PMACCT_TXT_FILES" ]; then
+  log "PMACCT" "INFO" "Merging $(echo "$PMACCT_TXT_FILES" | wc -l) text files into '$PMACCT_OLD_DATE.txt'" "$PMACCT_LOGFILE"
+  cat $PMACCT_TXT_FILES > "$PMACCT_OLD_DATE.txt"
+fi
+if [ -n "$PMACCT_JSON_FILES" ]; then
+  log "PMACCT" "INFO" "Merging $(echo "$PMACCT_JSON_FILES" | wc -l) JSON files into '$PMACCT_OLD_DATE.json'" "$PMACCT_LOGFILE"
+  cat $PMACCT_JSON_FILES > "$PMACCT_OLD_DATE.json"
+fi
+log "PMACCT" "INFO" "Cleaning up files older than 7 days..." "$PMACCT_LOGFILE"
+find . -maxdepth 1 -name "*.txt" -type f -mtime +7 -delete
+find . -maxdepth 1 -name "*.json" -type f -mtime +7 -delete
+find . -maxdepth 1 -name "archive_*.tar.gz" -type f -mtime +7 -delete
+log "PMACCT" "INFO" "Cleanup completed successfully" "$PMACCT_LOGFILE"
+log "PMACCT" "INFO" "pmacctd instances running:" "$PMACCT_LOGFILE"
+for PMACCT_PID in $(pgrep -f "/usr/local/sbin/pmacctd"); do
+  PMACCT_CMDLINE=$(ps -o cmd= -p "$PMACCT_PID")
+  log "PMACCT" "INFO" "pmacctd running as '$PMACCT_CMDLINE' with PID $PMACCT_PID" "$PMACCT_LOGFILE"
+done
+
+#----------------------------------------------------------------------------------------------------
+# DANTE (sockd)
+#----------------------------------------------------------------------------------------------------
+
+SOCKD_LOGFILE="/var/www/htdocs/tn/data/logs/sockd/sockd.log"
+log "SOCKD" "INFO" "Starting Network Proxy Server" "$SOCKD_LOGFILE"
+if [ -x /usr/local/sbin/sockd ]; then
+  /usr/local/sbin/sockd -D -p /var/www/htdocs/tn/data/run/sockd/sockd.pid >> "$SOCKD_LOGFILE" 2>&1 &
+fi
+
+#----------------------------------------------------------------------------------------------------
+# SPAMD
+#----------------------------------------------------------------------------------------------------
+
+SPAMD_LOGFILE="/var/www/htdocs/tn/data/logs/spamd/spamd.log"
+log "SPAMD" "INFO" "Starting spam deferral daemon" "$SPAMD_LOGFILE"
+if [ -x /usr/local/bin/spamd ]; then
+  /usr/local/bin/spamd -L -d -x -u _spamdaemon -r /var/www/htdocs/tn/data/run/spamd/spamd.pid >> "$SPAMD_LOGFILE" 2>&1 &
+fi
+
+#----------------------------------------------------------------------------------------------------
+# SMTP-GATED
+#----------------------------------------------------------------------------------------------------
+
+SMTP_GATED_PIDFILE="/var/www/htdocs/tn/data/run/smtp-gated/smtp-gated.pid"
+SMTPGATED_LOGFILE="/var/www/htdocs/tn/data/logs/smtp-gated/smtp-gated.log"
+
+if [ -f "$SMTP_GATED_PIDFILE" ]; then
+  rm -f "$SMTP_GATED_PIDFILE"
+fi
+
+log "SMTP-GATED" "INFO" "Starting content scanning transparent SMTP proxy" "$SMTPGATED_LOGFILE"
+if [ -x /usr/local/sbin/smtp-gated ]; then
+  /usr/local/sbin/smtp-gated /usr/local/etc/smtp-gated/smtp-gated.conf >> "$SMTPGATED_LOGFILE" 2>&1 &
+fi
+
+#----------------------------------------------------------------------------------------------------
+# SSLproxy
+#----------------------------------------------------------------------------------------------------
+
+SSLPROXY_LOGFILE="/var/www/htdocs/tn/data/logs/sslproxy/sslproxy.log"
+log "SSLPROXY" "INFO" "Starting transparent SSL-TLS proxy" "$SSLPROXY_LOGFILE"
+if [ -x /usr/local/bin/sslproxy ]; then
+  /usr/local/bin/sslproxy -f /usr/local/etc/sslproxy/sslproxy.conf >> "$SSLPROXY_LOGFILE" 2>&1 &
+fi
+
+#----------------------------------------------------------------------------------------------------
+# IMSPECTOR
+#----------------------------------------------------------------------------------------------------
+
+IMSPECTOR_LOGFILE="/var/www/htdocs/tn/data/logs/imspector/imspector.log"
+log "IMSPECTOR" "INFO" "Starting Instant Messaging Transparent Proxy" "$IMSPECTOR_LOGFILE"
+if [ -x /usr/local/sbin/imspector ]; then
+  [[ ! -d /tmp/imspector ]] && mkdir -p /tmp/imspector
+  chown -R _imspector:_imspector /tmp/imspector >> "$IMSPECTOR_LOGFILE" 2>&1
+  /usr/local/sbin/imspector -c /usr/local/etc/imspector/imspector.conf >> "$IMSPECTOR_LOGFILE" 2>&1 &
+fi
+
+#----------------------------------------------------------------------------------------------------
+# Sync PF assets for WebUI
+#----------------------------------------------------------------------------------------------------
+
+if [ -x /usr/local/sbin/pf_mirror_sync.sh ]; then
+  /usr/local/sbin/pf_mirror_sync.sh > /dev/null 2>&1
+fi
+
+#----------------------------------------------------------------------------------------------------
+# PF Logging
+#----------------------------------------------------------------------------------------------------
+
+log "TCPDUMP" "INFO" "Starting tcpdump on pf log interface %%INT_IF%%"
+PFLOG_MFS="/var/www/htdocs/tn/data/logs/pf"
+PFLOG_FILE="$PFLOG_MFS/pflog1.log"
+TCPDUMP="/usr/sbin/tcpdump"
+PFIF="%%INT_IF%%"
+
+# Create directory if needed
+[ ! -d "$PFLOG_MFS" ] && mkdir -p "$PFLOG_MFS"
+
+# Create file if needed
+[ ! -f "$PFLOG_FILE" ] && touch "$PFLOG_FILE"
+
+# Fix permissions
+chown www:wheel "$PFLOG_FILE"
+chmod 644 "$PFLOG_FILE"
+
+# Kill stale process if exists
+pkill -f "$TCPDUMP -n -e -ttt -i $PFIF" 2> /dev/null && sleep 1
+
+# Start tcpdump if interface exists and not already running
+if ifconfig "$PFIF" > /dev/null 2>&1; then
+  if ! pgrep -f "$TCPDUMP -n -e -ttt -i $PFIF" > /dev/null 2>&1; then
+    $TCPDUMP -n -e -ttt -i "$PFIF" >> "$PFLOG_FILE" 2>&1 &
+    sleep 1
+    if pgrep -f "$TCPDUMP -n -e -ttt -i $PFIF" > /dev/null 2>&1; then
+      log "TCPDUMP" "INFO" "tcpdump started successfully on $PFIF"
+    else
+      log "TCPDUMP" "ERROR" "tcpdump failed to start on $PFIF"
+    fi
+  else
+    log "TCPDUMP" "INFO" "tcpdump already running on $PFIF"
+  fi
+else
+  log "TCPDUMP" "ERROR" "$PFIF interface not found"
+fi
+
+#----------------------------------------------------------------------------------------------------
+# PROCESS MONITOR
+#----------------------------------------------------------------------------------------------------
+
+# Schedule process_monitor.pl 1 minute after the next 15-minute boundary
+(
+  # Configuration Variables
+  SERVICE_STATUS_FILE="/var/www/htdocs/tn/data/logs/bootlog/services.log"
+  CRON_COMMAND="/usr/local/sbin/process_monitor.pl"
+
+  # Dedicated Log Function (Uses 4 arguments, internal tee -a)
+  servicelog() {
+    local service="$1"
+    local level="$2"
+    local message="$3"
+    local logfile="$4"
+
+    # This line writes ONLY to the specified logfile
+    printf "[$(date '+%Y-%m-%d %H:%M:%S')] %s: [%s] %s\n" "$service" "$level" "$message" | tee -a "$logfile"
+  }
+  # End Dedicated Log Function
+
+  # Setup (Using install for directory, assuming your preferred 755 for directory)
+  install -d -o root -g wheel -m 755 "$(dirname "$SERVICE_STATUS_FILE")"
+
+  # Initialize and set file permissions
+  > "$SERVICE_STATUS_FILE"
+  chown root:wheel "$SERVICE_STATUS_FILE"
+  chmod 640 "$SERVICE_STATUS_FILE"
+
+  if [ -x "$CRON_COMMAND" ]; then
+    servicelog "PROCESS_MONITOR" "INFO" "Waiting for prior process to complete..." "$SERVICE_STATUS_FILE"
+
+    sleep 2
+
+    servicelog "PROCESS_MONITOR" "INFO" "Prior process completed. Calculating precise sleep time..." "$SERVICE_STATUS_FILE"
+
+    # CALCULATE TIME TO NEXT 15-MINUTE BOUNDARY + 1 MINUTE
+    current_minute=$(date +%M)
+    current_second=$(date +%S)
+    current_time_in_minute_s=$((current_minute * 60 + current_second))
+
+    # Calculate target offset
+    if [ "$current_minute" -le 15 ]; then
+      target_offset_s=900
+    elif [ "$current_minute" -le 30 ]; then
+      target_offset_s=1800
+    elif [ "$current_minute" -le 45 ]; then
+      target_offset_s=2700
+    else
+      target_offset_s=3600
+    fi
+
+    target_time_in_minute_s=$((target_offset_s + 60))
+    sleep_duration_s=$((target_time_in_minute_s - current_time_in_minute_s))
+
+    if [ "$sleep_duration_s" -le 0 ]; then
+      sleep_duration_s=$((sleep_duration_s + 3600))
+    fi
+
+    # 4. Execute the sleep command
+    servicelog "PROCESS_MONITOR" "INFO" "Sleeping for $sleep_duration_s seconds to run at 1 minute past the next 15-minute boundary." "$SERVICE_STATUS_FILE"
+    sleep "$sleep_duration_s"
+
+    # 5. RUN THE SCRIPT
+    servicelog "PROCESS_MONITOR" "INFO" "Target time reached. Executing process_monitor.pl..." "$SERVICE_STATUS_FILE"
+
+    # Use simple append (>>) for non-log function output
+    echo "=== Service Status Report at $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$SERVICE_STATUS_FILE"
+    "$CRON_COMMAND" >> "$SERVICE_STATUS_FILE" 2>&1
+
+    servicelog "PROCESS_MONITOR" "INFO" "process_monitor.pl execution complete." "$SERVICE_STATUS_FILE"
+
+  else
+    servicelog "PROCESS_MONITOR" "ERROR" "$CRON_COMMAND not found or not executable" "$SERVICE_STATUS_FILE"
+  fi
+) > /dev/null 2>&1 &
+
+#----------------------------------------------------------------------------------------------------
+# IPv6 default route check and recovery
+#----------------------------------------------------------------------------------------------------
+
+if [ -x /usr/local/sbin/ipv6_route_test.sh ]; then
+  /usr/local/sbin/ipv6_route_test.sh > /var/www/htdocs/tn/data/logs/bootlog/ipv6-route-check.log 2>&1
+fi
+
+#----------------------------------------------------------------------------------------------------
+# Populate PF Tables
+#----------------------------------------------------------------------------------------------------
+
+if [ -x /usr/local/sbin/pf_tables_load.sh ]; then
+  /usr/local/sbin/pf_tables_load.sh
+fi
+
+#----------------------------------------------------------------------------------------------------
+# Service Starter Function for WebUI
+#----------------------------------------------------------------------------------------------------
+
+start_service() {
+  local script="$1"
+  local name="$2"
+  local pidfile="/var/www/htdocs/tn/data/run/webui/${3:-${name}}.pid"
+
+  if [ ! -x "$script" ]; then
+    log "SERVICE MANAGEMENT" "ERROR" "$name: script not found or not executable"
+    return 1
+  fi
+
+  # Ensure PID directory exists
+  install -d -o www -g www -m 750 "/var/www/htdocs/tn/data/run/webui"
+
+  # Check if already running
+  if [ -f "$pidfile" ]; then
+    local old_pid=$(cat "$pidfile")
+    if kill -0 "$old_pid" 2> /dev/null; then
+      log "SERVICE MANAGEMENT" "INFO" "$name: already running (PID: $old_pid)"
+      return 0
+    fi
+    rm -f "$pidfile"
+  fi
+
+  # Start the service
+  "$script" < /dev/null > /dev/null 2>&1 &
+  local pid=$!
+
+  # Quick verification before writing PID
+  sleep 0.2
+  if kill -0 $pid 2> /dev/null; then
+    echo $pid > "$pidfile"
+    log "SERVICE MANAGEMENT" "INFO" "$name: started (PID: $pid)"
+  else
+    log "SERVICE MANAGEMENT" "ERROR" "$name: failed to start"
+    return 1
+  fi
+}
+
+#----------------------------------------------------------------------------------------------------
+# Start All Services
+#----------------------------------------------------------------------------------------------------
+
+start_service "/usr/local/sbin/queue_processor_runner.sh" "queue_runner"
+start_service "/usr/local/sbin/unbound_stats_runner.sh" "unbound_stats_runner"
+start_service "/usr/local/sbin/dashboard_stats_runner.sh" "dashboard_stats_runner"
+start_service "/usr/local/sbin/service_monitor_runner.sh" "service_monitor_runner"
+start_service "/usr/local/sbin/pf_stats_runner.sh" "pf_stats_runner"
+start_service "/usr/local/sbin/pf_tcpdump_runner.sh" "pflog_maint"
+start_service "/usr/local/sbin/pmacct_mfs_manage_runner.sh" "pmacct_mfs_manage_runner"
+start_service "/usr/local/sbin/pf_change_detector_runner.sh" "pf_change_detector"
+start_service "/usr/local/sbin/e2g_user_filter_runner.sh" "e2g_user_filter_detector"
+start_service "/usr/local/sbin/unbound_queue_runner.sh" "unbound_queue_runner"
+start_service "/usr/local/sbin/e2g_status_writer_runner.sh" "e2g_status_writer"
+start_service "/usr/local/sbin/e2g_queue_processor_runner.sh" "e2g_queue_processor"
+start_service "/usr/local/sbin/pf_monitor_runner.sh" "pf_monitor"
+start_service "/usr/local/sbin/integrity_check_runner.sh" "integrity_check"
+start_service "/usr/local/sbin/powermgmt_runner.sh" "powermgmt"
+start_service "/usr/local/sbin/pf_asn_runner.sh" "pf_asn_lookip"
+start_service "/usr/local/sbin/dhcpd_lease_watcher_runner.sh" "dhcpd_watcher"
+start_service "/usr/local/sbin/pf_anchor_sync_runner.sh" "pf_anchor_sync"
+
+# Boot-time RRD map self-healer for Tangent Networks UTM
+if [ -f /etc/collectd_reconciler.pm ]; then
+  /usr/bin/perl -T /etc/collectd_reconciler.pm
+fi
+
+exit 0

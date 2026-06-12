@@ -1,0 +1,452 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Tangent Networks — Documentation</title>
+    <link rel="stylesheet" href="./assets/css/docs.css" />
+  </head>
+  <body>
+    <!--
+    SVG SPRITE — inline icons, no external requests, no CDN.
+    display:none keeps the sprite invisible. All icons referenced via <use href="#id">.
+    Zero inline styles — display:none handled in docs.css via .doc-svg-sprite.
+  -->
+    <svg class="doc-svg-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <!-- icon-menu: hamburger -->
+        <symbol id="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 6h16M4 12h16M4 18h16" />
+        </symbol>
+        <!-- icon-book: documentation brand -->
+        <symbol id="icon-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13
+                 C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13
+                 C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13
+                 C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </symbol>
+        <!-- icon-sun: light mode -->
+        <symbol id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707
+                 M6.343 17.657l-.707.707M17.657 17.657l-.707-.707
+                 M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+        </symbol>
+        <!-- icon-moon: dark mode -->
+        <symbol id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.354 15.354A9 9 0 018.646 3.646
+                 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </symbol>
+        <!-- icon-arrow-left: back to dashboard -->
+        <symbol id="icon-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </symbol>
+        <!-- icon-chevron-down: sidebar section toggle -->
+        <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 9l-7 7-7-7" />
+        </symbol>
+        <!-- icon-bolt: quick reference -->
+        <symbol id="icon-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </symbol>
+        <!-- icon-boot: boot/startup -->
+        <symbol id="icon-boot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714
+                 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+        </symbol>
+        <!-- icon-server: system daemons -->
+        <symbol id="icon-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0
+                 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002
+                 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-5-4h.01M17 16h.01" />
+        </symbol>
+        <!-- icon-code: scripts / developer -->
+        <symbol id="icon-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+        </symbol>
+        <!-- icon-shield: security/monitoring -->
+        <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955
+                 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824
+                 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622
+                 0-1.042-.133-2.052-.382-3.016z" />
+        </symbol>
+        <!-- icon-cpu: backend -->
+        <symbol id="icon-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0
+                 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+        </symbol>
+        <!-- icon-monitor: frontend -->
+        <symbol id="icon-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0
+                 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </symbol>
+        <!-- icon-user: user manual -->
+        <symbol id="icon-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </symbol>
+        <!-- icon-terminal: developer guide -->
+        <symbol id="icon-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0
+                 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </symbol>
+        <!-- icon-copy: code copy button -->
+        <symbol id="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2
+                 m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2
+                 2v8a2 2 0 002 2z" />
+        </symbol>
+        <!-- icon-check: copied confirmation -->
+        <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 13l4 4L19 7" />
+        </symbol>
+	<!-- icon-preface: Getting started -->
+	<symbol id="icon-quill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  	  <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" />
+           <line x1="16" y1="8" x2="2" y2="22" />
+           <line x1="17.5" y1="15" x2="9" y2="15" />
+	</symbol>
+      </defs>
+    </svg>
+    <!-- ========================================================================
+       TOP BAR
+       ======================================================================== -->
+    <header class="doc-topbar" role="banner">
+      <div class="doc-topbar-brand">
+        <!-- Sidebar toggle — mobile only, shown via CSS -->
+        <button id="sidebar-toggle" class="btn-icon btn-sidebar-toggle" aria-label="Toggle navigation" aria-controls="doc-sidebar" aria-expanded="false" type="button">
+          <svg aria-hidden="true">
+            <use href="#icon-menu" />
+          </svg>
+        </button>
+        <!-- Brand -->
+        <svg class="doc-topbar-brand-icon" width="20" height="20" aria-hidden="true">
+          <use href="#icon-book" />
+        </svg>
+        <span>Tangent Networks&trade;</span>
+      </div>
+      <div class="doc-topbar-actions">
+        <a href="/index.html" class="btn btn-ghost" aria-label="Back to dashboard">
+          <svg width="14" height="14" aria-hidden="true">
+            <use href="#icon-arrow-left" />
+          </svg> Dashboard </a>
+        <button id="theme-toggle" class="btn-icon" type="button" aria-label="Switch theme">
+          <svg aria-hidden="true">
+            <use href="#icon-moon" />
+          </svg>
+        </button>
+      </div>
+    </header>
+    <!-- ========================================================================
+       LAYOUT
+       ======================================================================== -->
+    <div class="doc-layout">
+      <!-- SIDEBAR -->
+      <nav id="doc-sidebar" class="doc-sidebar" aria-label="Documentation sections">
+        <div class="doc-nav">
+          <!-- ----------------------------------------------------------------
+             SECTION: Getting Started
+             ---------------------------------------------------------------- -->
+          <div class="doc-nav-section">
+            <button class="doc-nav-section-toggle" type="button" aria-expanded="true" aria-controls="nav-start">
+              <span>Getting Started</span>
+              <svg class="doc-nav-section-toggle-icon" aria-hidden="true">
+                <use href="#icon-chevron-down" />
+              </svg>
+            </button>
+            <ul id="nav-start" class="doc-nav-items" role="list">
+              <li>
+		<a class="doc-nav-link" data-doc="preface" href="#preface" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-quill" />
+                    </svg> Preface </span>
+                </a>
+	      </li>
+	      <li>
+                <a class="doc-nav-link" data-doc="quick-reference" href="#quick-reference" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-bolt" />
+                    </svg> Quick Reference </span>
+                </a>
+              </li>
+	      <li>
+                <a class="doc-nav-link" data-doc="orchestration" href="#orchestration" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-boot" />
+                    </svg> System Orchestration </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="metrics" href="#metrics" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-cpu" />
+                    </svg> Metrics &amp; Discovery </span>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div class="doc-nav-divider" role="separator"></div>
+          <!-- ----------------------------------------------------------------
+             SECTION: System & Network
+             ---------------------------------------------------------------- -->
+          <div class="doc-nav-section">
+            <button class="doc-nav-section-toggle" type="button" aria-expanded="true" aria-controls="nav-system">
+              <span>System &amp; Network</span>
+              <svg class="doc-nav-section-toggle-icon" aria-hidden="true">
+                <use href="#icon-chevron-down" />
+              </svg>
+            </button>
+            <ul id="nav-system" class="doc-nav-items" role="list">
+              <li>
+                <a class="doc-nav-link" data-doc="network" href="#network" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-server" />
+                    </svg> Network Overview </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="firewall" href="#firewall" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-shield" />
+                    </svg> Firewall </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="content-filter" href="#content-filter" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-monitor" />
+                    </svg> Content Filtering </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="flow-accounting" href="#flow-accounting" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-terminal" />
+                    </svg> Flow Accounting </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="daemons" href="#daemons" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-cpu" />
+                    </svg> Runners &amp; Daemons </span>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div class="doc-nav-divider" role="separator"></div>
+          <!-- ----------------------------------------------------------------
+             SECTION: Integrity & Alerting
+             ---------------------------------------------------------------- -->
+          <div class="doc-nav-section">
+            <button class="doc-nav-section-toggle" type="button" aria-expanded="true" aria-controls="nav-integrity">
+              <span>Integrity &amp; Alerting</span>
+              <svg class="doc-nav-section-toggle-icon" aria-hidden="true">
+                <use href="#icon-chevron-down" />
+              </svg>
+            </button>
+            <ul id="nav-integrity" class="doc-nav-items" role="list">
+              <li>
+                <a class="doc-nav-link" data-doc="tnaudit" href="#tnaudit" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-shield" />
+                    </svg> TNAudit </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="tnwatch" href="#tnwatch" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-terminal" />
+                    </svg> TNWatch </span>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div class="doc-nav-divider" role="separator"></div>
+          <!-- ----------------------------------------------------------------
+             SECTION: UI Infrastructure & Auth
+             ---------------------------------------------------------------- -->
+          <div class="doc-nav-section">
+            <button class="doc-nav-section-toggle" type="button" aria-expanded="true" aria-controls="nav-ui-infra">
+              <span>UI Infrastructure &amp; Auth</span>
+              <svg class="doc-nav-section-toggle-icon" aria-hidden="true">
+                <use href="#icon-chevron-down" />
+              </svg>
+            </button>
+            <ul id="nav-ui-infra" class="doc-nav-items" role="list">
+              <li>
+                <a class="doc-nav-link" data-doc="database" href="#database" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-server" />
+                    </svg> Database &amp; Schema </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="tnenv" href="#tnenv" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-code" />
+                    </svg> TNEnv </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="tnconfig" href="#tnconfig" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-code" />
+                    </svg> TNConfig </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="tnauth" href="#tnauth" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-shield" />
+                    </svg> TNAuth </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="tnsecurity" href="#tnsecurity" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-shield" />
+                    </svg> TNSecurity </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="tnsecuritycheck" href="#tnsecuritycheck" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-shield" />
+                    </svg> TNSecurityCheck </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="tnwaf" href="#tnwaf" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-shield" />
+                    </svg> TNWAF </span>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div class="doc-nav-divider" role="separator"></div>
+          <!-- ----------------------------------------------------------------
+             SECTION: Backend
+             ---------------------------------------------------------------- -->
+          <div class="doc-nav-section">
+            <button class="doc-nav-section-toggle" type="button" aria-expanded="true" aria-controls="nav-backend">
+              <span>Backend</span>
+              <svg class="doc-nav-section-toggle-icon" aria-hidden="true">
+                <use href="#icon-chevron-down" />
+              </svg>
+            </button>
+            <ul id="nav-backend" class="doc-nav-items" role="list">
+              <li>
+                <a class="doc-nav-link" data-doc="backend" href="#backend" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-cpu" />
+                    </svg> CGI Scripts </span>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div class="doc-nav-divider" role="separator"></div>
+          <!-- ----------------------------------------------------------------
+             SECTION: Frontend
+             ---------------------------------------------------------------- -->
+          <div class="doc-nav-section">
+            <button class="doc-nav-section-toggle" type="button" aria-expanded="true" aria-controls="nav-frontend">
+              <span>Frontend</span>
+              <svg class="doc-nav-section-toggle-icon" aria-hidden="true">
+                <use href="#icon-chevron-down" />
+              </svg>
+            </button>
+            <ul id="nav-frontend" class="doc-nav-items" role="list">
+              <li>
+                <a class="doc-nav-link" data-doc="frontend-spa" href="#frontend-spa" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-monitor" />
+                    </svg> SPA Architecture </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="frontend-css" href="#frontend-css" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-code" />
+                    </svg> CSS </span>
+                </a>
+              </li>
+              <li>
+                <a class="doc-nav-link" data-doc="frontend-js" href="#frontend-js" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-terminal" />
+                    </svg> JavaScript </span>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div class="doc-nav-divider" role="separator"></div>
+          <!-- ----------------------------------------------------------------
+             Installation — last, when script ready
+             ---------------------------------------------------------------- -->
+          <div class="doc-nav-section">
+            <button class="doc-nav-section-toggle" type="button" aria-expanded="true" aria-controls="nav-install">
+              <span>Installation</span>
+              <svg class="doc-nav-section-toggle-icon" aria-hidden="true">
+                <use href="#icon-chevron-down" />
+              </svg>
+            </button>
+            <ul id="nav-install" class="doc-nav-items" role="list">
+              <li>
+                <a class="doc-nav-link" data-doc="installation" href="#installation" role="menuitem">
+                  <span class="doc-nav-link-left">
+                    <svg class="doc-nav-link-icon" aria-hidden="true">
+                      <use href="#icon-code" />
+                    </svg> Installation </span>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div class="doc-nav-divider" role="separator"></div>
+          <div class="doc-nav-back">
+            <a class="doc-nav-link" href="/index.html" aria-label="Back to dashboard">
+              <span class="doc-nav-link-left">
+                <svg class="doc-nav-link-icon" aria-hidden="true">
+                  <use href="#icon-arrow-left" />
+                </svg> Back to Dashboard </span>
+            </a>
+          </div>
+        </div>
+      </nav>
+      <!-- MAIN CONTENT -->
+      <main id="doc-main-content" class="doc-main" role="main" aria-live="polite">
+        <!-- Doc fragments are fetched and injected here by doc.js -->
+      </main>
+    </div>
+    <script src="./assets/js/doc.js" integrity="sha384-I2PJ8+c+uSGlbPHxv0FF0KRX6/MMHEg0y1rn2xYqNdUz1FESQ5xVmir6Y6/zdoV8" crossorigin="anonymous" defer></script>
+  </body>
+</html>

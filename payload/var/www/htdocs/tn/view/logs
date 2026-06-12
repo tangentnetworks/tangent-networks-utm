@@ -1,0 +1,264 @@
+<!-- BEGIN: Log view -->
+<!-- BEGIN: Header -->
+<div class="top-0 border-gray-200 bg-gray-50 p-2 backdrop-blur-md dark:border-gray-700 dark:bg-gray-900 sticky z-30 flex items-center justify-between border-b">
+  <div class="gap-4 flex items-center">
+    <div class="rounded-xl bg-blue-600 p-2.5 shadow-lg shadow-blue-500/20">
+      <svg class="text-white h-[24px] w-[24px]" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 10V7.914a1 1 0 0 1 .293-.707l3.914-3.914A1 1 0 0 1 9.914 3H18a1 1 0 0 1 1 1v6M5 19v1a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1M10 3v4a1 1 0 0 1-1 1H5m14 9.006h-.335a1.647 1.647 0 0 1-1.647-1.647v-1.706a1.647 1.647 0 0 1 1.647-1.647L19 12M5 12v5h1.375A1.626 1.626 0 0 0 8 15.375v-1.75A1.626 1.626 0 0 0 6.375 12H5Zm9 1.5v2a1.5 1.5 0 0 1-1.5 1.5v0a1.5 1.5 0 0 1-1.5-1.5v-2a1.5 1.5 0 0 1 1.5-1.5v0a1.5 1.5 0 0 1 1.5 1.5Z" />
+      </svg>
+    </div>
+    <div>
+      <h1 class="text-lg font-extrabold tracking-tight text-gray-900 dark:text-white uppercase italic">System Logs</h1>
+    </div>
+  </div>
+</div>
+<!-- END: Header -->
+<!-- BEGIN: NOTICE -->
+<div id="notice-logs" class="dismissible-banner">
+  <div class="feed-info-box">
+    <p class="feed-info-box-text">
+      <span class="feed-info-box-label">Notice:</span>Empty log files do not signal failure. Certain programs, such as Snort, operate with specific flags to suppress verbose warnings. Others generate no logs whatsoever.
+    </p>
+    <button type="button" class="close-banner-btn flex-shrink-0 p-1 text-gray-400 hover:text-red-600 transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
+    </button>
+  </div>
+</div>
+<!-- END: NOTICE -->
+<!-- BEGIN: Stats -->
+<div class="mb-6 gap-4 p-2 sm:grid-cols-2 lg:grid-cols-4 grid grid-cols-1">
+  <div class="rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+    <div class="flex items-center">
+      <div class="mr-3 rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
+        <svg class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 1.1.9 2 2 2h12a2 2 0 002-2V7M4 7a2 2 0 012-2h12a2 2 0 012 2M4 7h16M10 11h4M10 15h4" />
+        </svg>
+      </div>
+      <div>
+        <div class="text-sm text-gray-600 dark:text-gray-400">Log Sources</div>
+        <div class="text-xl font-bold text-gray-800 dark:text-white">25</div>
+      </div>
+    </div>
+  </div>
+  <div class="rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+    <div class="flex items-center">
+      <div class="mr-3 rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
+        <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div>
+        <div class="text-sm text-gray-600 dark:text-gray-400">Archive Days</div>
+        <div class="text-xl font-bold text-gray-800 dark:text-white">7</div>
+      </div>
+    </div>
+  </div>
+  <div class="rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+    <div class="flex items-center">
+      <div class="mr-3 rounded-lg bg-red-100 p-2 dark:bg-red-900">
+        <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      </div>
+      <div>
+        <div class="text-sm text-gray-600 dark:text-gray-400">Errors Today</div>
+        <div class="text-xl font-bold text-gray-800 dark:text-white" id="errorCount">0</div>
+      </div>
+    </div>
+  </div>
+  <div class="rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+    <div class="flex items-center">
+      <div class="mr-3 rounded-lg bg-purple-100 p-2 dark:bg-purple-900/30">
+        <svg class="h-5 w-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </div>
+      <div>
+        <div class="text-sm text-gray-600 dark:text-gray-400">Refresh Rate</div>
+        <div class="text-xl font-bold text-gray-800 dark:text-white">8s</div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- END: Stats -->
+<!-- BEGIN: Log Container -->
+<div class="p-2 container max-w-full">
+  <!-- BEGIN: Control Panel -->
+  <div class="mb-6 rounded-lg border-gray-200 bg-white p-6 shadow dark:border-gray-700 dark:bg-gray-800 border">
+    <div class="mb-6 gap-4 p-2 sm:grid-cols-2 lg:grid-cols-4 grid grid-cols-1">
+      <!-- BEGIN: Log Source Selection -->
+      <div>
+        <label class="mb-2 gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+          <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg> Log Source </label>
+        <select id="logSource" class="rounded-lg border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white w-full border focus:ring-1 focus:outline-none">
+          <option value="system/messages">System Messages</option>
+          <option value="system/daemon">System Daemon</option>
+          <option value="bootlog/rc.local.log">Boot Log (rc.local)</option>
+          <option value="doas/doas.log">Doas (Privilege Elevation)</option>
+          <option value="dhcpd/dhcpd.log">DHCP Server</option>
+          <option value="unbound/unbound.log">DNS (Unbound)</option>
+          <option value="rad/rad.log">Router Advertisement Daemon</option>
+          <option value="collectd/collectd.log">CollectD (Monitoring)</option>
+          <option value="sslproxy/sslproxy.log">SSL Proxy</option>
+          <option value="sslproxy/sslproxy_connect.log">SSL Proxy Connect</option>
+          <option value="sockd/sockd.log">SOCKS Daemon</option>
+          <option value="p3scan/p3scan.log">P3Scan (Virus Scan)</option>
+          <option value="smtp-gated/smtp-gated.log">SMTP GateD</option>
+          <option value="spamd/spamd.log">SpamAssassin</option>
+          <option value="snort/alert.log">Snort Alerts</option>
+          <option value="snort/snort.log">Snort IDS Log</option>
+          <option value="snort/snortinline.log">Snort IPS Log</option>
+          <option value="snortsentry/snortsentry.log">SnortSentry</option>
+          <option value="e2guardian/access.log">E2Guardian Access</option>
+          <option value="e2guardian/e2guardian.log">E2Guardian Logs</option>
+          <option value="httpd/httpd_access.log">HTTPD Access</option>
+          <option value="httpd/httpd_error.log">HTTPD Error</option>
+          <option value="imspector/imspector.log">IMSpector (IM Proxy)</option>
+          <option value="ftp-proxy/ftp-proxy.log">FTP Proxy</option>
+        </select>
+      </div>
+      <!-- END: Log Source Selection -->
+      <!-- BEGIN: Date Selection -->
+      <div>
+        <label class="mb-2 gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+          <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg> Date Range </label>
+        <select id="logDate" class="rounded-lg border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white w-full border focus:ring-1 focus:outline-none">
+          <option value="live">Live (Current Log)</option>
+          <option value="-1">2026-01-14 (9 KB)</option>
+          <option value="-2">2026-01-13 (12 KB)</option>
+          <option value="-3">2026-01-12 (17 KB)</option>
+        </select>
+      </div>
+      <!-- END: Date Selection -->
+      <!-- BEGIN: Filter Selection -->
+      <div>
+        <label class="mb-2 gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+          <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+          </svg> Filter </label>
+        <select id="logFilter" class="rounded-lg border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white w-full border focus:ring-1 focus:outline-none">
+          <option value="all">Complete Log</option>
+          <option value="error">Errors Only</option>
+          <option value="warning">Warnings Only</option>
+          <option value="auth">Authentication</option>
+          <option value="connection">Connections</option>
+          <option value="blocked">Blocked/Denied</option>
+        </select>
+      </div>
+      <!-- END: Filter Selection -->
+      <!-- BEGIN: Action Buttons -->
+      <div>
+        <div class="flex-1">
+          <label class="mb-2 gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+            <svg class="w-4 h-4 mr-2 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+              <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 8v8m0-8h8M8 8H6a2 2 0 1 1 2-2v2Zm0 8h8m-8 0H6a2 2 0 1 0 2 2v-2Zm8 0V8m0 8h2a2 2 0 1 1-2 2v-2Zm0-8h2a2 2 0 1 0-2-2v2Z"></path>
+            </svg> Apply </label>
+        </div>
+        <div class="space-x-2 flex items-center">
+          <button id="loadLogs" class="gap-2 rounded-lg bg-blue-600 px-4 py-2 p-2 font-bold text-white hover:bg-blue-700 flex items-center justify-center border-0 transition-all active:scale-95">
+            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg> Load </button>
+          <button id="copyLogs" class="gap-2 rounded-lg bg-green-600 px-4 py-2 p-2 font-bold text-white hover:bg-green-700 flex items-center justify-center border-0 transition-all active:scale-95">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+            </svg> Copy </button>
+        </div>
+      </div>
+      <!-- END: Action Buttons -->
+    </div>
+    <!-- BEGIN: Additional Controls -->
+    <div class="p-2 mt-6 gap-6 md:grid-cols-3 grid grid-cols-1">
+      <div class="md:col-span-2">
+        <label class="mb-2 gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+          <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg> Search in Logs (Regex) </label>
+        <div class="space-x-2 flex">
+          <input type="text" id="logSearch" placeholder="Enter search term (regex supported)" class="rounded-l-lg border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white flex-1 border border-r-0 focus:ring-1 focus:outline-none" />
+          <button id="clearSearch" class="rounded-lg bg-blue-700 px-4 text-white hover:text-gray-50">
+            <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <!-- BEGIN: Display Settings -->
+      <div>
+        <label class="mb-2 gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+          <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+          </svg> Display Options </label>
+        <div class="space-x-2 flex h-[42px] items-center">
+          <label class="inline-flex cursor-pointer items-center">
+            <input type="checkbox" id="autoRefresh" class="h-4 w-4 rounded text-blue-600" checked />
+            <span class="ml-2 text-sm dark:text-gray-300">Auto-refresh</span>
+          </label>
+          <label class="inline-flex cursor-pointer items-center">
+            <input type="checkbox" id="showTimestamp" class="h-4 w-4 rounded text-blue-600" checked />
+            <span class="ml-2 text-sm dark:text-gray-300">Timestamps</span>
+          </label>
+        </div>
+      </div>
+      <!-- END: Display Settings -->
+    </div>
+    <!-- END: Additional Controls -->
+  </div>
+  <!-- END: Control Panel -->
+  <!-- BEGIN: Log Display Area -->
+  <div class="rounded-lg border-gray-200 bg-white shadow dark:border-gray-700 dark:bg-gray-800 overflow-hidden border">
+    <!-- BEGIN: Log Banner -->
+    <div class="border-gray-200 p-2 dark:border-gray-700 flex items-center justify-between border-b">
+      <div>
+        <h2 class="gap-2 text-xl font-bold text-gray-800 dark:text-white flex items-center">
+          <svg class="h-6 w-6 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+          </svg>
+          <span id="currentLogTitle">System Messages</span>
+        </h2>
+        <p class="text-sm text-gray-600 dark:text-gray-400" id="logInfo">Live log • Showing all entries</p>
+      </div>
+      <div class="space-x-2 flex items-center">
+        <div class="text-sm text-gray-600 dark:text-gray-400">Lines: <span id="lineCount" class="font-bold text-blue-600 dark:text-blue-400">0</span>
+        </div>
+        <div class="ml-2 h-4 w-4 animate-pulse bg-green-500 rounded-full" id="statusIndicator"></div>
+      </div>
+    </div>
+    <!-- END: Log Banner -->
+    <!-- BEGIN: Log View Body -->
+    <div class="p-0">
+      <div class="log-container bg-gray-50 p-6 dark:bg-gray-900 dark:text-white h-[600px] overflow-y-auto" id="logContainer">
+        <div class="py-24 text-gray-500 flex flex-col items-center justify-center" id="emptyState">
+          <svg class="mb-4 h-16 w-16 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p class="text-xl font-bold">No log data loaded</p>
+          <p class="mt-2 text-sm italic">Select a log source and click "Load" to begin</p>
+        </div>
+      </div>
+    </div>
+    <!-- END: Log View Body -->
+    <!-- BEGIN: Footer -->
+    <div class="border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800 flex items-center justify-between border-t">
+      <div class="text-xs font-bold tracking-widest text-gray-500 uppercase">Last updated: <span id="lastUpdated" class="font-mono">Never</span>
+      </div>
+      <div class="space-x-2 flex">
+        <button id="scrollTop" class="rounded px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors">TOP</button>
+        <button id="scrollBottom" class="rounded px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors">BOTTOM</button>
+        <button id="clearLogs" class="rounded px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">CLEAR</button>
+      </div>
+    </div>
+    <!-- END: Footer -->
+  </div>
+  <!-- END: Log Display Area -->
+</div>
+<!-- END: Log Container -->
+<link rel="stylesheet" href="./assets/css/dynamic.css">
+<script src="./assets/js/logs.js" integrity="sha384-7s+HLrshxHLZy85Pm7/5jbvmjsv8E1YQ6tzLNXMOlOjcgf7Muk6wCYSRVqg/l0tK" defer crossorigin="anonymous"></script>

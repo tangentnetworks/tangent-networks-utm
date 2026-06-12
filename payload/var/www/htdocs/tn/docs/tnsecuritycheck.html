@@ -1,0 +1,326 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    TNSecurityCheck is the one-line security gate that every backend CGI script
+    calls at the top of its handler. A single <code>security_check($level)</code>
+    call enforces all active protection layers appropriate to the endpoint and
+    returns a session hashref on success or exits with an error response on
+    failure. This document covers the three protection levels, each validation
+    layer, the DEVEL mode bypass, and the pledge requirements that each calling
+    CGI must satisfy.
+  </p>
+</div>
+
+<h1>TNSecurityCheck</h1>
+
+<p>
+  <strong>Location:</strong>
+  <code>/var/www/htdocs/tn/data/lib/TNSecurityCheck.pm</code><br>
+  <strong>Version:</strong> 2.0.0<br>
+  <strong>Exports:</strong> <code>security_check</code> (auto-exported on <code>use</code>)
+</p>
+
+<h2>Usage</h2>
+
+<p>
+  Every backend CGI script calls <code>security_check()</code> as its first
+  action after loading modules. The call either returns a session hashref that
+  the script can use immediately, or it exits -- it never returns on failure.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>use TNSecurityCheck;
+
+# Public endpoint (origin check only, no authentication)
+my $session = security_check('standard');
+
+# Authenticated endpoint (session + POST + CSRF)
+my $session = security_check('protected');
+
+# Admin-only endpoint (session + POST + CSRF + admin role)
+my $session = security_check('restricted');
+
+# $session hashref fields:
+#   user_id   -- undef for standard level
+#   username  -- 'anonymous' for standard level
+#   role      -- 'public' for standard level, 'user' or 'admin' otherwise
+#   devel_mode -- 1 if DEVEL mode is active</code></pre>
+</div>
+
+<h2>Protection Levels</h2>
+
+<h3>standard</h3>
+
+<p>
+  Suitable for public endpoints that serve data to any authenticated browser
+  session, or to unauthenticated browsers that pass origin validation. Runs two
+  checks: origin validation and download protection. Does not check for a
+  session cookie. Returns an anonymous session hashref
+  (<code>role = 'public'</code>).
+</p>
+
+<h3>protected</h3>
+
+<p>
+  Suitable for endpoints that require a logged-in user. Runs all six check
+  layers in order. Returns the authenticated user's session hashref on success.
+</p>
+
+<h3>restricted</h3>
+
+<p>
+  Identical to <code>protected</code> but adds a role check in layer 6:
+  the session role must be <code>'admin'</code>. Suitable for admin-only
+  endpoints. Returns the admin session hashref on success.
+</p>
+
+<h2>Check Layers</h2>
+
+<p>
+  The six layers are applied in a fixed order. Any failure exits immediately
+  with an error response -- later layers are not reached.
+</p>
+
+<h3>Layer 1: Session Validation</h3>
+
+<p>
+  Reads the <code>tn_session</code> cookie from <code>$ENV{HTTP_COOKIE}</code>,
+  extracts the signed value with a regex that limits the character set to
+  <code>[a-zA-Z0-9_\-=.]</code>, calls
+  <code>TNSecurity::verify_session_id()</code> to verify the HMAC signature
+  and extract the raw session ID, then calls
+  <code>TNAuth::validate_session()</code> to check the database.
+</p>
+
+<p>
+  Returns the session hashref from TNAuth on success. Returns undef (triggering
+  a 401) on any failure: no cookie header, cookie not found, signature invalid,
+  session not in database, session expired.
+</p>
+
+<p>
+  Only runs for <code>protected</code> and <code>restricted</code> levels.
+</p>
+
+<h3>Layer 2: Origin Validation</h3>
+
+<p>
+  Checks <code>HTTP_ORIGIN</code> and <code>HTTP_REFERER</code> against
+  <code>HTTP_HOST</code>.
+</p>
+
+<ul>
+  <li>If both Origin and Referer are absent, the request is allowed (same-origin requests from most browsers do not send these headers for non-CORS requests).</li>
+  <li>If Origin is present: allowed if it matches <code>http(s)://HTTP_HOST</code>.</li>
+  <li>If Referer is present: allowed if it starts with <code>http(s)://HTTP_HOST/</code>.</li>
+</ul>
+
+<p>
+  Runs for all three levels.
+</p>
+
+<h3>Layer 3: Download Protection</h3>
+
+<p>
+  Rejects requests with Accept headers that suggest a download tool or an
+  attempt to retrieve raw script source:
+</p>
+
+<ul>
+  <li><code>application/octet-stream</code></li>
+  <li><code>text/x-perl</code></li>
+  <li><code>application/x-perl</code></li>
+  <li><code>text/plain.*download</code></li>
+</ul>
+
+<p>
+  Returns HTTP 550 on a match. Runs for all three levels.
+</p>
+
+<h3>Layer 4: Method Validation</h3>
+
+<p>
+  Requires <code>REQUEST_METHOD = POST</code>. Returns 405 for any other
+  method.
+</p>
+
+<p>
+  Runs for <code>protected</code> and <code>restricted</code> levels only.
+</p>
+
+<h3>Layer 5: CSRF Validation</h3>
+
+<p>
+  Reads the JSON POST body, extracts <code>csrf_token</code>, and calls
+  <code>TNSecurity::validate_csrf_token()</code>. Returns 403 on failure.
+</p>
+
+<p>
+  Runs for <code>protected</code> and <code>restricted</code> levels only.
+</p>
+
+<h3>Layer 6: Role Check</h3>
+
+<p>
+  Verifies that <code>$session-&gt;{role} eq 'admin'</code>. Returns 403 for
+  any other role.
+</p>
+
+<p>
+  Runs for <code>restricted</code> level only.
+</p>
+
+<h2>DEVEL Mode Bypass</h2>
+
+<p>
+  When <code>TNConfig::is_devel_mode()</code> returns true,
+  <code>security_check()</code> returns immediately with a synthetic admin
+  session without running any check layer:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>{
+    user_id   => 'devel',
+    username  => 'developer',
+    role      => 'admin',
+    devel_mode => 1,
+}</code></pre>
+</div>
+
+<p>
+  This bypass applies regardless of the level requested. A request to a
+  <code>restricted</code> endpoint in DEVEL mode is granted admin access
+  without a cookie, without a CSRF token, and without any database lookup.
+</p>
+
+<div class="callout callout-danger">
+  <p>
+    The DEVEL bypass is comprehensive. All six check layers are skipped
+    simultaneously. DEVEL mode must be disabled before any deployment that
+    handles real traffic. The production guard in router.pl (which refuses to
+    serve non-loopback traffic while DEVEL is active) provides a second line
+    of defence, but the config must be correct for it to trigger.
+  </p>
+</div>
+
+<h2>Error Responses</h2>
+
+<p>
+  <code>_error_response($status, $message, $log_message)</code> logs the event
+  via <code>TNSecurity::log_security_event('warning', ...)</code>, prints the
+  HTTP status line, calls <code>TNSecurity::print_secure_headers()</code> for
+  the full security header set, prints a JSON error body, and calls
+  <code>exit</code>. It does not return.
+</p>
+
+<p>Error codes returned by each layer:</p>
+
+<dl>
+  <dt>401</dt>
+  <dd>Session absent, invalid, or expired (layer 1).</dd>
+  <dt>403</dt>
+  <dd>Origin mismatch (layer 2), CSRF token invalid (layer 5), insufficient role (layer 6).</dd>
+  <dt>405</dt>
+  <dd>Request method is not POST (layer 4).</dd>
+  <dt>550</dt>
+  <dd>Download attempt blocked (layer 3). This is a non-standard code used internally; it does not appear in standard HTTP status registries.</dd>
+</dl>
+
+<h2>Pledge Requirements</h2>
+
+<p>
+  TNSecurityCheck calls TNAuth::validate_session (database read), TNSecurity::verify_session_id (key file read), and TNSecurity::log_security_event (log file write). Any CGI script that calls <code>security_check()</code> must therefore have the following pledge promises active before the call:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>stdio rpath wpath cpath flock</code></pre>
+</div>
+
+<p>
+  And the following paths must be unveiled before the pledge lock is applied:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>data/db        rwc   (SQLite database)
+data/keys      r     (HMAC and session key files)
+data/logs      rwc   (security.log and waf logs)
+/dev/urandom   r     (salt generation)
+Perl lib paths r     (module loading)</code></pre>
+</div>
+
+<div class="callout callout-warning">
+  <p>
+    Pledge and unveil are the calling CGI script's responsibility.
+    TNSecurityCheck does not issue any pledge or unveil calls itself. A backend
+    CGI script that calls <code>security_check()</code> without first setting
+    up pledge and unveil will function correctly, but runs without the kernel-
+    level sandbox protection. All CGI scripts should implement their own pledge
+    block modelled on the one in control.pl. See the backend CGI documents for
+    script-specific pledge blocks.
+  </p>
+</div>
+
+<div class="callout callout-note">
+  <p>
+    All probe-and-unveil path existence checks must happen before the first
+    <code>unveil()</code> call. Once any unveil is issued, the kernel begins
+    restricting filesystem visibility. A <code>-d</code> test on an un-unveiled
+    path will return false even if the directory exists. Resolve all conditional
+    paths while the filesystem is unrestricted, then issue unveil calls in a
+    single pass.
+  </p>
+</div>
+
+<h2>Comparison with control.pl</h2>
+
+<p>
+  The authentication CGI script <code>control.pl</code> does not use
+  TNSecurityCheck. It implements its own session and CSRF validation directly
+  via <code>require_session()</code> and <code>require_csrf_token()</code>.
+  This is intentional: control.pl handles the unauthenticated endpoints (login,
+  registration, password reset) where TNSecurityCheck's session requirement
+  would block legitimate use.
+</p>
+
+<p>
+  All other CGI scripts (the backend handlers for dashboard, firewall,
+  content filter, DNS, flow accounting, system, and integrity endpoints) use
+  TNSecurityCheck. They call <code>security_check('protected')</code> or
+  <code>security_check('restricted')</code> depending on whether admin access
+  is required.
+</p>
+
+<!-- SUMMARY -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Three protection levels: <code>standard</code> (origin + download only), <code>protected</code> (session + origin + POST + CSRF), <code>restricted</code> (all of protected plus admin role check).</li>
+    <li>All six check layers run in fixed order. Any failure exits immediately with a JSON error response -- the function never returns on failure.</li>
+    <li>DEVEL mode bypasses all layers and returns a synthetic admin session unconditionally. The router.pl production guard is the only barrier against DEVEL mode on a live system.</li>
+    <li>Pledge and unveil are the calling CGI's responsibility. TNSecurityCheck issues no pledge calls. Required promises: <code>stdio rpath wpath cpath flock</code>. Required unveil paths: data/db (rwc), data/keys (r), data/logs (rwc), /dev/urandom (r), Perl libs (r).</li>
+    <li>control.pl uses its own session and CSRF validation directly. All other CGI scripts use TNSecurityCheck.</li>
+  </ul>
+</div>

@@ -1,0 +1,5 @@
+Dec 16 21:47:26 (1765901846.717468) sockd[20904]: warning: closechild(): failed to notify request-child 55251 it should exit normally: Broken pipe
+Dec 16 21:47:26 (1765901846.717476) sockd[20904]: warning: closechild(): failed to notify request-child 3551 it should exit normally: Broken pipe
+Dec 16 21:47:26 (1765901846.717484) sockd[20904]: warning: closechild(): failed to notify request-child 78397 it should exit normally: Broken pipe
+Dec 16 21:47:26 (1765901846.717492) sockd[20904]: warning: closechild(): failed to notify request-child 87298 it should exit normally: Broken pipe
+Dec 16 21:47:26 (1765901846.717500) sockd[20904]: warning: closechild(): failed to notify io-child 81498 it should exit normally: Broken pipe

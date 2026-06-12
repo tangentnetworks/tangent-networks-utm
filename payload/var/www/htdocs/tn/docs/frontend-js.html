@@ -1,0 +1,290 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>This document covers the JavaScript layer for all dashboard views, the manage view tab system, and the supporting utility and infrastructure scripts. The authentication, session, CSRF, power management, theme, and SPA shell scripts are documented separately in the View System and Authentication document. The CGI endpoints called by these scripts are documented in the CGI Scripts document.</p>
+</div>
+
+<h1>Dashboard JavaScript: View Scripts and Utilities</h1>
+
+<p>Each dashboard view loaded by <code>view.js</code> into <code>#main-content</code> includes one or more inline or embedded scripts. These scripts initialise when the view HTML is injected, run for the lifetime of that view, and are torn down by the nuclear cleanup in <code>view.js</code> when the user navigates away. No view script persists across navigations.</p>
+
+<p>All view scripts follow the principle that JavaScript handles UI state and API calls while Perl generates all application HTML. No view script constructs application-level HTML from scratch except for card and list components built from data returned by the CGI backend. All user-facing text rendered from API data is passed through an <code>escapeHtml()</code> or equivalent function before insertion into the DOM.</p>
+
+<h2>Dashboard View: view/dashboard</h2>
+
+<p>The dashboard loads three independent scripts: <code>metrics.js</code>, <code>pfstats.js</code>, and <code>servicemonitor.js</code>. Each polls a separate data source and updates its own section of the page. None depends on the others.</p>
+
+<h3>metrics.js</h3>
+
+<p>Renders collectd-derived system metrics into four cards: CPU, memory, disk, and network. Each card maps to a JSON file under <code>/data/stats/collectd/</code> served directly from the webroot. The metric keys follow the collectd naming convention using the hostname <code>tangent</code> as the RRD prefix, for example <code>tangent/cpu_avg-cpu-average/cpu</code>.</p>
+
+<p>Polling runs every 10 seconds via a global interval stored as <code>window.dashMetricsInterval</code>. Initialisation uses a polling guard that checks for <code>#card-cpu</code> every 500ms for up to 10 seconds before giving up. This is the standard SPA-safe initialisation pattern used by all three dashboard scripts.</p>
+
+<p>If any metric file is absent, empty, or contains invalid JSON (which happens when collectd is mid-write), the fetch returns null and that card is silently skipped for that cycle. The existing card value is left unchanged. No console noise is produced for these transient failures. DOM update errors, which indicate genuine bugs, are always logged.</p>
+
+<p>The network card handles two interfaces. The WAN interface (<code>%%EXT_IF%%</code>) is the primary card value showing RX throughput. The LAN interface (<code>%%INT_IF%%</code>) is shown in a footer element. The disk card computes a percentage-used value from used, free, and reserved raw byte values before rendering.</p>
+
+<p>Exposes <code>window.refreshSystemMetrics</code> for manual trigger.</p>
+
+<h3>pfstats.js</h3>
+
+<p>Renders PF firewall statistics from <code>/data/stats/pf_stats.json</code>. Updates five sections every 15 seconds: top vitals (current state count, search count, PF health status, uptime, and state churn rate), a rule audit table showing the top 15 rules by packet count with an efficiency badge (Efficient, Review, or Unused), a throughput bar chart showing the top 10 rules by raw bytes, and a last-update timestamp.</p>
+
+<p>The rule audit table and its mobile list mirror are both rendered from the same data, allowing the view to present appropriately on desktop and mobile without layout switching logic. Table columns are pinned with a dynamically injected <code>&lt;colgroup&gt;</code> element on first render to prevent column width jitter on updates.</p>
+
+<p>All DOM elements are built programmatically using <code>document.createElement</code> and <code>DocumentFragment</code> to avoid repeated reflows. Uses the same 500ms polling guard as <code>metrics.js</code>, checking for <code>#stat-states</code> before starting.</p>
+
+<h3>servicemonitor.js</h3>
+
+<p>Fetches status files from <code>/data/services/status/</code> for eight security and network services: Snort IDS, Snort IPS, Snort Sentry, ClamAV, Unbound DNS, DHCPv4, IPv6 Router Advertisements, and E2Guardian. Each service has its own status file path. All eight are fetched in parallel via <code>Promise.all</code>.</p>
+
+<p>Renders a desktop table (<code>#security-service-table</code>) and a mobile card list (<code>#mobile-service-view</code>). Each entry shows display name, running or down status badge, PID, and CPU and memory percentage. Updates every 30 seconds via a global interval stored as <code>window.dashServiceInterval</code>.</p>
+
+<p>If a status file fetch fails, the service is rendered as down with zeroed metrics rather than omitted or erroring out. Uses the same DOM-polling initialisation pattern, checking for either the table or the mobile container before starting.</p>
+
+<p>Exposes <code>window.refreshDashboard</code> for manual trigger.</p>
+
+<h2>Logs View: view/logs</h2>
+
+<h3>logs.js</h3>
+
+<p>Implements the <code>LogVisualizer</code> class. Handles log source selection, date selection, server-side filter selection, client-side search, auto-refresh, and clipboard copy. Backend is <code>logs.pl</code> which supports 25 log sources.</p>
+
+<p>On initialisation it detects mobile by user agent and screen width. Auto-refresh is disabled on mobile devices to conserve battery and cannot be re-enabled on mobile. The refresh interval is 8 seconds on desktop.</p>
+
+<p>The date selector is populated by calling <code>logs.pl?action=available_dates</code> on source change. Available archive dates are shown with file size in KB. Gap entries (dates where no archive exists) are appended as disabled options with a classified reason label: System Offline, Empty Log, Archive Missing, or Future. A rotation status element is injected adjacent to the date selector showing last rotation date and a gap summary.</p>
+
+<p>Log rendering uses <code>DocumentFragment</code> for a single-pass DOM update. Each line is classified as info, warning, or error based on the level field from the backend. Timestamps are extracted and rendered as a separate styled span. Service labels from bracketed log formats are separated and styled independently. Client-side search applies a <code>data-log-visible</code> attribute to each line element rather than removing elements, which allows filter toggling without re-fetching. The search field supports both plain string matching and regex, falling back to plain string on regex parse error.</p>
+
+<p>Smart error handling: when <code>logs.pl</code> returns a structured error response rather than log data, the error type field is used to select an appropriate panel style and human-readable explanation. Error types map to distinct visual treatments so the operator can understand immediately whether the system was offline, the service was silent, the archive is missing, or the date is in the future.</p>
+
+<p>Empty file handling: a zero-byte log file is treated separately from an error. A contextual warning panel is shown that explains quiet-mode services may produce empty logs without indicating a problem.</p>
+
+<h2>Firewall View: view/firewall</h2>
+
+<h3>firewall.js</h3>
+
+<p>Renders PF firewall log entries fetched from <code>firewall.pl</code>. The backend parses <code>pflog</code> formatted log files and returns server-rendered HTML for the log list and pagination controls. The JavaScript layer handles filtering, date selection, auto-refresh, modal management, and log detail display.</p>
+
+<p>State tracks the current filter set (date, interface, IP family, protocol, port, action, and limit), all fetched logs, and modal pagination state. Auto-refresh runs every 15 seconds. The date selector is populated with the last 7 days, defaulting to today.</p>
+
+<p>Three modals are in use. The filter modal allows the operator to configure all filter parameters before applying them as a batch. The paginated modal shows the full log set when the View All button is clicked, with 10 entries per page and previous and next controls. The detail modal shows all parsed fields for a selected log entry (time, action, rule, interface, source, destination, protocol, port, direction, reason, and payload) plus a toggleable raw JSON view with a copy button.</p>
+
+<p>Initialisation uses the same polling guard pattern as the dashboard scripts, checking for the main container every 100ms for up to 5 seconds. The log cards are built using <code>document.createElement</code>. Click events on cards are wired directly per card, not via delegation, since the card set is replaced on each fetch.</p>
+
+<p>Error states render a retry button using a <code>data-action</code> attribute picked up by a delegated listener on the main container, consistent with the CSP no-inline-handler policy used throughout the application.</p>
+
+<p>Exposes <code>window.firewallForceFetch</code>, <code>window.firewallOpenPaginatedModal</code>, and <code>window.firewallState</code>.</p>
+
+<h2>Services View: view/services</h2>
+
+<h3>services.js</h3>
+
+<p>Renders service status cards for all monitored system services, with start, stop, and restart controls. Data comes from <code>services.pl</code> (status) and <code>manage_services.pl</code> (control). Polls status every 15 seconds.</p>
+
+<p>Rendering uses an incremental update strategy. On first load or if the service count changes, a full render replaces the grid. On subsequent updates, only the changed fields within each existing card are updated in place, avoiding flicker. Each card shows a status dot, status badge, CPU percentage, memory percentage, PID, and restart and start or stop buttons.</p>
+
+<p>A grace period system handles slow-starting services. When a start or restart action succeeds, services in the <code>SLOW_START_SERVICES</code> set are shown as Starting for up to 15 seconds rather than immediately reflecting a stopped status if the process has not yet registered. pmacct has an extended 30-second grace period and additional intermediate refresh checks at 3, 8, 15, and 22 seconds because it runs as three aggregated processes with background jobs.</p>
+
+<p>Service control uses CSRF token fetched from <code>control.pl/api/csrf</code> at startup and refreshed on 401 responses. Control actions open a modal immediately showing a spinner, then update to success or error state when the Perl backend returns. Success modals auto-close after 3 seconds. Error modals remain until dismissed. The modal includes a service state panel showing current PID, CPU, memory, RSS, VSZ, user, command, and type from the outcome data.</p>
+
+<p>Six skeleton loading placeholders are shown while the first fetch is in progress. The grid uses delegated click handling for all control buttons to avoid re-binding on each render. A manual refresh button with working and failed visual states is also supported.</p>
+
+<p>Exposes <code>window.fetchStatus</code> for manual trigger.</p>
+
+<h2>System Mail View: view/mail</h2>
+
+<h3>mail.js</h3>
+
+<p>Lists, views, and deletes root mailbox messages via <code>mail.pl</code>. Auto-refreshes every 30 seconds. The mail list is paginated with 20 items per page on desktop and 10 on mobile, adjusting automatically on window resize via a debounced handler.</p>
+
+<p>State tracks all mail objects, the current page, selected IDs as a Set, a CSRF token fetched from <code>control.pl/api/csrf</code>, and a delete callback for the confirmation modal. All DOM element references are cached by ID on initialisation.</p>
+
+<p>Each mail item renders a checkbox, a clickable content area showing subject and sender, and an individual delete button. Clicking the content area opens a view modal that fetches the raw message from <code>/data/inbox/mail/</code> and displays it as plain text. The modal shows subject, sender, date, and size. A copy button copies the message body to clipboard.</p>
+
+<p>Selection state is managed through a <code>Set</code> of file IDs. The select-all checkbox operates on the current page only. Batch operations include batch delete and batch mark as read. Both batch delete and individual delete route through a confirmation modal to prevent accidental deletion. The delete callback pattern stores the pending operation as a function reference in state and executes it only when the user confirms.</p>
+
+<p>Stats in the header show total message count, unread count, high-priority count (messages with error, fail, critical, urgent, or alert in the subject), and total size. Priority detection and read state are client-side only; the backend does not track read state.</p>
+
+<h2>External Traffic View: view/external</h2>
+
+<h3>wan.js</h3>
+
+<p>Renders WAN interface traffic flows from <code>fetch_wan.pl</code> (live) and <code>search_wan.pl</code> (archive). Merged from three previously separate files. Provides live polling, archive search, paginated flow browsing, and per-flow JSON detail.</p>
+
+<p>Live mode polls <code>fetch_wan.pl</code> every 10 seconds showing the 20 most recent flows as a preview. Each fetch uses an <code>AbortController</code> to cancel any in-flight request before starting a new one, preventing race conditions on slow connections. After three consecutive errors the polling stops and an error state is shown.</p>
+
+<p>Archive search mode submits filter parameters (date, hour, minute, protocol, source IP, destination IP, port) to <code>search_wan.pl</code>. When results are returned they are displayed in the paginated modal automatically. When no results are found, a message is shown and live polling resumes after 3 seconds. When an archive search error occurs, the error is shown and live polling resumes after 3 seconds.</p>
+
+<p>Date selects in the search form are populated with the last 7 days with human-readable labels (Today, Yesterday, day names).</p>
+
+<p>Three modals are in use. The search modal collects archive search parameters. The paginated modal shows any flow set (live or archive) with 20 entries per page. Closing the paginated modal restarts live polling. The flow detail modal shows the raw JSON for a selected flow with a copy button using the Clipboard API with execCommand fallback.</p>
+
+<p>Flow cards are built using <code>document.createElement</code> and <code>createElementNS</code> for SVG elements. HTML is never inserted via <code>innerHTML</code> for flow data. Error states in the main container use <code>data-action</code> attributes picked up by a delegated listener.</p>
+
+<p>Exposes <code>window.initializeExternalView</code>, <code>window.forceRefresh</code>, <code>window.openPaginatedModal</code>, and <code>window.resetFilters</code>.</p>
+
+<h2>Internal Traffic View: view/internal</h2>
+
+<h3>lan.js</h3>
+
+<p>Renders LAN interface traffic flows from <code>fetch_lan.pl</code>. Mirrors the architecture of <code>wan.js</code> but covers only the live feed; there is no archive search for LAN traffic. Polls every 10 seconds.</p>
+
+<p>The LAN view additionally tracks multicast traffic as a distinct counter alongside IPv4 and IPv6. Counters are taken directly from the backend response (total, ipv4, ipv6, multicast fields) rather than computed client-side.</p>
+
+<p>Filtering supports protocol, source IP, source MAC, source port, destination port, and IP family. Active filters are shown as badge labels below the filter button. Filters are applied as query parameters to <code>fetch_lan.pl</code>. Auto-refresh pauses while filters are active to prevent the filter state from being overwritten by background polls.</p>
+
+<p>Three modals: a slide-in filter modal, a paginated full-flow modal (20 entries per page, fetching from the backend with offset), and a flow detail modal showing raw JSON with clipboard copy. The paginated modal fetches each page from the backend rather than paginating a client-side dataset, so it always shows fresh data.</p>
+
+<p>Auto-refresh can be toggled via a button in the view header. Toggle state is reflected on the button class and a status label. A last-updated timestamp shows how long ago the last successful fetch completed.</p>
+
+<p>Exposes <code>window.lanEnhanced</code> (with refresh, toggleAutoRefresh, openModal, and state accessors) and <code>window.lanRetry</code>.</p>
+
+<h2>Manage View: view/manage</h2>
+
+<p>The manage view is the most complex in the system. It loads five scripts: <code>ui.js</code>, <code>managenav.js</code>, <code>pf.js</code>, <code>e2g.js</code>, and <code>unbound.js</code>. The scripts must load in this order: <code>ui.js</code> first (required by <code>pf.js</code>), then <code>managenav.js</code>, then the three tab scripts.</p>
+
+<h3>ui.js</h3>
+
+<p>Shared UI primitive library exposing <code>window.UI</code> with three functions. Replaces all native <code>confirm()</code>, <code>alert()</code>, and <code>prompt()</code> calls in the manage view.</p>
+
+<p><code>UI.confirm(options)</code> shows a themed confirmation dialog with title, body text, optional bullet-list consequences, optional warning callout, configurable button labels, and a variant (danger, warning, info) that controls icon and button colour. Returns via <code>onConfirm</code> and <code>onCancel</code> callbacks. Supports Escape key and backdrop click to cancel. Focuses the confirm button on open for keyboard users.</p>
+
+<p><code>UI.toast(message, type, duration)</code> shows a self-dismissing notification in the bottom-right corner. Types are success, error, info, and warning. Default duration is 3500ms. Toasts animate in and out. Multiple toasts stack vertically.</p>
+
+<p><code>UI.error(message, anchorEl)</code> inserts an inline error banner directly after a given anchor element. Removes any existing banner at that anchor before inserting. Auto-removes after 6 seconds. Passing null as message removes an existing banner without adding one.</p>
+
+<p>All three functions inject their styles into a single <code>&lt;style&gt;</code> element on first use. The element is checked by ID before injection so styles are never duplicated. Dark mode is handled via <code>.dark</code> class selectors on the HTML element, consistent with the rest of the application. No Tailwind dark: utilities are used; all colours are defined as explicit CSS rules.</p>
+
+<h3>managenav.js</h3>
+
+<p>The tab navigation controller for the manage view. Mirrors the architecture of <code>view.js</code> with three internal modules: <code>TabState</code>, <code>TabRegistry</code>, and <code>TabSwitcher</code>, plus a public <code>window.ManageNav</code> API.</p>
+
+<p>Tab IDs are <code>pf</code>, <code>e2guardian</code>, and <code>unbound</code>. On switch, <code>TabSwitcher</code> fires a <code>manageTabLeaving</code> event and calls deactivate hooks for the outgoing tab, updates the DOM (removes and adds <code>active</code> classes on content panels and buttons), updates state, fires activate hooks for the new tab, and dispatches a <code>manageTabChanged</code> event for legacy compatibility.</p>
+
+<p><code>TabRegistry</code> allows tab scripts to register <code>onActivate</code> and <code>onDeactivate</code> lifecycle hooks via <code>window.ManageNav.register(tabId, hooks)</code>. If a tab is already active when a script registers, its <code>onActivate</code> hook is called immediately. All hooks are wrapped in try-catch so one broken hook does not prevent others from running.</p>
+
+<p>Dispatches <code>manageNavReady</code> on completion. Tab buttons are re-cloned before binding to prevent duplicate listener accumulation across view reloads.</p>
+
+<p>Public API: <code>ManageNav.register(tabId, hooks)</code>, <code>ManageNav.switchTo(tabId)</code>, <code>ManageNav.getCurrentTab()</code>, <code>ManageNav.debug.getState()</code>. Also maintains <code>window.switchManageTab</code> as a legacy alias.</p>
+
+<h3>pf.js</h3>
+
+<p>The PF firewall management tab. Consolidates what were previously seven separate scripts. Requires <code>ui.js</code>. Boots via the <code>manageTabChanged</code> event when the pf tab becomes active.</p>
+
+<p>Six input sections are managed independently: IP and CIDR, ASN, GeoIP, IP list feeds, a rule builder, and a validation workflow.</p>
+
+<p>IP and ASN sections accept user input, validate format client-side (IP, CIDR, IPv6, ASN normalisation from bare numbers to AS-prefixed format), and write to the queue via <code>pf_write_input.pl</code>. Enter key submits the input field. Each submitted entry is rendered as a card with a delete button that calls <code>pf_delete_input.pl</code>. On success, the card animates out using CSS class transitions rather than immediate removal. Queue entries are loaded from the backend on tab activation via <code>pf_read_input.pl</code>.</p>
+
+<p>The GeoIP section fetches the country list from <code>/data/db/GeoIP/isocountrycodes.html</code>, parses the label elements using <code>DOMParser</code>, and renders them as a searchable checkbox grid. Search filters visible labels in real time. Select all and clear buttons toggle the entire visible set. The GeoIP policy (selected country codes and block or pass action) is written to the queue as a JSON file via <code>pf_write_input.pl</code> with type <code>geoip</code>.</p>
+
+<p>The feeds section loads the protected system intel feeds from <code>/data/db/pf/intel.txt</code> as read-only display items. A separate user feed input allows adding custom HTTP or HTTPS URLs with a block or pass action. User feeds are written to the queue and shown in a separate user feeds list with delete buttons.</p>
+
+<p>The rule builder assembles PF rule syntax from a form with action, direction, quick, log, interface, address family, protocol, source address and port, destination address and port, flags, and state fields. The assembled tokens are shown as a colour-coded live preview. Rules are added to a staging list before submission. The staging list shows numbered rules with per-token syntax highlighting and individual remove buttons. Staged rules can be validated via <code>pf_validate_rule.pl</code> for basic client-side syntax checking, or submitted as a batch to the queue via <code>pf_write_input.pl</code> with type <code>custom_rule</code>, gated behind a <code>UI.confirm</code> dialog listing all staged rules as consequences.</p>
+
+<p>The validation workflow sends a validate trigger to <code>pf_trigger.pl</code>, then polls <code>/data/services/queue/pf-rules/validation-output/verdict.json</code> at one-second intervals for up to 120 seconds. When the verdict file appears, a modal shows pass or fail with statistics (IPs added, ASNs, countries, feeds, rejected, duplicates) or error details. On pass, Apply Changes and View Full Output buttons are available. Apply sends an apply trigger and closes the modal. View Full Output fetches the full validation text from <code>/data/services/queue/pf-rules/validation-output/full-context.txt</code>. Reset sends a reset trigger via <code>pf_trigger.pl</code>, gated behind a <code>UI.confirm</code> dialog listing consequences.</p>
+
+<p>The default rules viewer is a collapsible accordion that fetches <code>/data/services/queue/pf-rules/current</code> and renders it with syntax highlighting: action keywords (pass, block, match), protocol names, port numbers, and directive keywords are each styled as distinct token classes. The accordion auto-refreshes every 30 seconds while open. Refresh and copy buttons are provided.</p>
+
+<p>All state-mutating operations require a CSRF token. The token is fetched at init and stored in module scope. <code>ensureCSRF()</code> fetches a new token if none is present. All fetch calls use <code>credentials: 'same-origin'</code> and <code>X-Requested-With: XMLHttpRequest</code>.</p>
+
+<p>Public API on <code>window.PF</code>: <code>applyRules</code>, <code>closeVerdictModal</code>, <code>showFullOutput</code>, <code>copyOutput</code>. These are used by dynamically rendered modal button handlers.</p>
+
+<h3>e2g.js</h3>
+
+<p>The e2guardian content filter management tab. Boots via the <code>manageTabChanged</code> event when the e2guardian tab becomes active. Manages filter mode switching, feed management, user feed list editing, and filter log viewing.</p>
+
+<p>Mode switching (general or childsafe) sends a request to <code>e2g_mode_switch.pl</code> which queues the operation and polls for up to 25 minutes. Progress is shown in the UI during the wait. An anti-spam check prevents queuing a second job while one is in progress.</p>
+
+<p>The feed list fetches available feeds from <code>e2g_feeds.pl</code> with a mode parameter (general, childsafe, or custom). User feeds are managed through <code>e2g_write_input.pl</code> (add and remove actions). Log viewing calls <code>e2g_get_log.pl</code> and <code>e2g_get_log_info.pl</code> to fetch log content and metadata.</p>
+
+<h3>unbound.js</h3>
+
+<p>The Unbound DNS management tab. Boots exclusively via the <code>manageNavReady</code> event, then registers <code>onActivate</code> and <code>onDeactivate</code> lifecycle hooks with <code>ManageNav</code>. No timers start at load time. Nothing runs until the tab is first opened by the user.</p>
+
+<p>On activation it loads DNS statistics from <code>/data/db/unbound/stats.json</code> and starts a 30-second polling interval. The stats file maps to eight display elements: total queries, cached queries, cache hit rate, cache size, uptime, rate-limited queries, recursion count, and average response time. On deactivation the polling stops, the initialised flag resets, and any open modals are removed.</p>
+
+<p>Six operations are available, all wired via a single delegated click handler that checks whether the unbound content panel is active before processing: refresh stats, purge cache (full flush, requires confirmation), flush domain (single domain cache removal, validates domain format, requires confirmation), dump cache (export), reload configuration (reloads <code>unbound.conf</code> without restart), and DNS lookup (test resolution for a domain). Enter key in both domain input fields triggers their respective operations.</p>
+
+<p>Each operation uses three modal types. Confirmation modals (with optional detail block showing the domain name) resolve as Promises before the operation proceeds. Operation feedback modals show a spinner while the request is in flight, then resolve to a success or error state with optional output text. Success modals auto-close after 4 seconds. Validation error modals replace the browser <code>alert()</code> for input errors. All modals support backdrop click to close. No native <code>confirm()</code>, <code>alert()</code>, or <code>prompt()</code> is used.</p>
+
+<p>Domain validation uses a hostname regex before any network request is made. All text rendered into modal bodies passes through <code>escapeHtml()</code>. No globals are exported.</p>
+
+<h2>Integrity View: view/integrity</h2>
+
+<h3>integrity.js</h3>
+
+<p>Manages the file integrity verification UI for all 18 TNAudit check groups. Communicates with <code>integrity_request.pl</code>, <code>integrity_status.pl</code>, and <code>integrity_files.pl</code>. Calls <code>control.pl/api/csrf</code> for the CSRF token.</p>
+
+<p>Initialisation uses a <code>MutationObserver</code>-based element wait rather than a polling interval, which is more efficient in the SPA context since the observer fires immediately when the element appears rather than waiting for the next interval tick. The observer watches <code>document.body</code> with <code>childList: true, subtree: true</code>.</p>
+
+<p>On load it fetches a summary from <code>integrity_status.pl</code> with action <code>summary</code>, which returns the current state of all check groups from TNAudit.db. Cards are rendered from an HTML template element (<code>#check-card-tpl</code>) using <code>cloneNode(true)</code>, keeping card construction declarative. Each card shows the check name, directory path, description, a status dot and badge, file count, change count, and status string, plus a Verify button and conditionally an Accept Changes button.</p>
+
+<p>The <code>checksData</code> object is the single source of truth for all card states. DOM updates always read from <code>checksData</code>, never from the DOM itself. <code>updateGlobalStats()</code> derives the banner totals and overall status from <code>checksData</code> entries.</p>
+
+<p>Verify requests send to <code>integrity_request.pl</code> with a timestamp-based request time field (format YYYY-MM-DD-HH-MM-SS) that links the request file to its outcome file. The Perl backend blocks for up to 120 seconds polling for the runner's response. Concurrent checks are tracked in an <code>activeChecks</code> Map to prevent duplicate submissions. Each check in progress shows a modal with a spinner and status text, which updates to a results panel or error on completion. Success modals auto-close after 3 seconds.</p>
+
+<p>Accept Changes requests send action <code>update</code> to the same endpoint, triggering <code>TNAudit.pl --update-baseline</code> for the check. Missing files are reported back but not silently accepted. The modal for an accept operation shows accepted count, skipped missing count, error count, and duration, with file lists for any items that could not be accepted.</p>
+
+<p>Verify All iterates the current <code>checksData</code> keys sequentially with a 500ms delay between each request to avoid overwhelming the queue runner. The button is disabled and shows VERIFYING while running.</p>
+
+<p>The violations accordion uses a lazy-load pattern. The accordion content is not fetched until first expansion. Once loaded for a given check, the result is cached in <code>FileAccordion.loadedChecks</code> and not re-fetched on subsequent opens. When violations exist, the accordion auto-expands once (tracked by <code>FileAccordion.autoExpanded</code> to prevent re-expansion on subsequent status updates). The violation count badge updates on every <code>updateGlobalStats()</code> call.</p>
+
+<p>Violations are fetched by calling <code>integrity_files.pl</code>, waiting 500ms for the backend to write the output file, then fetching <code>/data/db/TNAuditFilesList.json</code>. The response can be grouped by check name or flat. On a healthy system both paths render a clean-state panel with a checkmark icon. On a system with violations, each file entry shows filepath, size, permission mode, status badge with icon, and a truncated SHA-256.</p>
+
+<h2>Documentation SPA: documentation.html</h2>
+
+<h3>doc.js</h3>
+
+<p>A self-contained documentation SPA. Loads documentation fragments into <code>#doc-main-content</code> from the <code>docs/</code> directory. Not a view loaded by <code>view.js</code>; it runs on its own standalone <code>documentation.html</code> page.</p>
+
+<p>Twenty-two documents are configured across five sections: Getting Started (preface, quick reference, metrics, orchestration), System and Network (network, firewall, content filter, flow accounting, runners and daemons), Integrity and Alerting (TNAudit, TNWatch), UI Infrastructure and Auth (database, TNEnv, TNConfig, TNAuth, TNSecurity, TNSecurityCheck, TNWAF), Backend (CGI scripts), and Frontend (SPA architecture, CSS, JavaScript). An Installation document closes the list.</p>
+
+<p>Theme management is stored in <code>localStorage</code> under the key <code>tn-docs-theme</code> and falls back to the OS <code>prefers-color-scheme</code> media query on first visit. The theme is applied as a <code>data-theme</code> attribute on the document root rather than a class, keeping it independent of the main dashboard theme mechanism. A toggle button in the header switches between light and dark.</p>
+
+<p>Navigation links use <code>data-doc</code> attributes to identify their target document. All click handlers are wired via <code>addEventListener</code> with no inline handlers, maintaining strict CSP <code>script-src 'self'</code> compliance. Sidebar sections are collapsible with open and closed state tracked via <code>aria-expanded</code> attributes. On mobile, clicking a nav link closes the sidebar. Outside-click handling closes the sidebar when the viewport is 768px or narrower.</p>
+
+<p>Hash-based routing resolves the initial document from <code>window.location.hash</code> on load. The URL hash is updated via <code>history.replaceState</code> on each navigation to allow bookmarking.</p>
+
+<p>Code copy buttons are wired after every fragment load via <code>wireCodeCopyButtons()</code>, which checks a <code>data-wired</code> attribute to prevent duplicate binding. Copy uses the Clipboard API with a <code>textarea execCommand</code> fallback for environments without clipboard access. The button label changes to Copied for 2 seconds on success.</p>
+
+<p>Fragment fetches use <code>Accept: text/html</code> and <code>X-Requested-With: XMLHttpRequest</code> with <code>cache: 'no-cache'</code>. Load and error states are shown in the content area rather than blocking the page. Errors render a callout-danger panel with the HTTP status message.</p>
+
+<h2>Maintenance Page: maintenance.html</h2>
+
+<h3>maintenance.js</h3>
+
+<p>Runs on <code>maintenance.html</code>, the page shown after a system restart or shutdown is triggered by <code>powermgmt.js</code>.</p>
+
+<p>Reads the <code>action</code> query parameter from the URL. If the action is <code>shutdown</code>, a static shutdown message panel is displayed and the script exits immediately. No polling occurs because the system is not coming back.</p>
+
+<p>If the action is <code>restart</code>, a spinner panel is shown and the script begins polling <code>/cgi-bin/control.pl/api/health</code> every 5 seconds. A countdown timer shows seconds until the next poll attempt. Any HTTP response from the health endpoint, regardless of status code, means the server has returned and is accepting connections. The script redirects to <code>index.html</code> 800ms after detecting a response. Network errors (where <code>fetch()</code> throws rather than returning a response) mean the system is still down; polling continues. This distinction ensures the redirect fires on server availability rather than on a specific response body.</p>
+
+<div class="callout callout-note">
+  <p>The self-starting initialisation pattern used by <code>metrics.js</code>, <code>pfstats.js</code>, and <code>servicemonitor.js</code> (polling for a specific element before starting) is necessary because these scripts are loaded into the SPA shell before their target HTML is present in the DOM. The <code>DOMContentLoaded</code> event fires for the shell page, not for dynamically injected view content. The polling approach handles arbitrary injection timing without tight coupling to the view loading sequence.</p>
+</div>
+
+<div class="callout callout-warning">
+  <p>The manage view scripts (<code>pf.js</code>, <code>e2g.js</code>, <code>unbound.js</code>) must register with <code>ManageNav</code> before their tab is first activated. If a script fails to load, its tab will be visible but unresponsive. The <code>manageNavReady</code> event used by <code>unbound.js</code> provides a clean registration point after <code>managenav.js</code> completes initialisation. Scripts that listen for <code>manageTabChanged</code> directly (such as <code>pf.js</code>) must guard against firing before the DOM is ready.</p>
+</div>
+
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>The dashboard loads three independent scripts: <code>metrics.js</code> (collectd system stats, 10s poll), <code>pfstats.js</code> (PF rule and state stats, 15s poll), and <code>servicemonitor.js</code> (eight security service statuses, 30s poll). All three use a DOM-polling guard for SPA-safe initialisation.</li>
+    <li><code>logs.js</code> implements a full log viewer with 25 sources, archive date selection with gap classification, server-side line filtering, client-side regex search, mobile battery conservation, and smart error panels that explain why a log is unavailable.</li>
+    <li><code>firewall.js</code> and <code>wan.js</code> share a similar architecture: live polling, filter modal, paginated full-set modal, and per-entry detail modal. <code>wan.js</code> adds archive search via <code>search_wan.pl</code>. <code>lan.js</code> is live-only but adds multicast tracking and a side-panel filter modal.</li>
+    <li><code>services.js</code> uses incremental card updates to avoid flicker, a grace period system for slow-starting services, and a service-specific timeout map for the control queue.</li>
+    <li>The manage view is controlled by <code>managenav.js</code>, which provides a lifecycle hook system (onActivate, onDeactivate) for the three tab scripts. <code>ui.js</code> provides shared confirm, toast, and error primitives used by <code>pf.js</code> and <code>unbound.js</code>.</li>
+    <li><code>pf.js</code> consolidates seven previously separate PF management scripts into one module covering IP, ASN, GeoIP, feeds, rule builder, and a validation workflow with verdict polling and apply or reset actions.</li>
+    <li><code>unbound.js</code> is lifecycle-driven: nothing starts until the tab is opened, everything stops when it is left. Operations use Promise-based custom modals instead of native browser dialogs.</li>
+    <li><code>integrity.js</code> uses a MutationObserver for initialisation, a template element for card rendering, a single-source-of-truth data object for all card states, and a lazy-load accordion for violation file lists.</li>
+    <li><code>doc.js</code> is a standalone documentation SPA with theme persistence, hash routing, collapsible sidebar sections, and clipboard copy buttons wired after each fragment load.</li>
+    <li><code>maintenance.js</code> distinguishes shutdown (static message, no polling) from restart (health endpoint polling, redirect on any response).</li>
+  </ul>
+</div>

@@ -1,0 +1,485 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>This document covers TNAudit from the operator perspective: what it monitors, how to run it, how to read its output, and what to do when it reports a change. For the internal module API and developer integration guide see the separate developer documentation in <code>/usr/local/share/doc/TN/dev/tnaudit.md</code>.</p>
+  <p>Read the Quick Reference first if you have not already. The integrity check system is listed there under the data directory map and the runner table.</p>
+</div>
+
+<h1>TNAudit: File Integrity Monitoring</h1>
+
+<p>TNAudit monitors the SHA-256 hash of every file in a configured set of directories and individual files. It records a baseline at a known-good time, then verifies the current state against that baseline on demand or on a schedule. Any file that has been modified, deleted, or created since the baseline was taken is reported as a change.</p>
+
+<p>On this system TNAudit monitors 18 check groups spanning the Tangent Networks application code, system configuration, system binaries, libraries, headers, the package database, and the DNS resolver tree. A full baseline covers several thousand files. Verification of the full set runs in seconds.</p>
+
+<h2>Architecture</h2>
+
+<p>TNAudit consists of a single command-line script and four support modules:</p>
+
+<dl>
+  <dt><code>/usr/local/sbin/TNAudit.pl</code></dt>
+  <dd>The main script. Parses command-line options and dispatches to create-baseline, verify, status, list-files, history, or init-db. Runs under Perl taint mode (<code>-T</code>). Always run as root.</dd>
+
+  <dt><code>/etc/TNAudit/TNAuditConfig.pm</code></dt>
+  <dd>Reads and parses <code>integrity_checks.conf</code>. Validates each check definition. Loads the global excludes file. Merges per-check and global exclude patterns.</dd>
+
+  <dt><code>/etc/TNAudit/TNAuditDatabase.pm</code></dt>
+  <dd>All SQLite operations. Creates and manages the three-table schema in <code>TNAudit.db</code>. Provides baseline, verify, status query, and change history functions.</dd>
+
+  <dt><code>/etc/TNAudit/TNAuditExcludes.pm</code></dt>
+  <dd>Pattern matching for file exclusion. Supports shell glob (default), regex (<code>/pattern/</code>), and exact (<code>exact:name</code>) pattern types.</dd>
+
+  <dt><code>/etc/TNAudit/TNAuditScanner.pm</code></dt>
+  <dd>File system traversal and SHA-256 hashing. Uses <code>File::Find</code> for recursive directory walks. Skips symlinks. Records size, mode, uid, gid, mtime, and SHA-256 for each file.</dd>
+</dl>
+
+<p>The modules live at <code>/etc/TNAudit/</code>, outside the httpd chroot. TNAudit runs as root from cron and from the integrity runner shell script. It never runs inside the chroot and is never called by a CGI script directly.</p>
+
+<p>The database lives at:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>/var/www/htdocs/tn/data/db/TNAudit.db</code></pre>
+</div>
+
+<p>This path is inside the webroot so the www user can read it for the dashboard UI. Direct HTTP access to TNAudit.db is blocked by the TNWAF <code>serve_data()</code> denylist, which denies all requests for <code>.db</code> files.</p>
+
+<h2>Configuration Files</h2>
+
+<p>Two configuration files control what TNAudit monitors and what it ignores.</p>
+
+<h3>integrity_checks.conf</h3>
+
+<p>Located at <code>/var/www/htdocs/tn/data/config/integrity_checks.conf</code>. Each active line defines one check group in pipe-delimited format:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>type|check_name|display_name|path|description|excludes</code></pre>
+</div>
+
+<p>Where <code>type</code> is <code>dir</code> for recursive directory scan or <code>file</code> for a single file. The <code>check_name</code> is the short identifier used in API calls, log entries, and the queue system. The <code>excludes</code> field is optional and takes comma-separated patterns applied only to that check, in addition to the global excludes.</p>
+
+<p>The 18 active checks on this system are:</p>
+
+<dl>
+  <dt>assets</dt>
+  <dd>Web Assets. Path: <code>/var/www/htdocs/tn/assets</code>. JavaScript and CSS files served by the dashboard.</dd>
+
+  <dt>cgi</dt>
+  <dd>CGI Scripts. Path: <code>/var/www/htdocs/tn/cgi-bin</code>. All 24 Perl CGI endpoints.</dd>
+
+  <dt>config</dt>
+  <dd>Configuration. Path: <code>/var/www/htdocs/tn/data/config</code>. Security configuration files including <code>security.conf</code>, <code>integrity_checks.conf</code>, and <code>integrity_excludes.conf</code>.</dd>
+
+  <dt>keys</dt>
+  <dd>Encryption Keys. Path: <code>/var/www/htdocs/tn/data/keys</code>. The HMAC and session key files. A change to any file in this directory invalidates all session tokens and breaks all active sessions.</dd>
+
+  <dt>lib</dt>
+  <dd>Perl Modules. Path: <code>/var/www/htdocs/tn/data/lib</code>. The core TN*.pm modules: TNAuth, TNConfig, TNEnv, TNSecurity, TNSecurityCheck, and TNWAF.</dd>
+
+  <dt>etc</dt>
+  <dd>System Configuration. Path: <code>/etc</code>. Full recursive coverage of all system configuration. Per-check excludes: <code>master.passwd</code>, <code>passwd</code>, <code>random.seed</code>, <code>pf/feeds</code>. The password and shadow files are excluded because they change on user operations. The PF feeds directory is excluded because it is updated hourly from external blocklist sources.</dd>
+
+  <dt>usr_local_etc</dt>
+  <dd>Package Configuration. Path: <code>/usr/local/etc</code>. Third-party package configuration including Snort, e2guardian, ClamAV, and all other installed service configs.</dd>
+
+  <dt>usr_bin</dt>
+  <dd>User Binaries. Path: <code>/usr/bin</code>. Standard user commands and utilities. Per-check excludes: <code>*.old</code>, <code>*.backup</code>, <code>*~</code>.</dd>
+
+  <dt>usr_sbin</dt>
+  <dd>System Binaries. Path: <code>/usr/sbin</code>. Essential system administration binaries. Per-check excludes: <code>*.old</code>, <code>*.backup</code>, <code>*~</code>.</dd>
+
+  <dt>usr_libexec</dt>
+  <dd>System Utilities. Path: <code>/usr/libexec</code>. Internal binaries run by other programs. Per-check excludes: <code>*.old</code>, <code>*.backup</code>, <code>*~</code>.</dd>
+
+  <dt>local_bin</dt>
+  <dd>Local Binaries. Path: <code>/usr/local/bin</code>. User-installed executables and scripts. Per-check excludes: <code>*.old</code>, <code>*.backup</code>, <code>*~</code>.</dd>
+
+  <dt>sbin</dt>
+  <dd>System Scripts. Path: <code>/usr/local/sbin</code>. Service management and monitoring scripts including all Tangent runners. Per-check excludes: <code>*.old</code>, <code>*.backup</code>, <code>*~</code>.</dd>
+
+  <dt>usr_lib</dt>
+  <dd>Base System Libraries. Path: <code>/usr/lib</code>. Base system shared libraries. Useful after a sysupgrade to verify the library set matches the expected post-upgrade state.</dd>
+
+  <dt>usr_local_lib</dt>
+  <dd>Package Libraries. Path: <code>/usr/local/lib</code>. Third-party package shared libraries.</dd>
+
+  <dt>usr_include</dt>
+  <dd>System Headers. Path: <code>/usr/include</code>. System-wide C header files.</dd>
+
+  <dt>usr_local_include</dt>
+  <dd>Package Headers. Path: <code>/usr/local/include</code>. Third-party C header files.</dd>
+
+  <dt>pkg</dt>
+  <dd>Package Database. Path: <code>/var/db/pkg</code>. Metadata for all installed packages. The global excludes strip the <code>+CONTENTS</code>, <code>+DESC</code>, <code>+COMMENT</code>, and other per-package metadata files that update on every <code>pkg_add</code> or <code>pkg_delete</code> operation.</dd>
+
+  <dt>var_unbound</dt>
+  <dd>DNS Resolver. Path: <code>/var/unbound</code>. The caching DNS resolver tree. Unbound runs chrooted to this directory.</dd>
+</dl>
+
+<div class="callout callout-tip">
+  <p>To add a new check, append a line to <code>integrity_checks.conf</code> then run <code>TNAudit.pl --create-baseline --check &lt;name&gt;</code>. The new card appears in the UI automatically on the next page load.</p>
+</div>
+
+<div class="callout callout-warning">
+  <p>If you keep dated backup files using the compact <code>YYYYMMDD</code> format (for example <code>script.sh-20260225</code>) in any monitored directory, add the pattern <code>*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]</code> to <code>integrity_excludes.conf</code>. The existing global exclude pattern covers only the hyphenated <code>YYYY-MM-DD</code> format. Without this addition, compact-date backups in <code>sbin</code>, <code>etc</code>, or any other active check will be reported as unexpected new files on every verification run.</p>
+</div>
+
+<h3>integrity_excludes.conf</h3>
+
+<p>Located at <code>/var/www/htdocs/tn/data/config/integrity_excludes.conf</code>. Contains global exclude patterns applied to every check. Patterns are matched against the bare filename, not the full path, unless a regex pattern is used. The three pattern types are:</p>
+
+<dl>
+  <dt>Shell glob (default)</dt>
+  <dd>Plain pattern, matched case-sensitively against the filename. Wildcards: <code>*</code> matches any characters, <code>?</code> matches one character, <code>[abc]</code> and <code>[0-9]</code> match character classes. Examples: <code>*.backup</code>, <code>*~</code>, <code>*-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]</code>.</dd>
+
+  <dt>Regex</dt>
+  <dd>Pattern wrapped in forward slashes. Full Perl regex syntax. Matched against the full file path. Example: <code>/\/lists\//</code> excludes any file under a directory named <code>lists</code>.</dd>
+
+  <dt>Exact</dt>
+  <dd>Prefixed with <code>exact:</code>. Matches the bare filename exactly. Example: <code>exact:master.passwd</code>.</dd>
+</dl>
+
+<p>The global excludes cover editor temporary files (<code>*.swp</code>, <code>*~</code>), backup extensions (<code>*.bak</code>, <code>*.old</code>, <code>*.orig</code>, date-stamped variants), version control directories (<code>.git</code>, <code>CVS</code>), log and temp files, runtime state files (<code>*.pid</code>, <code>*.lock</code>, <code>*.sock</code>), SSH and SSL private key material, OpenBSD shadow password files, Snort dynamic shared objects, ClamAV signature databases, and RRD databases.</p>
+
+<h2>Database Schema</h2>
+
+<p>TNAudit.db contains three tables. The <code>files</code> table holds one row per monitored file with its baseline SHA-256, size, mode, ownership, and modification time. The <code>changes</code> table records every detected modification with old and new hashes and sizes. The <code>checks</code> table stores check metadata from the configuration. All three tables are created automatically by <code>init_db()</code> on first use. The database runs in WAL mode for concurrent reads by the dashboard UI.</p>
+
+<p>File status values in the <code>files</code> table:</p>
+
+<dl>
+  <dt>baseline</dt>
+  <dd>Initial state after a baseline run, or after an operator has accepted a change via <code>--update-baseline</code>. Treated as clean.</dd>
+
+  <dt>verified</dt>
+  <dd>File was checked and its current SHA-256 matches the baseline.</dd>
+
+  <dt>modified</dt>
+  <dd>File exists but its SHA-256 no longer matches the baseline.</dd>
+
+  <dt>missing</dt>
+  <dd>File was in the baseline but no longer exists on disk.</dd>
+
+  <dt>error</dt>
+  <dd>File exists but could not be read during verification.</dd>
+</dl>
+
+<p>New files found during verification (files present on disk but not in the baseline) are reported in the JSON output with status <code>new</code>. They are not written to the <code>files</code> table until a baseline or update-baseline run.</p>
+
+<h2>Command Reference</h2>
+
+<p>All commands require root. Run from the host shell, not from inside the chroot.</p>
+
+<h3>Create or refresh the baseline</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Full baseline across all checks. Clears and rebuilds the files and checks tables.
+# The changes table (audit history) is preserved.
+TNAudit.pl --create-baseline
+
+# Single check baseline. Replaces rows for that check only.
+TNAudit.pl --create-baseline --check cgi
+
+# With JSON output
+TNAudit.pl --create-baseline --json</code></pre>
+</div>
+
+<p>A full baseline deletes all rows from the <code>files</code> and <code>checks</code> tables before scanning. This ensures that check names removed from the configuration file do not leave stale rows behind that would appear as ghost cards in the UI. The <code>changes</code> table is never cleared; audit history is permanent unless explicitly purged.</p>
+
+<div class="callout callout-warning">
+  <p>A full baseline on the complete 18-check set takes several minutes on first run because it hashes every file under <code>/usr/lib</code>, <code>/usr/local/lib</code>, <code>/usr/include</code>, and <code>/var/db/pkg</code>. Subsequent verification runs are fast because they only compare hashes. Run the full baseline only after a confirmed clean state: after a fresh install, after a reviewed sysupgrade, or after deliberately accepting all pending changes.</p>
+</div>
+
+<h3>Verify integrity</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Verify all checks
+TNAudit.pl --verify
+
+# Verify one check
+TNAudit.pl --verify --check cgi
+
+# Verify and get JSON output (used by the runner)
+TNAudit.pl --verify --check cgi --json</code></pre>
+</div>
+
+<p>Verification compares the current SHA-256 of every file in the baseline against the stored hash. It also scans the monitored paths for new files not in the baseline. The result JSON includes counts of verified, modified, missing, and new files, plus a list of changed file paths with their old and new hashes.</p>
+
+<h3>Query status</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Status of all checks from the database
+TNAudit.pl --status --json
+
+# Status of one check
+TNAudit.pl --status --check cgi --json</code></pre>
+</div>
+
+<p>Status queries read the current state of the <code>files</code> table without re-hashing anything. The result reflects the outcome of the last verification run. Use <code>--verify</code> to get a fresh result.</p>
+
+<h3>List monitored files</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNAudit.pl --list-files --check cgi --json</code></pre>
+</div>
+
+<p>Returns all files in the baseline for the named check, with their stored hashes, sizes, modes, and last-checked timestamps. Check name is required for this action.</p>
+
+<h3>Show change history</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Last 50 changes for a check (default)
+TNAudit.pl --history --check cgi
+
+# Last 20 changes
+TNAudit.pl --history --check cgi --limit 20</code></pre>
+</div>
+
+<p>History reads the <code>changes</code> table, which is never cleared by baseline operations. It shows every modification, deletion, and accepted change recorded for the named check, newest first.</p>
+
+<h3>Accept a changed file</h3>
+
+<p>When a file has been legitimately modified after a package update, a configuration edit, or a sysupgrade, run a targeted baseline to accept the new state:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Accept all changes in one check
+TNAudit.pl --create-baseline --check cgi
+
+# Accept everything (use after a reviewed sysupgrade)
+TNAudit.pl --create-baseline</code></pre>
+</div>
+
+<h3>Initialise the database</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNAudit.pl --init-db</code></pre>
+</div>
+
+<p>Creates the database and schema if they do not exist. Safe to run on an existing database; the <code>CREATE TABLE IF NOT EXISTS</code> guards prevent data loss. Run this after first install before any baseline.</p>
+
+<h3>Environment overrides</h3>
+
+<p>All three paths can be overridden for testing without touching the live database:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TAUDIT_DB=/tmp/test.db \
+TAUDIT_CONFIG=/tmp/test_checks.conf \
+TAUDIT_EXCLUDE=/tmp/test_excludes.conf \
+TNAudit.pl --create-baseline</code></pre>
+</div>
+
+<h2>The Runner Pipeline</h2>
+
+<p>The web UI integrity panel triggers on-demand verifications through a queue system rather than calling TNAudit.pl directly. This keeps the CGI layer unprivileged and avoids blocking the HTTP response on a potentially slow hash operation.</p>
+
+<p>The pipeline has three components:</p>
+
+<dl>
+  <dt><code>/usr/local/sbin/integrity_check_runner.sh</code></dt>
+  <dd>The outer loop. Writes its PID to <code>/var/www/htdocs/tn/data/run/webui/integrity_check.pid</code> and calls <code>integrity_check.sh</code> in an infinite loop with a one-second sleep between iterations. Started by <code>rc.local</code> at boot.</dd>
+
+  <dt><code>/usr/local/sbin/integrity_check.sh</code></dt>
+  <dd>The queue processor. Reads request files from <code>/var/www/htdocs/tn/data/queue/integrity/request/</code>. For each request it calls <code>TNAudit.pl</code> with the appropriate action and check name, writes the JSON result to <code>/var/www/htdocs/tn/data/queue/integrity/outcome/</code>, and updates the cached status in <code>/var/www/htdocs/tn/data/services/status/integrity/</code>. Cleans outcome files older than five minutes. Exits silently if the queue is empty.</dd>
+
+  <dt><code>/var/www/htdocs/tn/cgi-bin/integrity_request.pl</code></dt>
+  <dd>The CGI endpoint. Creates a request file in the request directory. The file name encodes a Unix timestamp; the file contents contain the action and check name. Returns immediately to the browser. The actual verification happens asynchronously.</dd>
+</dl>
+
+<p>Request file format:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># filename: request-1741768800
+# contents: one line, two fields
+verify cgi</code></pre>
+</div>
+
+<p>Valid actions in a request file are <code>verify</code>, <code>baseline</code>, and <code>update</code>. The runner maps these to <code>TNAudit.pl --verify</code>, <code>--create-baseline</code>, and <code>--update-baseline</code> respectively.</p>
+
+<p>The outcome file contains the raw JSON output from TNAudit.pl, written as-is:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">json</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>{
+  "success": true,
+  "action": "verify",
+  "check": "cgi",
+  "status": "verified",
+  "files": 24,
+  "verified": 24,
+  "modified": 0,
+  "missing": 0,
+  "new": 0,
+  "changes": 0,
+  "duration": "0.42s"
+}</code></pre>
+</div>
+
+<p>The runner log is at <code>/var/www/tmp/integrity_runner.log</code>. It records every request processed, the TNAudit.pl exit code, duration, and any parse errors.</p>
+
+<h2>Cron Schedule</h2>
+
+<p>TNAudit runs one scheduled job: a full baseline every Sunday at 14:00.</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">cron</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>0 14 * * 0   root   TNAudit.pl --create-baseline >> /var/www/tmp/integrity_baseline.log 2>&1</code></pre>
+</div>
+
+<p>The baseline runs on Sunday to align with the TNWatch weekly purge cycle and to avoid interfering with the daily digest at 09:00. The baseline log at <code>/var/www/tmp/integrity_baseline.log</code> accumulates all weekly runs. Review it after any system change to confirm the baseline completed cleanly.</p>
+
+<div class="callout callout-danger">
+  <p>The weekly cron baseline unconditionally replaces the previous baseline. If the system has been compromised between Sunday runs, running the baseline will overwrite evidence of the change, recording the attacker's modified files as the new known-good state. For this reason the <code>changes</code> table is never cleared by a baseline operation; it accumulates the full history of every detected modification. Review the changes table and the TNWatch digest before accepting a new baseline after any anomaly.</p>
+</div>
+
+<h2>Integration with TNWatch</h2>
+
+<p>TNWatch reads TNAudit.db directly. The TNWatchParser <code>parse_tnaudit</code> function opens TNAudit.db via SQLite, queries the <code>files</code> table for rows with status other than <code>ok</code>, <code>verified</code>, or <code>baseline</code>, and emits a <code>file_change</code> event to the TNWatch event database for each modified or missing file. It also emits one <code>integrity_check</code> summary event per parse cycle with total and changed file counts.</p>
+
+<p>The default TNWatch alert rule <code>tnaudit_change</code> fires an immediate email the first time a <code>file_change</code> event appears. The daily digest includes the TNAudit section with the last known status, total file count, change count, and a list of any changed file paths detected in the past 24 hours.</p>
+
+<h2>Troubleshooting</h2>
+
+<p>Check that the database and config exist and are readable:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>ls -l /var/www/htdocs/tn/data/db/TNAudit.db
+ls -l /var/www/htdocs/tn/data/config/integrity_checks.conf
+ls -l /etc/TNAudit/</code></pre>
+</div>
+
+<p>Run a quick status check to confirm the database is readable and the last verification results are present:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNAudit.pl --status --json | head -40</code></pre>
+</div>
+
+<p>Check the runner is alive:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>cat /var/www/htdocs/tn/data/run/webui/integrity_check.pid
+kill -0 $(cat /var/www/htdocs/tn/data/run/webui/integrity_check.pid) &amp;&amp; echo alive</code></pre>
+</div>
+
+<p>Inspect the runner log for recent activity:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>tail -40 /var/www/tmp/integrity_runner.log</code></pre>
+</div>
+
+<p>Inspect the weekly baseline log:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>tail -20 /var/www/tmp/integrity_baseline.log</code></pre>
+</div>
+
+<p>Query the database directly to see the file status breakdown:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>sqlite3 /var/www/htdocs/tn/data/db/TNAudit.db \
+  "SELECT check_name, status, COUNT(*) FROM files GROUP BY check_name, status ORDER BY check_name"</code></pre>
+</div>
+
+<p>If a check shows no files at all, the baseline for that check has never been run or was cleared. Run a targeted baseline:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNAudit.pl --create-baseline --check cgi</code></pre>
+</div>
+
+<p>If a check path does not exist, TNAuditConfig will skip it with a warning on stderr. The check will not appear in the UI until the path exists and a baseline is run.</p>
+
+<div class="callout callout-note">
+  <p>TNAuditScanner skips symlinks deliberately. The file count shown in the UI card is the count of regular files only, which matches what <code>find /path -type f</code> would return. Do not compare it against <code>ls -la</code> counts, which include symlinks.</p>
+</div>
+
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>TNAudit monitors 18 check groups via SHA-256 hashing. A full baseline covers the Tangent application code, all system configuration, binaries, libraries, headers, the package database, and the DNS resolver tree.</li>
+    <li>The database is at <code>/var/www/htdocs/tn/data/db/TNAudit.db</code>. Modules are at <code>/etc/TNAudit/</code>. Neither lives inside the httpd chroot. TNAudit always runs as root.</li>
+    <li>A full baseline runs every Sunday at 14:00 via cron. Log at <code>/var/www/tmp/integrity_baseline.log</code>. The changes table accumulates history permanently and is never cleared by a baseline run.</li>
+    <li>The web UI triggers on-demand verifications through a queue in <code>data/queue/integrity/</code>. The runner processes requests within one second and writes results to <code>data/queue/integrity/outcome/</code>. Runner log at <code>/var/www/tmp/integrity_runner.log</code>.</li>
+    <li>TNWatch reads TNAudit.db directly on every parse cycle. Any file with modified or missing status triggers an immediate alert email via the <code>tnaudit_change</code> rule and appears in the daily digest.</li>
+    <li>Compact-date backups in the format <code>file-YYYYMMDD</code> are not covered by the existing global exclude pattern. Add <code>*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]</code> to <code>integrity_excludes.conf</code> if you keep backups in this format inside monitored directories.</li>
+  </ul>
+</div>

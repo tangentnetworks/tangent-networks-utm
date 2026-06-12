@@ -1,0 +1,7 @@
+c858d60469d9d8ac.b none swap sw
+c858d60469d9d8ac.a / ffs rw,wxallowed 1 1
+
+swap /var/www/htdocs/tn/data/logs/pf mfs rw,nodev,nosuid,noexec,-s=262144 0 0
+
+swap /var/www/htdocs/tn/data/pipes/pmacct mfs rw,nosuid,nodev,noatime,noexec,-s=64m 0 0
+

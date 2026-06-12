@@ -1,0 +1,15 @@
+$OpenBSD$
+
+Index: src/NaughtyFilter.hpp
+--- src/NaughtyFilter.hpp.orig
++++ src/NaughtyFilter.hpp
+@@ -107,6 +107,9 @@ class NaughtyFilter
+     String search_terms;
+     struct timeval thestart;
+ 
++	String sslproxy_ip;
++	int sslproxy_port;
++
+     // 0=none,1=first line,2=all
+     int headersent = 0;
+ 

@@ -1,0 +1,324 @@
+<!-- BEGIN: EGRESS VIEW -->
+<!-- BEGIN: Banner -->
+<div class="top-0 border-gray-200 bg-gray-50 p-6 backdrop-blur-md dark:border-gray-700 dark:bg-gray-900 sticky z-30 flex items-center justify-between border-b">
+  <div class="gap-4 flex items-center">
+    <div class="rounded-xl bg-blue-600 p-2.5 shadow-lg shadow-blue-500/20">
+      <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+      </svg>
+    </div>
+    <div>
+      <h1 class="text-lg font-extrabold tracking-tight text-gray-900 dark:text-white uppercase italic">External (WAN)</h1>
+    </div>
+  </div>
+  <div class="rounded-xl bg-gray-200/50 p-1 dark:bg-gray-800 flex">
+    <button id="view-live-btn" class="rounded-lg bg-white px-5 py-2 text-xs font-bold text-blue-600 shadow-sm dark:bg-gray-700 dark:text-blue-400 cursor-pointer transition-all">LIVE FEED</button>
+    <button id="open-search-modal" class="rounded-lg px-5 py-2 text-xs font-bold text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 cursor-pointer uppercase transition-all">Search Archives</button>
+  </div>
+</div>
+<!-- END: Banner -->
+<!-- BEGIN: Log Section -->
+<section class="max-w-6xl space-y-6 p-4 md:p-8 container mx-auto">
+  <!-- BEGIN: Stats -->
+  <div class="gap-6 sm:grid-cols-2 lg:grid-cols-4 grid grid-cols-1">
+    <!-- Total Flows (unchanged) -->
+    <div class="card card-hoover rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="text-xs font-bold tracking-wider text-gray-500 dark:text-white mb-2 uppercase">Total Flows</p>
+      <p class="text-3xl font-bold text-gray-900 dark:text-white" id="total-flows">--</p>
+    </div>
+    <!-- IPv4 Flows (NEW) -->
+    <div class="card card-hoover rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="text-xs font-bold tracking-wider text-gray-500 dark:text-white mb-2 uppercase">IPv4 Flows</p>
+      <p class="text-3xl font-bold text-gray-900 dark:text-white" id="ipv4-flows">--</p>
+    </div>
+    <!-- IPv6 Flows (NEW) -->
+    <div class="card card-hoover rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="text-xs font-bold tracking-wider text-gray-500 dark:text-white mb-2 uppercase">IPv6 Flows</p>
+      <p class="text-3xl font-bold text-gray-900 dark:text-white" id="ipv6-flows">--</p>
+    </div>
+    <!-- Status Card (UPDATED) -->
+    <div class="card card-hoover rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="text-xs font-bold tracking-wider text-gray-500 dark:text-white mb-2 uppercase">Status</p>
+      <div class="flex items-center">
+        <span id="status-indicator" class="h-3 w-3 mr-2 relative flex">
+          <!-- Will be populated by JS -->
+        </span>
+        <p class="text-lg font-bold text-gray-900 dark:text-white uppercase" id="status-text">--</p>
+      </div>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="status-detail">--</p>
+    </div>
+  </div>
+  <!-- END: Stats -->
+  <!-- BEGIN: Actitivy Display -->
+  <div class="gap-4 md:flex-row flex flex-col items-center justify-between">
+    <!-- BEGIN: Status Indicators -->
+    <div class="gap-4 flex items-center">
+      <!-- Live View Indicator -->
+      <div id="status-badge" class="badge badge-success gap-2 flex items-center">
+        <span class="h-2 w-2 mr-2 relative flex">
+          <span class="animate-ping bg-green-400 absolute inline-flex h-full w-full rounded-full opacity-75"></span>
+          <span class="h-2 w-2 bg-green-500 relative inline-flex rounded-full"></span>
+        </span>
+        <span class="text-xs font-bold tracking-wider">Live Feed</span>
+      </div>
+      <div class="text-xs font-bold text-gray-500 uppercase">Updated: <span id="last-update-time" class="font-mono text-gray-700 dark:text-gray-300">--:--:--</span>
+      </div>
+    </div>
+    <!-- END: Status Indicators -->
+    <!-- BEGIN: View All Button -->
+    <button id="view-all-btn" class="btn btn-sm btn-secondary bg-blue-700 text-white md:flex hidden">
+      <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+      </svg> View All Results </button>
+    <!-- END: View All Button -->
+  </div>
+  <!-- END: Activity Display -->
+  <!-- BEGIN: PMACCT Log Output -->
+  <div id="main-container" class="min-h-[400px]"></div>
+  <!-- END: PMACCT Log Output -->
+</section>
+<!-- END: Log Section -->
+<!-- BEGIN: Search Modal -->
+<div id="search-modal" class="inset-0 p-4 fixed z-50 hidden items-center justify-center">
+  <div class="inset-0 bg-gray-800/60 backdrop-blur-sm absolute"></div>
+  <!-- BEGIN: Search Modal Body -->
+  <div class="card p-2 max-w-md shadow-xl relative mx-auto flex max-h-[95vh] w-full flex-col overflow-hidden border">
+    <!-- BEGIN: header -->
+    <div class="card-header border-gray-100 p-4 dark:border-gray-800 flex shrink-0 items-center justify-between border-b">
+      <div>
+        <h3 class="text-base font-bold text-gray-900 dark:text-white lowercase">archive search</h3>
+        <p class="text-gray-500 text-[11px]">date, time, protocol and address filters</p>
+      </div>
+      <button id="close-search-modal" class="text-gray-400 hover:text-red-500 transition-colors">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+        </svg>
+      </button>
+    </div>
+    <!-- END: header -->
+    <!-- BEGIN: Form Body -->
+    <form id="search-form" class="card-body p-4 mt-2 flex-1 overflow-y-auto space-y-3">
+      <!-- BEGIN: Date Range -->
+      <div class="space-x-2 grid grid-cols-2">
+        <div class="mt-1">
+          <label class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase">From Date</label>
+          <select id="date-from" name="date_from" required class="rounded border-gray-200 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-700 w-full">
+            <option value="">YYYY-MM-DD</option>
+            <!-- NOTE: Will be populated by JS (default: today) -->
+          </select>
+        </div>
+        <div class="mt-1">
+          <label class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase">To Date</label>
+          <select id="date-to" name="date_to" required class="rounded border-gray-200 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-700 w-full">
+            <option value="">YYYY-MM-DD</option>
+            <!-- NOTE: Will be populated by JS (default: today) -->
+          </select>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 dark:text-gray-400 text-center">Tip: Use the same date for both fields for best performance</p>
+      <!-- END: Date Range -->
+      <!-- BEGIN: Time Window -->
+      <div class="space-x-2 grid grid-cols-2">
+        <div class="mt-1">
+          <label class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase">Start Time</label>
+          <div class="space-x-2 flex">
+            <select name="start_hr" class="rounded border-gray-200 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-700 w-full">
+              <option value="">HH</option>
+              <option value="00">00</option>
+              <option value="01">01</option>
+              <option value="02">02</option>
+              <option value="03">03</option>
+              <option value="04">04</option>
+              <option value="05">05</option>
+              <option value="06">06</option>
+              <option value="07">07</option>
+              <option value="08">08</option>
+              <option value="09">09</option>
+              <option value="10">10</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+              <option value="13">13</option>
+              <option value="14">14</option>
+              <option value="15">15</option>
+              <option value="16">16</option>
+              <option value="17">17</option>
+              <option value="18">18</option>
+              <option value="19">19</option>
+              <option value="20">20</option>
+              <option value="21">21</option>
+              <option value="22">22</option>
+              <option value="23">23</option>
+            </select>
+            <select name="start_min" class="rounded border-gray-200 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-700 w-full">
+              <option value="">MM</option>
+              <option value="00">00</option>
+              <option value="15">15</option>
+              <option value="30">30</option>
+              <option value="45">45</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-1">
+          <label class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase">End Time</label>
+          <div class="space-x-2 flex">
+            <select name="end_hr" class="rounded border-gray-200 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-700 w-full">
+              <option value="">HH</option>
+              <option value="00">00</option>
+              <option value="01">01</option>
+              <option value="02">02</option>
+              <option value="03">03</option>
+              <option value="04">04</option>
+              <option value="05">05</option>
+              <option value="06">06</option>
+              <option value="07">07</option>
+              <option value="08">08</option>
+              <option value="09">09</option>
+              <option value="10">10</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+              <option value="13">13</option>
+              <option value="14">14</option>
+              <option value="15">15</option>
+              <option value="16">16</option>
+              <option value="17">17</option>
+              <option value="18">18</option>
+              <option value="19">19</option>
+              <option value="20">20</option>
+              <option value="21">21</option>
+              <option value="22">22</option>
+              <option value="23">23</option>
+            </select>
+            <select name="end_min" class="rounded border-gray-200 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-700 w-full">
+              <option value="">MM</option>
+              <option value="00">00</option>
+              <option value="15">15</option>
+              <option value="30">30</option>
+              <option value="45">45</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <!-- END: Time Window -->
+      <!-- BEGIN: Protocol -->
+      <div class="mt-1">
+        <label class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase">Protocol</label>
+        <select name="proto" class="rounded border-gray-200 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-700 w-full">
+          <option value="">any proto</option>
+          <option value="tcp">tcp</option>
+          <option value="udp">udp</option>
+          <option value="icmp">icmp</option>
+        </select>
+      </div>
+      <!-- END: Protocol -->
+      <!-- BEGIN: IP Options -->
+      <div class="space-x-2 grid grid-cols-2">
+        <div class="mt-1">
+          <label class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase">Source IP</label>
+          <input type="text" name="src" placeholder="192.168.1.1" class="rounded border-gray-200 py-1.5 text-sm font-mono dark:bg-gray-800 dark:border-gray-700 w-full" />
+        </div>
+        <div class="mt-1">
+          <label class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase">Destination IP</label>
+          <input type="text" name="dst" placeholder="8.8.8.8" class="rounded border-gray-200 py-1.5 text-sm font-mono dark:bg-gray-800 dark:border-gray-700 w-full" />
+        </div>
+      </div>
+      <!-- END: IP Options -->
+      <!-- BEGIN: Port Options -->
+      <div class="space-x-2 grid grid-cols-2">
+        <div class="mt-1">
+          <label class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase">Source Port</label>
+          <input type="number" name="src_port" min="1" max="65535" placeholder="443" class="rounded border-gray-200 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-700 w-full" />
+        </div>
+        <div class="mt-1">
+          <label class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase">Destination Port</label>
+          <input type="number" name="dst_port" min="1" max="65535" placeholder="80" class="rounded border-gray-200 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-700 w-full" />
+        </div>
+      </div>
+      <!-- END: Port Options -->
+      <!-- BEGIN: Bytes Threshold -->
+      <div class="mt-1">
+        <label class="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase">Bytes Threshold (≥)</label>
+        <input type="number" name="bytes_min" min="0" placeholder="1024" class="rounded border-gray-200 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-700 w-full" />
+      </div>
+      <!-- END: Bytes Threshold -->
+    </form>
+    <!-- END: Form Body -->
+    <!-- BEGIN: Action Control -->
+    <div class="card-footer space-x-2 border-gray-100 bg-gray-50/50 p-4 dark:border-gray-800 dark:bg-gray-900/50 flex border-t">
+      <button type="submit" form="search-form" class="rounded bg-blue-600 py-2 text-sm font-bold text-white hover:bg-blue-700 flex-1 uppercase transition-colors">Query Archives</button>
+      <button type="button" id="close-search-modal-footer" class="rounded border-gray-200 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 flex-1 border uppercase transition-colors">Cancel</button>
+    </div>
+    <!-- END: Action Control -->
+  </div>
+  <!-- END: Search Modal Body -->
+</div>
+<!-- END: Search Modal -->
+<!-- BEGIN: Paginated Results Modal -->
+<div id="paginated-modal" class="hidden fixed inset-0 z-50 flex items-start justify-center p-2 md:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+  <div class="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl shadow-2xl w-full max-w-5xl my-4 md:my-8">
+    <!-- BEGIN: Modal Header -->
+    <div class="flex items-center justify-between p-4 md:p-6 border-b border-gray-200 dark:border-gray-700">
+      <div>
+        <h2 class="text-lg md:text-2xl font-bold text-gray-900 dark:text-white">All Traffic Flows</h2>
+        <p class="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-1">Showing <span id="modal-showing" class="font-semibold">1-20</span> of <span id="modal-total" class="font-semibold">--</span></p>
+      </div>
+      <button id="close-paginated-modal" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+        <svg class="w-5 h-5 md:w-6 md:h-6 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    <!-- END: Modal Header -->
+    <!-- BEGIN: Modal Content -->
+    <div class="p-3 md:p-6 max-h-[60vh] overflow-y-auto" id="modal-flows-container">
+      <!-- NOTE: Paginated flows populated here -->
+    </div>
+    <!-- END: Modal Content -->
+    <!-- BEGIN: Pagination Controls -->
+    <div class="flex max-w-fit items-center justify-center space-x-4 p-2">
+      <button id="prev-page" class="mr-2 flex items-center justify-center rounded-lg bg-gray-700 p-2 text-sm font-semibold text-gray-100 transition-colors hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-600" disabled>
+        <svg class="h-4 w-4 md:h-5 md:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+      </button>
+      <div class="flex items-center space-x-2">
+        <span class="text-xs text-gray-700 md:text-sm dark:text-white">Page</span>
+        <span id="current-page" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white">1</span>
+        <span class="text-xs text-gray-700 md:text-sm dark:text-white">of</span>
+        <span id="total-pages" class="rounded-lg bg-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-900 dark:bg-gray-700 dark:text-white">--</span>
+      </div>
+      <button id="next-page" class="ml-2 flex items-center justify-center rounded-lg bg-blue-600 p-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+        <svg class="h-4 w-4 md:h-5 md:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+      </button>
+    </div>
+    <!-- END: Pagination Controls -->
+  </div>
+</div>
+<!-- END: Paginated Results Modal -->
+<!-- BEGIN: Flow Detail Modal -->
+<div id="json-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-2 md:p-4 bg-black/50 backdrop-blur-sm">
+  <div class="bg-white dark:bg-gray-800 rounded-xl md:rounded-2xl shadow-2xl w-full max-w-md md:max-w-2xl mx-auto max-h-[90vh] overflow-hidden flex flex-col">
+    <div class="flex items-center justify-between p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+      <h3 class="text-lg md:text-xl font-bold text-gray-900 dark:text-white">Flow Details</h3>
+      <button id="close-modal" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="p-4 md:p-6 overflow-y-auto flex-1">
+      <pre id="json-beautified" class="text-xs md:text-sm font-mono text-gray-700 dark:text-gray-300 p-3 md:p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto whitespace-pre-wrap break-all"></pre>
+      <button id="copy-json-btn" class="mt-3 md:mt-4 w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm">
+        <svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+        </svg>
+        Copy JSON
+      </button>
+    </div>
+  </div>
+</div>
+<!-- END: Flow Detail Modal -->
+<link rel="stylesheet" href="./assets/css/dynamic.css">
+<script src="./assets/js/wan.js" integrity="sha384-ASRSQNd6tbZJQ5Ooe3ihVfOfF73nGH0SzfyuuCJDJ/1AbmVbjfbLcTKMdH8D1cYp" defer crossorigin="anonymous"></script>
+<!-- END: EGRESS VIEW -->

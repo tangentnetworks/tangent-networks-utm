@@ -1,0 +1,7 @@
+{
+    "success": true,
+    "timestamp": "2026-04-04 05:42:09",
+    "stats": {"custom_rules":10,"asn_added":0,"feeds_added":1,"duplicates":0,"rejected":0,"ip_added":0,"geoip_countries":0},
+    "warnings": ["GeoIP: PH - no data files found (checked /var/www/htdocs/tn/data/db/GeoIP/ipv4/PH.txt and /var/www/htdocs/tn/data/db/GeoIP/ipv6/PH.txt)","GeoIP: VN - no data files found (checked /var/www/htdocs/tn/data/db/GeoIP/ipv4/VN.txt and /var/www/htdocs/tn/data/db/GeoIP/ipv6/VN.txt)","GeoIP: no country data loaded - ensure get_geoip_data.pl has been run"],
+    "errors": []
+}

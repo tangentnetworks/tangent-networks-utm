@@ -1,0 +1,466 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    This document covers the three subsystems that discover and report the live
+    state of the system to the dashboard: firewall health collection via
+    <code>pfhealth.pl</code>, system metrics collection via
+    <code>collectd_exporter.pl</code>, and service status monitoring via
+    <code>monitor.pl</code>. All three follow the same architectural pattern -- 
+    a Perl script collects data, writes JSON to a known path under
+    <code>data/stats/</code> or <code>data/logs/bootlog/</code>, and a shell
+    runner keeps the script executing at a fixed interval. The dashboard reads
+    the JSON files. Nothing communicates over TCP. If a panel is stale or dark,
+    the first question is always whether the relevant runner is alive.
+  </p>
+</div>
+
+<h1>Metrics &amp; Discovery</h1>
+
+<h2>Overview</h2>
+<p>
+  Three independent scripts feed the dashboard with live data. Each is
+  taint-safe Perl (<code>perl -T</code>), writes output atomically to a fixed
+  path, and runs inside a persistent shell loop rather than cron because cron's
+  minimum granularity of one minute is too coarse for a live dashboard. All
+  three runners follow the same pattern: write PID on start, trap exit to clean
+  up the PID file, loop indefinitely with a fixed sleep interval.
+</p>
+<p>
+  The three scripts are deliberately independent. <code>pfhealth.pl</code>
+  knows nothing about <code>collectd_exporter.pl</code>. A failure in one does
+  not affect the others. The dashboard reads each output file directly without
+  any aggregation layer between the scripts and the UI.
+</p>
+
+<h2>pfhealth.pl -- Firewall Health Collection</h2>
+<p>
+  <code>pfhealth.pl</code> queries the OpenBSD packet filter from three
+  sources on each run and writes a single JSON file used by the firewall
+  statistics panel. It runs every six seconds via
+  <code>pf_stats_runner.sh</code>.
+</p>
+<p>
+  The three data sources are <code>systat -n pf</code> for PF status and
+  uptime, <code>pfctl -si</code> for state table metrics, and
+  <code>pfctl -vvsr</code> for per-rule counters. Each source contributes a
+  distinct section to the output JSON.
+</p>
+
+<h3>State Table Metrics</h3>
+<p>
+  From <code>pfctl -si</code> the script extracts four counters: current
+  entries (active state table entries at this moment), searches (lifetime
+  state lookups since boot), inserts (states created since boot), and removals
+  (states destroyed since boot). The dashboard displays current entries as the
+  primary active states figure. Inserts minus removals gives net state growth -- 
+  a persistently growing number suggests a state leak or a SYN flood in
+  progress.
+</p>
+
+<h3>Rule Efficiency Analysis</h3>
+<p>
+  From <code>pfctl -vvsr</code> the script reads every rule's evaluation count,
+  packet count, byte count, and active state count. For each rule it calculates
+  an efficiency ratio: evaluations divided by packets matched. A low ratio
+  means the rule matches most of what it evaluates -- it is in the right place
+  in the ruleset. A high ratio means the rule is being evaluated against a lot
+  of traffic that it never matches -- either the rule should be moved higher in
+  the ruleset, given a <code>quick</code> keyword, or its match criteria should
+  be refined.
+</p>
+<p>
+  The classification thresholds are: a ratio below 5 is Efficient; between 5
+  and 20 is Review; above 20 is Optimize. A rule with evaluations greater than
+  zero but zero packets matched is classified as Unused -- it has never matched
+  anything and is wasting evaluation cycles on every packet. Bytes are
+  converted to IEC units (KiB, MiB, GiB using base-1024) for display.
+</p>
+
+<h3>Output</h3>
+<dl>
+  <dt><code>data/stats/pf_stats.json</code></dt>
+  <dd>Written on every run. Permissions www:www 0644. Contains a timestamp,
+      PF status and since fields, the four state table counters, and the full
+      per-rule array with efficiency classification. The dashboard firewall
+      panel reads this file every 15 seconds.</dd>
+</dl>
+
+<h3>Runner</h3>
+<p>
+  <code>pf_stats_runner.sh</code> runs <code>pfhealth.pl</code> every six
+  seconds. Six seconds was chosen because PF counters change rapidly under
+  load, the script completes in under 100ms, and the browser refreshes at 15
+  seconds -- data is never more than six seconds stale when the browser fetches
+  it. The runner does not use <code>set -e</code>, so a Perl error on one
+  iteration does not kill the loop.
+</p>
+<dl>
+  <dt><code>data/run/webui/pf_stats_runner.pid</code></dt>
+  <dd>PID of the running <code>pf_stats_runner.sh</code> process.</dd>
+</dl>
+
+<h2>collectd_exporter.pl -- System Metrics</h2>
+<p>
+  <code>collectd_exporter.pl</code> bridges collectd's Unix socket interface
+  and the dashboard's JSON layer. collectd runs continuously and maintains
+  live metric values accessible via its socket. The exporter queries the
+  socket on demand and writes structured JSON to per-plugin output files.
+  If the socket is unavailable -- for example because collectd is restarting --
+  the companion module <code>collectd_rrd_exporter.pm</code> reads the last
+  known values from collectd's RRD files and returns them in the same JSON
+  format. The dashboard never sees a failure; the <code>source</code> field
+  in each metric record indicates whether the value came from the live socket
+  (<code>unixsock</code>) or from the archive (<code>rrd</code>).
+</p>
+
+<h3>collectd Configuration</h3>
+<p>
+  collectd must have the <code>unixsock</code> plugin loaded with the socket
+  file pointing to <code>data/sockets/collectd/collectd.sock</code>, and the
+  <code>rrdtool</code> plugin loaded with its base directory pointing to
+  <code>data/rrd/collectd</code>. The <code>Hostname</code> directive in
+  <code>collectd.conf</code> must be set to <code>tangent</code> -- this value
+  is used to construct metric IDs and RRD file paths, and a mismatch will cause
+  all socket queries and RRD lookups to fail silently.
+</p>
+<p>
+  The CPU aggregation plugin is configured to average across all CPU cores and
+  expose the result under the <code>cpu_avg-cpu-average</code> plugin instance.
+  The interface plugin monitors all interfaces except lo0, enc0, and pflog0 --
+  so %%EXT_IF%% (WAN) and %%INT_IF%% (LAN) are the monitored interfaces. The processes
+  plugin tracks 19 named daemons by exact process name.
+</p>
+
+<h3>Supported Plugins</h3>
+<dl>
+  <dt><code>cpu</code></dt>
+  <dd>Average CPU utilisation across all cores, via the collectd aggregation
+      plugin. Displayed as a percentage.</dd>
+
+  <dt><code>memory</code></dt>
+  <dd>Active, inactive, and free memory. Displayed in IEC byte units.</dd>
+
+  <dt><code>load</code></dt>
+  <dd>System load averages at 1, 5, and 15 minutes.</dd>
+
+  <dt><code>swap</code></dt>
+  <dd>Used and free swap space per device (sd1b). Displayed in IEC byte units.</dd>
+
+  <dt><code>df</code></dt>
+  <dd>Root filesystem usage (sd1a, ffs, mounted at /). Free, reserved, and
+      used space in IEC byte units.</dd>
+
+  <dt><code>disk</code></dt>
+  <dd>Read and write octets on sd1. Displayed in IEC byte units.</dd>
+
+  <dt><code>interfaces</code></dt>
+  <dd>Octets, packets, and errors per interface for %%EXT_IF%% and %%INT_IF%%.</dd>
+
+  <dt><code>ping</code></dt>
+  <dd>Round-trip latency, drop rate, and standard deviation to
+      (gateway) and 1.1.1.1 (Cloudflare DNS).</dd>
+
+  <dt><code>pf</code></dt>
+  <dd>OpenBSD PF counters, limits, source tracking, and state table metrics
+      directly from the collectd PF plugin.</dd>
+
+  <dt><code>processes</code></dt>
+  <dd>Per-process metrics for 19 monitored daemons: clamd, cron, dhcpd,
+      e2guardian, ftpproxy, httpd, ntpd, pflogd, pmacctd, smtp-gated, smtpd,
+      snort, snortsentry, sockd, sslproxy, p3scan, unbound, sshd, freshclam.
+      Metrics include PID count, CPU time, RSS, VSZ, and page faults.</dd>
+
+  <dt><code>system</code></dt>
+  <dd>System uptime (displayed as days and hours) and logged-in user count.</dd>
+</dl>
+
+<h3>Execution Modes</h3>
+<p>
+  The exporter supports four modes selected by how it is invoked. With no
+  arguments it exports all registered plugins into a single aggregate JSON
+  file. With one or more plugin names as arguments it exports only those
+  plugins, each to its own output file. In CGI mode (when
+  <code>QUERY_STRING</code> is set) it accepts an <code>action=plugin</code>
+  parameter, writes the output file, and also prints the JSON to stdout.
+  Unknown plugin names are rejected in all modes -- only names present in the
+  internal metrics registry are accepted.
+</p>
+
+<h3>RRD Fallback</h3>
+<p>
+  <code>collectd_rrd_exporter.pm</code> is invoked transparently whenever the
+  Unix socket is unreachable, returns an error, or returns no parseable data.
+  It looks up the RRD file path for each metric, fetches the last five minutes
+  of AVERAGE data, and scans backwards to find the last non-NaN value. Multi-DS
+  RRDs (such as disk I/O with separate read and write data sources) return one
+  value per data source. The <code>source</code> field in the output JSON will
+  read <code>rrd</code> when fallback is active. OpenBSD's collectd PF plugin
+  creates RRD filenames that may contain literal spaces -- the fallback module
+  handles these with an explicit path mapping.
+</p>
+
+<h3>Output</h3>
+<dl>
+  <dt><code>data/stats/collectd_exporter.json</code></dt>
+  <dd>Full aggregate JSON containing all plugins. Written when the exporter
+      is invoked with no arguments.</dd>
+
+  <dt><code>data/stats/collectd/&lt;plugin&gt;/metrics</code></dt>
+  <dd>Per-plugin JSON output. Written when a specific plugin is requested.
+      The dashboard_stats_runner.sh writes cpu, memory, df, and interfaces
+      here every six seconds.</dd>
+</dl>
+
+<h3>Runner</h3>
+<p>
+  <code>dashboard_stats_runner.sh</code> runs a batch export of
+  <code>cpu memory df interfaces</code> every six seconds. These are the four
+  panels that update in near-real-time on the dashboard. Other plugins -- pf,
+  ping, processes, system -- can be exported on demand via CGI or added to a
+  separate lower-frequency runner.
+</p>
+<dl>
+  <dt><code>data/run/webui/dashboard_stats_runner.pid</code></dt>
+  <dd>PID of the running <code>dashboard_stats_runner.sh</code> process.</dd>
+
+  <dt><code>data/logs/collectd/exporter.log</code></dt>
+  <dd>Append-only event log. Records successful exports, batch summaries,
+      and plugin failures with error details. Not rotated by the exporter
+      itself -- tangent_logrotate.sh handles rotation.</dd>
+</dl>
+
+<h2>monitor.pl -- Service Status</h2>
+<p>
+  <code>monitor.pl</code> polls every configured service every six seconds
+  and writes three outputs simultaneously: a plain-text log for manual
+  inspection, a consolidated JSON file read by the Services panel, and
+  individual per-service JSON status files for services that the dashboard
+  fetches independently. Service definitions live in a separate configuration
+  module at <code>/etc/tangent_services.pm</code> -- adding or removing a
+  monitored service requires only a one-line change to that file, with no
+  changes to the main script.
+</p>
+
+<h3>Service Types</h3>
+<p>
+  Each service in the configuration is either a <code>pid_file</code> service
+  or an <code>rcctl</code> service. For pid_file services the monitor reads the
+  named PID file to get the process ID and then queries <code>ps</code> for
+  metrics. The PID file must exist, be readable, and contain only a numeric
+  PID. For rcctl services the monitor uses <code>pgrep -n</code> with the
+  configured process name. The process name must match what <code>pgrep</code>
+  sees -- this may differ from the rcctl service name (for example ftp-proxy
+  is configured as <code>name =&gt; "ftp-proxy"</code>).
+</p>
+<p>
+  For each running process the monitor collects PID, user, CPU%, memory%,
+  RSS, VSZ, command, arguments, and TCP port listeners via
+  <code>netstat -an -p tcp</code>. All subprocess calls use the list form of
+  <code>open("-|", ...)</code> rather than backticks, which avoids spawning a
+  shell and prevents injection.
+</p>
+
+<h3>Aggregation Groups</h3>
+<p>
+  Related processes can be grouped into a single logical entry in the JSON
+  output using the <code>%aggregation</code> hash in
+  <code>tangent_services.pm</code>. Services listed in an aggregation group
+  are excluded from standalone JSON output and appear only inside their group.
+  The group status is <code>running</code> if all member services are running,
+  <code>degraded</code> if some but not all are running, and
+  <code>stopped</code> if none are running. The pmacct three-instance
+  architecture is expressed as one aggregation group with three member services.
+</p>
+
+<h3>Output</h3>
+<dl>
+  <dt><code>data/logs/bootlog/services.json</code></dt>
+  <dd>Consolidated JSON snapshot. Contains a timestamp and a map of all
+      services. Aggregated groups appear as single entries with a
+      <code>subprocesses</code> array and rolled-up aggregate metrics.
+      This is the primary feed for the Services panel in the dashboard.</dd>
+
+  <dt><code>data/logs/bootlog/services.log</code></dt>
+  <dd>Plain-text status log. One block per service in alphabetical order by
+      key. Useful for quick manual inspection. Written on every run.</dd>
+
+  <dt><code>data/services/status/&lt;key&gt;/status</code></dt>
+  <dd>Individual JSON status file per service key or aggregation group key.
+      Written on every run for consumption by dashboard components that fetch
+      service status independently.</dd>
+</dl>
+
+<h3>Runner</h3>
+<p>
+  <code>service_monitor_runner.sh</code> invokes <code>monitor.pl</code> every
+  six seconds. Because <code>monitor.pl</code> runs to completion on each
+  invocation (it is not a daemon), the effective poll rate is the sleep
+  interval plus script execution time. On a typical system <code>monitor.pl</code>
+  completes in well under one second, so the effective rate closely tracks six
+  seconds. A non-zero exit from <code>monitor.pl</code> does not abort the
+  loop -- the runner continues regardless.
+</p>
+<dl>
+  <dt><code>data/run/webui/service_monitor_runner.pid</code></dt>
+  <dd>PID of the running <code>service_monitor_runner.sh</code> process.</dd>
+</dl>
+
+<h2>The Runner Pattern</h2>
+<p>
+  All three runners share the same design. It is worth understanding because
+  the same pattern is used across all 17 WebUI runners in the system.
+</p>
+<p>
+  On start the runner writes its own PID to a known file and registers a trap
+  that removes the PID file on any exit. It then loops indefinitely: run the
+  script, sleep for the configured interval, repeat. There is no <code>set
+  -e</code> -- a script failure on one iteration does not kill the loop.
+  Stdout and stderr are redirected to <code>/dev/null</code> when launched
+  from <code>start_service</code> in rc.local -- errors appear in the relevant
+  service log, not on the console.
+</p>
+<p>
+  The interval of six seconds was chosen because script execution times are
+  well under 100ms, the browser refresh rate for live panels is 15 seconds,
+  and six seconds guarantees data is never more than six seconds stale when
+  the browser fetches it. It is not a magic number -- the sleep value in any
+  runner can be adjusted freely without touching the monitored script.
+</p>
+<p>
+  The PID file serves two purposes. Externally, other scripts and the dashboard
+  use it to determine whether a runner is alive. Internally, rc.local's
+  <code>start_service</code> function reads it to guard against double-starting
+  a runner that is already running. If the PID file exists and the process is
+  alive, <code>start_service</code> returns without launching a second instance.
+  If the PID file exists but the process is gone -- a stale file from a crash --
+  <code>start_service</code> removes it and proceeds with a fresh start.
+</p>
+
+<h2>Security</h2>
+<p>
+  All three scripts run under Perl taint mode (<code>perl -T</code>). This
+  means all data from external sources -- environment variables, command-line
+  arguments, file contents, subprocess output -- is treated as tainted and must
+  pass through an explicit regex validation before use in any system call or
+  file operation. The <code>PATH</code> is set to a minimal safe value at
+  startup and <code>IFS</code>, <code>CDPATH</code>, <code>ENV</code>, and
+  <code>BASH_ENV</code> are deleted. CGI input in <code>collectd_exporter.pl</code>
+  is validated against the metrics registry before any processing -- an unknown
+  plugin name causes an immediate error rather than a silent skip.
+</p>
+
+<h2>Output Files Reference</h2>
+<dl>
+  <dt><code>data/stats/pf_stats.json</code></dt>
+  <dd>PF state table metrics and per-rule efficiency data.
+      Updated every 6 seconds by pf_stats_runner.sh.</dd>
+
+  <dt><code>data/stats/collectd_exporter.json</code></dt>
+  <dd>Full aggregate collectd metrics (all plugins).
+      Updated on demand or by full aggregate invocation.</dd>
+
+  <dt><code>data/stats/collectd/cpu/metrics</code></dt>
+  <dd>CPU utilisation. Updated every 6 seconds by dashboard_stats_runner.sh.</dd>
+
+  <dt><code>data/stats/collectd/memory/metrics</code></dt>
+  <dd>Memory usage. Updated every 6 seconds by dashboard_stats_runner.sh.</dd>
+
+  <dt><code>data/stats/collectd/df/metrics</code></dt>
+  <dd>Root filesystem usage. Updated every 6 seconds by dashboard_stats_runner.sh.</dd>
+
+  <dt><code>data/stats/collectd/interfaces/metrics</code></dt>
+  <dd>Interface traffic (%%EXT_IF%% + %%INT_IF%%). Updated every 6 seconds by dashboard_stats_runner.sh.</dd>
+
+  <dt><code>data/stats/collectd/&lt;plugin&gt;/metrics</code></dt>
+  <dd>Per-plugin metrics for load, swap, disk, ping, pf, processes, system.
+      Updated on CGI request or manual invocation.</dd>
+
+  <dt><code>data/logs/bootlog/services.json</code></dt>
+  <dd>Consolidated service status for all monitored daemons.
+      Updated every 6 seconds by service_monitor_runner.sh.</dd>
+
+  <dt><code>data/logs/bootlog/services.log</code></dt>
+  <dd>Plain-text service status. Updated every 6 seconds.</dd>
+
+  <dt><code>data/services/status/&lt;key&gt;/status</code></dt>
+  <dd>Individual per-service JSON status files.
+      Updated every 6 seconds.</dd>
+
+  <dt><code>data/sockets/collectd/collectd.sock</code></dt>
+  <dd>collectd Unix socket. Created by collectd at startup and removed at
+      shutdown. rc.local sleeps 2 seconds after starting collectd to ensure
+      the socket exists before the exporter first runs.</dd>
+</dl>
+
+<h2>Recovery</h2>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check if a runner is alive
+kill -0 $(cat /var/www/htdocs/tn/data/run/webui/pf_stats_runner.pid) \
+    && echo "running" || echo "dead"
+
+# Restart pf_stats_runner manually
+kill $(cat /var/www/htdocs/tn/data/run/webui/pf_stats_runner.pid) 2>/dev/null
+/usr/local/sbin/pf_stats_runner.sh &
+
+# Restart dashboard_stats_runner manually
+kill $(cat /var/www/htdocs/tn/data/run/webui/dashboard_stats_runner.pid) 2>/dev/null
+/usr/local/sbin/dashboard_stats_runner.sh &
+
+# Restart service_monitor_runner manually
+kill $(cat /var/www/htdocs/tn/data/run/webui/service_monitor_runner.pid) 2>/dev/null
+/usr/local/sbin/service_monitor_runner.sh &
+
+# Run pfhealth.pl manually and check output
+/usr/local/sbin/pfhealth.pl
+cat /var/www/htdocs/tn/data/stats/pf_stats.json | grep TS
+
+# Export a single collectd plugin manually
+/usr/local/sbin/collectd_exporter.pl cpu
+cat /var/www/htdocs/tn/data/stats/collectd/cpu/metrics
+
+# Check collectd socket exists
+ls -la /var/www/htdocs/tn/data/sockets/collectd/collectd.sock
+
+# Check collectd exporter log
+tail -20 /var/www/htdocs/tn/data/logs/collectd/exporter.log
+
+# Run monitor.pl manually and check output
+/usr/local/sbin/monitor.pl
+cat /var/www/htdocs/tn/data/logs/bootlog/services.json | grep timestamp</code></pre>
+</div>
+
+<!-- SUMMARY -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li><code>pfhealth.pl</code> queries PF state tables and per-rule counters
+        every six seconds and classifies rule efficiency automatically -- no
+        manual <code>pfctl</code> parsing required to identify ruleset
+        bottlenecks.</li>
+    <li><code>collectd_exporter.pl</code> provides live system metrics via
+        collectd's Unix socket with automatic transparent fallback to RRD
+        files if collectd is temporarily unavailable.</li>
+    <li><code>monitor.pl</code> tracks 19 system daemons, aggregates related
+        processes into logical groups, and writes structured JSON that feeds
+        the Services panel every six seconds.</li>
+    <li>All three use the same runner pattern: write PID, trap exit, loop
+        indefinitely. Understanding one runner means understanding all 17.</li>
+    <li>If a dashboard panel is stale or dark, check the corresponding runner
+        PID file first. If the runner is alive and the panel is still stale,
+        check the output file timestamp and then the relevant log.</li>
+  </ul>
+</div>

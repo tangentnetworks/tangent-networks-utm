@@ -1,0 +1,7 @@
+{
+  "success": true,
+  "request_id": "1769839105775_06799",
+  "output": "The following name servers are used for lookup of google.com.\n""forwarding request:\n""Delegation with 0 names, of which 0 can be examined to query further addresses.\n""It provides 4 IP addresses.\n""9.9.9.11        	expired, rto 494647816 msec, tA 0 tAAAA 0 tother 0.\n""149.112.112.11  	expired, rto 494647816 msec, tA 0 tAAAA 0 tother 0.\n""2620:fe::11     	expired, rto 494647816 msec, tA 0 tAAAA 0 tother 0.\n""2620:fe::fe:11  	not in infra cache.
+",
+  "timestamp": 1769839107
+}

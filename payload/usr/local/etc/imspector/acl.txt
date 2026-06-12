@@ -1,0 +1,8 @@
+# ACL sample file. Format is:
+# allow|deny localid|all [groupchat|remoteid1 ... remoteidN]
+# NOTE: Currently an ACL cannot be broken across multiple lines!
+
+allow sales@hotmail.com client@hotmail.com company.com
+allow admin@company.com
+allow all support@company.com
+deny all

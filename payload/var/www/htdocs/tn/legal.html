@@ -1,0 +1,158 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!DOCTYPE html>
+<html lang="en" class="">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Take control of your network security with Tangent Networkss Firewall and Router. Easily manage access, configure settings, and protect your devices.">
+    <title>Tangent Networkss | Web interface for managing your firewall and router</title>
+    <link rel="stylesheet" href="./assets/css/tangent.css">
+  </head>
+  <!-- BEGIN: Page -->
+  <!-- Reverted background classes to robust dual-theme Tailwind classes -->
+  <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
+    <!-- BEGIN: NAVIGATION -->
+    <header id="layout-navigation-block">
+      <!-- BEGIN: NAVBAR -->
+      <nav class="bg-white dark:bg-gray-900 fixed w-full z-20 top-0 start-0 border-b border-gray-200 dark:border-gray-700 shadow-lg">
+        <div class="max-w-screen-xl flex items-center justify-between mx-auto p-4">
+          <!-- 1. Logo/Brand (FIX: Combined into one responsive anchor to prevent the logo gap) -->
+          <button class="inline-flex items-center justify-center p-2 rounded-lg text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90 shadow-md">
+            <div class="flex items-center">
+              <!-- NOTE: Mobile Icon Logo -->
+              <img src="./assets/images/logo/icon.svg" alt="TN logo icon" class="h-5 w-auto object-contain md:hidden">
+              <!-- NOTE: Desktop Full Logo -->
+              <img src="./assets/images/logo/tnw.svg" alt="TN logo full" class="h-5 w-auto object-contain hidden md:block">
+            </div>
+          </button>
+          <!-- END: Logo/Brand -->
+          <div class="flex items-center space-x-2">
+            <!-- BEGIN: Theme Toggle Button -->
+            <button id="theme-toggle" type="button" class="inline-flex items-center justify-center p-2 rounded-lg text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90 shadow-md">
+              <!-- NOTE: Dark Mode -->
+              <svg id="theme-toggle-dark-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+              </svg>
+              <!-- NOTE: Light Mode-->
+              <svg id="theme-toggle-light-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"></path>
+              </svg>
+            </button>
+            <!-- END: Theme Toggle Button -->
+            <!-- BEGIN: User Dropdown Container -->
+            <div class="relative">
+              <!-- User Dropdown Toggle Button (Serving as the main utility menu) -->
+              <button id="user-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90" aria-expanded="false">
+                <span class="sr-only">Open user menu</span>
+                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <path stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M5 7h14M5 12h14M5 17h14"></path>
+                </svg>
+              </button>
+              <!-- Dropdown Menu -->
+              <div id="dropdown-user" class="z-50 absolute right-0 mt-2 bg-gray-50 dark:bg-gray-900 border border-default rounded-lg shadow-lg w-44 hidden">
+                <ul class="p-2 text-sm font-medium" role="none">
+                  <li>
+                    <a href="index.html" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Sign In</a>
+                  </li>
+                  <li>
+                    <a href="pwreset.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Reset Password</a>
+                  </li>
+		  <li>
+                    <a href="documentation.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Documentation</a>
+                  </li>
+                  <li>
+                    <a href="privacy.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Privacy</a>
+                  </li>
+                  <li>
+                    <a href="license.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">License</a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <!-- END: User Dropdown Container -->
+          </div>
+          <!-- END: Action Buttons -->
+        </div>
+      </nav>
+    </header>
+    <!-- END: NAVIGATION -->
+    <!-- BEGIN: Main Content - PRIVACY POLICY -->
+    <main class="relative flex-grow">
+      <!-- Added pt-20 padding to account for the fixed header height -->
+      <div class="max-w-screen-xl mx-auto p-4 pt-20">
+        <!-- Ensure content is centered and takes up space correctly -->
+        <article class="prose prose-neutral lg:prose-lg dark:prose-invert max-w-screen-xl bg-white p-8 shadow-2xl dark:bg-gray-900">
+          <div>
+            <!-- Title -->
+            <div class="mb-6 rounded-lg bg-gray-100 p-5 text-center shadow-md dark:bg-gray-800">
+              <h1 class="mb-2 text-3xl font-semibold text-gray-900 dark:text-white">Terms of Service (ToS)</h1>
+              <p class="p-3 text-base font-normal text-gray-700 dark:text-white">Last Updated On: <time datetime="2025-12-06T11:14:50+05:30">Sat Dec 6 11:14:50 AM IST 2025</time>
+              </p>
+            </div>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">These Terms of Service ("Terms") constitute a legally binding agreement between Tangent Network ("Company", "we", "us", or "our") and any individual or entity accessing or using the Tangent Network WebUI Application ("Application"). By accessing, installing, deploying, or using the Application, the user ("User", "you") acknowledges and agrees to be bound by these Terms.</p>
+            <!-- Section Heading -->
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">1. Acceptance of Terms</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">Your access to and use of the Application is conditioned upon your acceptance of these Terms. If you do not agree to these Terms, you are prohibited from using the Application and must cease all access to it.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">2. Purpose and Scope of the Application</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">The Application is intended to manage network security systems including, but not limited to, firewall configurations, routing mechanisms, intrusion detection and prevention systems (IDPS), and related security infrastructure. The User acknowledges that the Application is designed for technical, administrative, and operational purposes within professional or organizational environments.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">3. User Responsibilities</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">Users are responsible for ensuring that the Application is deployed, configured, and operated in accordance with applicable laws, organizational policies, security best practices, and technical guidelines. Users shall maintain the confidentiality of access credentials, prevent unauthorized access, and ensure that all actions performed within the Application are done by authorized personnel.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">4. Compliance and Lawful Use</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">The User agrees not to employ the Application for unlawful, unauthorized, or malicious activities. This includes any action that compromises network integrity, violates data protection laws, or interferes with the operation of third-party systems. The User assumes full responsibility for all actions executed through the Application.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">5. Intellectual Property</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">All intellectual property rights associated with the Application, including its design, interface, documentation, and underlying technology, remain the exclusive property of Tangent Network or its licensors. Use of the Application does not grant the User any rights, titles, or interests other than those expressly provided under these Terms or an applicable license agreement.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">6. Data Handling and Privacy</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">The Application does not collect, store, or transmit personal or operational data unless such information is voluntarily provided by the User, specifically for support or troubleshooting purposes. All voluntarily supplied information will be handled strictly in accordance with the Privacy Policy associated with this Application.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">7. Security Responsibilities</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">While the Application is designed to operate within secure environments, the User is solely responsible for ensuring adequate system security, including device hardening, access controls, network segregation, patching, and backup procedures. Tangent Network does not guarantee immunity from security incidents arising due to misconfiguration, environmental vulnerabilities, or external factors beyond its control.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">8. No Warranty</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">To the fullest extent permitted by law, the Application is provided on an "as is" and "as available" basis without warranties of any kind, whether express, implied, statutory, or otherwise. This includes, without limitation, implied warranties of fitness for a particular purpose, merchantability, performance, accuracy, and non-infringement.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">9. Limitation of Liability</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">To the maximum extent permitted under applicable law, Tangent Network shall not be liable for any direct, indirect, incidental, consequential, exemplary, or special damages arising out of or relating to the use or inability to use the Application. This includes, without limitation, operational disruptions, data loss, security breaches resulting from user configuration, financial loss, or system downtime.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">10. Modifications and Updates</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">Tangent Network reserves the right to modify, update, enhance, or discontinue features of the Application at any time. Such changes may be introduced for reasons including legal compliance, performance improvements, security enhancements, or functional adjustments. Continued use of the Application following modifications constitutes acceptance of the updated Terms.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">11. Termination</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">Tangent Network may suspend or terminate User access to the Application at its discretion in cases of misuse, violation of these Terms, or any circumstance deemed necessary to protect system integrity, security, or legal compliance. Upon termination, the User must cease all use of the Application and delete any associated materials as instructed.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">12. Governing Law and Jurisdiction</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">These Terms shall be governed by and interpreted in accordance with the laws of the State of Kerala, India. All disputes arising out of or relating to the Application or these Terms shall fall under the exclusive jurisdiction of the competent courts situated in Kerala, India.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">13. Entire Agreement</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">These Terms constitute the complete and exclusive agreement between Tangent Network and the User concerning the use of the Application and supersede all prior verbal or written understandings, communications, or agreements relating to the Application.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">14. Contact Information</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">For matters pertaining to these Terms, including clarification, compliance inquiries, or legal notices, Users may contact Tangent Network through the official communication channels provided within the Application or its accompanying documentation.</p>
+          </div>
+        </article>
+      </div>
+    </main>
+    <!-- END: Main Content -->
+    <!-- BEGIN: Back To Top -->
+    <button id="backToTop" type="button" class="back-to-top text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-full text-lg p-3 text-center opacity-0 invisible transition-opacity duration-300 shadow-xl">
+      <svg class="w-6 h-6 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v13m0-13 4 4m-4-4-4 4"></path>
+      </svg>
+    </button>
+    <!-- END: Back To Top -->
+    <!-- BEGIN: Footer -->
+    <footer class="bg-white dark:bg-gray-900 rounded-t-xl shadow-inner border-t border-gray-200 dark:border-gray-700 mt-auto">
+      <div class="w-full mx-auto max-w-screen-xl p-4 md:flex md:items-center md:justify-between">
+        <span class="text-xs text-gray-600 dark:text-white sm:text-center">© 2023 <a href="https://tangentnet.top/" class="hover:underline text-blue-500 hover:text-blue-400">Tangent Networks™</a>. All Rights Reserved. </span>
+        <ul class="flex flex-wrap items-center mt-3 text-sm font-medium text-body sm:mt-0">
+          <li>
+            <a href="privacy.html" target="_blank" rel="noopener noreferrer" class="hover:underline text-blue-500 hover:text-blue-400 me-4 md:me-6">Privacy</a>
+          </li>
+          <li>
+            <a href="license.html" target="_blank" rel="noopener noreferrer" class="hover:underline text-blue-500 hover:text-blue-400 me-4 md:me-6">License</a>
+          </li>
+        </ul>
+      </div>
+    </footer>
+    <!-- END: Footer -->
+    <!-- BEGIN: JavaScript -->
+    <script src="./assets/js/ts.js" integrity="sha384-TH4RWg6PiUgp3X5p0KFpJPI48AYQL3BjUGLmYsswiOPb3uRy6AfJ0OawHKaN2lmo" defer crossorigin="anonymous"></script>
+  </body>
+</html>

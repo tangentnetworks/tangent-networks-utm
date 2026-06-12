@@ -1,0 +1,5724 @@
+/*
+ * SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/*
+ * dynamic.css — Tangent Networks utility classes
+ * Framework-agnostic. Survives Tailwind upgrades/removal.
+ * All classes prefixed tn- to avoid collision with Tailwind or component CSS.
+ *
+ * Sections:
+ *   1.  Visibility toggles
+ *   2.  Status backgrounds (data-attribute selectors)
+ *   3.  Status text colours
+ *   4.  Icon pseudo-elements (ui.js Category 3)
+ *   5.  Body scroll lock (mail.js modals)
+ *   6.  Accordion icon rotation (pf.js / integrity.js)
+ *   7.  Card delete animation (pf.js)
+ *   8.  Offscreen clipboard textarea (firewall.js / wan.js / lan.js)
+ *   9.  PF bar width via CSS custom property (pfstats.js)
+ *  10.  Button loading state (services.js)
+ *  11.  Log line visibility (logs.js)
+ *  12.  Maintenance page view toggling
+ *  13.  DEVEL mode banner
+ */
+
+
+/* ============================================================
+   0. GLOBAL TEXT + DARK MODE FIX
+   tangent.css has a Gemini-introduced bug:
+     :root:where(.dark, .dark *) body {
+       background-color: var(--color-white);  ← white bg in dark mode
+       color: var(--color-white);             ← white text on white bg
+     }
+   We override it here. dynamic.css is unlayered so it beats @layer base.
+   Target: text-gray-600 in light, white in dark — readable everywhere.
+   ============================================================ */
+
+:root:where(.dark, .dark *) body {
+    background-color: #111827 !important;
+    color: #f9fafb !important;
+}
+
+/* Light mode default body text — text-base (16px), gray-600 */
+body {
+    font-size: 1rem;
+    color: #4b5563;
+}
+
+/* Global minimum readable font size — floor text-[9px]/[10px] to 12px, bump xs to 13px */
+.text-\[9px\]  { font-size: 0.75rem !important; }
+.text-\[10px\] { font-size: 0.75rem !important; }
+.text-xs       { font-size: 0.8125rem !important; }
+
+/* Missing dark:text-* utilities — tangent.css only compiled gray-300/400/500 + white */
+.dark\:text-gray-100 { &:where(.dark, .dark *) { color: #f3f4f6; } }
+.dark\:text-gray-200 { &:where(.dark, .dark *) { color: #e5e7eb; } }
+.dark\:text-gray-600 { &:where(.dark, .dark *) { color: #4b5563; } }
+.dark\:text-gray-700 { &:where(.dark, .dark *) { color: #374151; } }
+.dark\:text-gray-800 { &:where(.dark, .dark *) { color: #1f2937; } }
+.dark\:text-gray-900 { &:where(.dark, .dark *) { color: #111827; } }
+
+/* Flip light-only text-gray-* in dark mode for elements with no dark: override */
+:where(.dark, .dark *) .text-gray-900 { color: #f3f4f6; }
+:where(.dark, .dark *) .text-gray-800 { color: #e5e7eb; }
+:where(.dark, .dark *) .text-gray-700 { color: #d1d5db; }
+:where(.dark, .dark *) .text-gray-600 { color: #9ca3af; }
+
+/* ============================================================
+   1. VISIBILITY TOGGLES
+   ============================================================ */
+
+.tn-hidden {
+    display: none !important;
+}
+
+.tn-visible {
+    display: block !important;
+}
+
+.tn-flex {
+    display: flex !important;
+}
+
+
+/* ============================================================
+   2. STATUS BACKGROUNDS  (data-status-type attribute)
+   Used by any element that needs a dynamic background colour
+   set by JS without an inline style attribute.
+   ============================================================ */
+
+[data-status-type="success"] {
+    background: rgba(40, 167, 69, 0.15);
+    border-left: 3px solid rgba(40, 167, 69, 0.6);
+}
+
+[data-status-type="error"] {
+    background: rgba(220, 53, 69, 0.15);
+    border-left: 3px solid rgba(220, 53, 69, 0.6);
+}
+
+[data-status-type="info"] {
+    background: rgba(0, 123, 255, 0.12);
+    border-left: 3px solid rgba(0, 123, 255, 0.5);
+}
+
+[data-status-type="warning"] {
+    background: rgba(255, 193, 7, 0.15);
+    border-left: 3px solid rgba(255, 193, 7, 0.6);
+}
+
+
+/* ============================================================
+   3. STATUS TEXT COLOURS  (data-color-role attribute)
+   Replaces services.js setElementText() color param.
+   ============================================================ */
+
+[data-color-role="muted"] {
+    color: #6b7280;
+}
+
+.dark [data-color-role="muted"] {
+    color: #9ca3af;
+}
+
+[data-color-role="success"] {
+    color: #065f46;
+}
+
+.dark [data-color-role="success"] {
+    color: #6ee7b7;
+}
+
+[data-color-role="error"] {
+    color: #991b1b;
+}
+
+.dark [data-color-role="error"] {
+    color: #fca5a5;
+}
+
+[data-color-role="warning"] {
+    color: #92400e;
+}
+
+.dark [data-color-role="warning"] {
+    color: #fde68a;
+}
+
+[data-color-role="primary"] { color: #111827; }
+.dark [data-color-role="primary"] { color: #f9fafb; }
+
+[data-color-role="info"] { color: #2563eb; }
+.dark [data-color-role="info"]    { color: #60a5fa; }
+
+
+/* ============================================================
+   4. ICON PSEUDO-ELEMENTS  (ui.js Category 3)
+   Replaces ⚠ / ✓ / ✗ character literals in JS-built HTML.
+   The SVGs already in the codebase are preferred; these are
+   text-fallback classes for the ui.js confirm / toast / error
+   paths that use a simple character icon.
+   ============================================================ */
+
+.tn-icon-warning::before {
+    content: '!';
+    font-weight: 900;
+    font-style: normal;
+}
+
+.tn-icon-error::before {
+    content: 'x';
+    font-weight: 900;
+    font-style: normal;
+}
+
+.tn-icon-success::before {
+    content: 'v';
+    font-weight: 900;
+    font-style: normal;
+}
+
+.tn-icon-info::before {
+    content: 'i';
+    font-weight: 900;
+    font-style: normal;
+}
+
+
+/* ============================================================
+   5. BODY SCROLL LOCK  (mail.js modal open/close)
+   Applied to <body> via classList when a modal is open.
+   ============================================================ */
+
+body.tn-modal-open {
+    overflow: hidden;
+}
+
+
+/* ============================================================
+   6. ACCORDION ICON ROTATION  (pf.js / integrity.js)
+   Replaces icon.style.transform = 'rotate(Xdeg)'.
+   ============================================================ */
+
+.tn-rotate-0 {
+    transform: rotate(0deg);
+    transition: transform 200ms ease;
+}
+
+.tn-rotate-180 {
+    transform: rotate(180deg);
+    transition: transform 200ms ease;
+}
+
+
+/* ============================================================
+   7. CARD DELETE ANIMATION  (pf.js deleteEntry)
+   Replaces the multi-step card.style.* transition sequence.
+   Add .tn-card-deleting to trigger the collapse animation.
+   ============================================================ */
+
+.tn-card-faded {
+    opacity: 0.5;
+    transition: opacity 150ms ease;
+}
+
+.tn-card-deleting {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity 200ms ease, max-height 200ms ease;
+}
+
+
+/* ============================================================
+   8. OFFSCREEN CLIPBOARD TEXTAREA  (firewall.js / wan.js / lan.js)
+   Replaces textArea.style.position/left/opacity assignments.
+   Applied by JS to the temporary textarea used for
+   execCommand('copy') fallback. Never visible to users.
+   ============================================================ */
+
+.tn-offscreen {
+    position: fixed !important;
+    left: -9999px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    top: 0 !important;
+}
+
+
+/* ============================================================
+   9. PF BAR WIDTH  (pfstats.js traffic volume bars)
+   Width is set via CSS custom property from JS:
+     el.style.setProperty('--tn-bar-width', pct + '%')
+   This is NOT a style-src-attr violation — custom properties
+   set via setProperty() are permitted under strict CSP.
+   ============================================================ */
+
+.pf-bar {
+    width: var(--tn-bar-width, 0%);
+    min-width: 2px;
+}
+
+
+/* ============================================================
+  10. BUTTON LOADING STATE  (services.js control buttons)
+   Replaces btn.style.opacity = '0.6' / btn.style.opacity = ''.
+   ============================================================ */
+
+.tn-btn-loading {
+    opacity: 0.6;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+
+/* ============================================================
+  11. LOG LINE VISIBILITY  (logs.js filterLines)
+   Replaces line.style.display = 'block'/'none'.
+   JS sets data-log-visible attribute; CSS does the showing.
+   ============================================================ */
+
+.log-line {
+    display: block;
+}
+
+.log-line[data-log-visible="false"] {
+    display: none;
+}
+
+/* Gap-type option styling (logs.js date select disabled options)
+   Replaces option.style.color/fontStyle assignments.
+   Note: <option> CSS support varies by browser/OS; these are best-effort. */
+
+option[data-gap-type="offline"] {
+    color: #999;
+    font-style: italic;
+}
+
+option[data-gap-type="empty"] {
+    color: #6b7280;
+    font-style: italic;
+}
+
+option[data-gap-type="missing"] {
+    color: #f59e0b;
+    font-style: italic;
+}
+
+option[data-gap-type="future"] {
+    color: #6b7280;
+    font-style: italic;
+}
+
+/* ============================================================
+  13. BUTTON STATES  (firewall.js / lan.js / logs.js / mail.js
+                      pf.js / services.js / wan.js)
+   Replaces all dynamic Tailwind class swaps on buttons.
+   JS sets/removes a single semantic modifier class.
+   ============================================================ */
+
+/* Copy / action success — auto-reverts after timeout */
+.btn--copied {
+    background-color: #16a34a !important;
+    color: #fff !important;
+}
+
+/* Destructive / error result */
+.btn--error-state {
+    background-color: #dc2626 !important;
+    color: #fff !important;
+}
+
+/* Toggle ON state (auto-refresh, copy confirmed, etc.) */
+.btn--active {
+    background-color: #16a34a !important;
+    color: #fff !important;
+}
+
+/* Full button replace — working state (services.js) */
+.btn--working {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 0.5rem;
+    background-color: #22c55e;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 900;
+    color: #fff;
+    cursor: default;
+}
+
+/* Full button replace — failed state (services.js) */
+.btn--failed {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 0.5rem;
+    background-color: #dc2626;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 900;
+    color: #fff;
+    cursor: default;
+}
+
+/* Pagination — enabled */
+.btn--paginate-on {
+    background-color: #2563eb !important;
+    color: #fff !important;
+}
+.btn--paginate-on:hover {
+    background-color: #1d4ed8 !important;
+}
+
+/* Pagination — disabled / at boundary */
+.btn--paginate-off {
+    background-color: #374151 !important;
+    color: #9ca3af !important;
+    cursor: default;
+}
+.btn--paginate-off:hover {
+    background-color: #374151 !important;
+}
+
+/* Disabled — not interactive */
+.btn--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ============================================================
+  14. TAB / VIEW TOGGLE  (wan.js viewLive vs openSearch)
+   Replaces multi-class Tailwind dark-mode tab swaps.
+   JS sets data-tab-state on each button.
+   ============================================================ */
+
+.tab-btn--active {
+    background-color: #fff;
+    color: #2563eb;
+}
+.dark .tab-btn--active {
+    background-color: #374151;
+    color: #60a5fa;
+}
+
+.tab-btn--inactive {
+    background-color: transparent;
+    color: #6b7280;
+}
+
+/* ============================================================
+  15. ICON SPINNER  (pf.js / mail.js)
+   Replaces classList.add('animate-spin').
+   ============================================================ */
+
+.icon--spinning {
+    animation: tn-icon-spin 0.75s linear infinite;
+}
+
+@keyframes tn-icon-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+  16. STATUS TEXT  (integrity.js / pfstats.js)
+   Replaces full className= assignment on status display elements.
+   JS sets el.className = 'tn-status-text' then el.dataset.result
+   ============================================================ */
+
+.tn-status-text {
+    font-weight: 900;
+}
+
+.tn-status-text[data-result="fail"] {
+    font-size: 1.5rem;
+    color: #dc2626;
+}
+.tn-status-text[data-result="pass"] {
+    font-size: 1.5rem;
+    color: #16a34a;
+}
+.tn-status-text[data-result="warn"] {
+    font-size: 1.5rem;
+    color: #d97706;
+}
+/* pfstats.js healthEl — larger display */
+.tn-status-text[data-result="enabled"] {
+    font-size: 2.25rem;
+    letter-spacing: -0.05em;
+    font-variant-numeric: tabular-nums;
+    color: #3b82f6;
+}
+.tn-status-text[data-result="disabled"] {
+    font-size: 2.25rem;
+    letter-spacing: -0.05em;
+    font-variant-numeric: tabular-nums;
+    color: #ef4444;
+}
+
+/* ============================================================
+  17. HEALTH INDICATOR DOT  (logs.js)
+   Distinct from tn-status-dot (section 14 of original set).
+   Smaller, pulsing, inline with log health status text.
+   JS: el.className = 'tn-health-dot'; el.dataset.health = 'ok'
+   ============================================================ */
+
+.tn-health-dot {
+    display: inline-block;
+    width:  1rem;
+    height: 1rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+}
+
+.tn-health-dot[data-health="error"] {
+    background-color: #ef4444;
+    animation: tn-health-pulse 1.5s ease-in-out infinite;
+}
+.tn-health-dot[data-health="warn"] {
+    background-color: #f59e0b;
+    animation: tn-health-pulse 1.5s ease-in-out infinite;
+}
+.tn-health-dot[data-health="ok"] {
+    background-color: #22c55e;
+    animation: tn-health-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tn-health-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+}
+
+/* ============================================================
+  18. STATUS LABEL TEXT  (lan.js online/offline indicator text)
+   Replaces statusText.className = "ml-2 text-sm ... text-green-500"
+   Always green — LAN online state is the only rendered state.
+   JS: el.className = 'tn-status-label'
+   ============================================================ */
+
+.tn-status-label {
+    margin-left: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #22c55e;
+}
+
+@media (min-width: 768px) {
+    .tn-status-label {
+        font-size: 1.125rem;
+    }
+}
+
+.dark .tn-status-label {
+    color: #4ade80;
+}
+
+/* ============================================================
+  19. MAIL ITEM SELECTION STATE  (mail.js)
+   Replaces classList swap of bg-blue-100/bg-blue-50 pairs.
+   JS adds/removes mail-item--selected and mail-item--unread.
+   ============================================================ */
+
+.mail-item--selected {
+    background-color: #dbeafe !important;
+}
+.dark .mail-item--selected {
+    background-color: rgba(37, 99, 235, 0.3) !important;
+}
+
+.mail-item--unread {
+    background-color: rgba(239, 246, 255, 0.5);
+}
+.dark .mail-item--unread {
+    background-color: rgba(37, 99, 235, 0.1);
+}
+
+/* ============================================================
+  20. STATUS BADGE STATES  (firewall.js / wan.js)
+   Replaces full className= on dom.statusBadge.
+   JS: el.className = 'badge--live' or 'badge--idle'
+   ============================================================ */
+
+.badge--live {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    /* inherits badge-success colours from tangent.css */
+}
+.badge--live::before {
+    content: '';
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: #22c55e;
+    animation: tn-health-pulse 1.5s ease-in-out infinite;
+}
+
+.badge--idle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* ============================================================
+  20b. STATUS INDICATOR DOT  (firewall.js / wan.js / lan.js / pfstats.js)
+   Replaces JS-built dot/ping spans with inline-block h-3 w-3 etc.
+   JS: dot.className = 'tn-status-dot'; dot.dataset.color = 'green'
+   ============================================================ */
+
+.tn-status-dot {
+    display: inline-block;
+    width:  0.75rem;
+    height: 0.75rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.tn-status-dot[data-color="green"]  { background-color: #22c55e; }
+.tn-status-dot[data-color="blue"]   { background-color: #3b82f6; }
+.tn-status-dot[data-color="red"]    { background-color: #ef4444; }
+.tn-status-dot[data-color="yellow"] { background-color: #f59e0b; }
+.tn-status-dot[data-color="gray"]   { background-color: #6b7280; }
+
+.tn-status-dot[data-color="green"]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background-color: #4ade80;
+    opacity: 0.75;
+    animation: tn-health-pulse 1.5s ease-in-out infinite;
+}
+
+/* ============================================================
+  20c. FIREWALL ACTION BADGE COLOURS  (firewall.js / wan.js)
+   Replaces getActionBadgeClass() returning Tailwind token strings.
+   JS: span.className = 'fw-action--block' etc.
+   ============================================================ */
+
+.fw-action--block,
+.fw-action--match,
+.fw-action--pass,
+.fw-action--default {
+    padding: 0.125rem 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.025em;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    border: 1px solid;
+}
+
+.fw-action--block   { border-color: #ef4444; color: #ef4444; background-color: rgba(239,  68,  68, 0.05); }
+.fw-action--match   { border-color: #3b82f6; color: #3b82f6; background-color: rgba( 59, 130, 246, 0.05); }
+.fw-action--pass    { border-color: #22c55e; color: #22c55e; background-color: rgba( 34, 197,  94, 0.05); }
+.fw-action--default { border-color: #6b7280; color: #6b7280; background-color: rgba(107, 114, 128, 0.05); }
+
+/* ============================================================
+  21. STRUCTURAL CARD / CONTAINER CLASSES
+   Replaces one-time className= assignments on created elements.
+   These never change after render — but externalising removes
+   all Tailwind token dependency from JS entirely.
+   ============================================================ */
+
+/* Log entry card row (firewall.js) */
+.card--log-entry {
+    cursor: pointer;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+    transition: background-color 0.15s;
+}
+.card--log-entry:hover {
+    background-color: rgba(59, 130, 246, 0.05);
+}
+.dark .card--log-entry:hover {
+    background-color: rgba(59, 130, 246, 0.08);
+}
+
+/* Flow entry card row (lan.js / wan.js) */
+.card--flow-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
+}
+
+/* Empty state card (firewall.js / lan.js / wan.js) */
+.card--empty-state {
+    padding: 2rem;
+    text-align: center;
+}
+
+/* Error state card (firewall.js) */
+.card--error-state {
+    padding: 2rem;
+    text-align: center;
+    background-color: #fef2f2;
+}
+.dark .card--error-state {
+    background-color: rgba(220, 38, 38, 0.1);
+}
+
+/* Error title inside card--error-state (firewall.js) */
+.card--error-title {
+    color: #dc2626;
+    font-weight: 700;
+}
+.dark .card--error-title {
+    color: #f87171;
+}
+
+/* Error message body (firewall.js) */
+.card--error-msg {
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+}
+
+/* ============================================================
+  22. LOG STRUCTURAL CLASSES  (logs.js)
+   Replaces className= on dynamically created log containers.
+   ============================================================ */
+
+/* Outer error/warn section wrappers */
+.log-error-wrap {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.log-warn-wrap {
+    padding: 1.5rem;
+}
+
+/* Inline fetch error banner inside log panel */
+.log-fetch-error {
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+    background-color: rgba(239, 68, 68, 0.1);
+    padding: 1rem;
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    font-family: ui-monospace, monospace;
+    font-size: 0.875rem;
+}
+.dark .log-fetch-error {
+    color: #f87171;
+}
+
+/* Timestamp / status label under log entries */
+.log-status-label {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+    padding: 0 0.25rem;
+}
+.dark .log-status-label {
+    color: #9ca3af;
+}
+
+/* ============================================================
+  23. MODAL OVERLAY  (powermgmt.js / pf.js)
+   Replaces className= 'fixed inset-0 z-50 flex...' on
+   dynamically created overlay divs.
+   ui.js already uses .ui-overlay — this is for module-level
+   confirmation dialogs created outside ui.js.
+   ============================================================ */
+
+/* .modal-overlay — canonical definition in M4 (merged from e2g/integrity/services) */
+
+/* ============================================================
+  24. AUTH STRUCTURAL WRAPPERS  (auth.js)
+   Replaces className= on question/content container divs.
+   ============================================================ */
+
+.auth-question-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.auth-content-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Form label inside question wrap */
+.auth-form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+}
+.dark .auth-form-label { color: #d1d5db; }
+
+/* Form input/select inside question wrap */
+.auth-form-input {
+    display: block;
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    background: #fff;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    color: #111827;
+    box-sizing: border-box;
+}
+.dark .auth-form-input {
+    border-color: #4b5563;
+    background: #374151;
+    color: #fff;
+}
+.auth-form-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* Code block: recovery codes / registration tokens */
+.auth-code-block {
+    background: #111827;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.875rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.auth-code-block--green { color: #4ade80; }
+.auth-code-block--blue  { color: #60a5fa; }
+
+/* Section heading inside recovery/token panels */
+.auth-section-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+.auth-section-title--green { color: #166534; }
+.dark .auth-section-title--green { color: #bbf7d0; }
+.auth-section-title--blue  { color: #1e40af; }
+.dark .auth-section-title--blue  { color: #bfdbfe; }
+
+/* Body text inside recovery/token panels */
+.auth-section-body {
+    font-size: 0.875rem;
+    margin-bottom: 0.75rem;
+}
+.auth-section-body--green { color: #15803d; }
+.dark .auth-section-body--green { color: #86efac; }
+.auth-section-body--blue  { color: #1d4ed8; }
+.dark .auth-section-body--blue  { color: #93c5fd; }
+
+/* Continue button after recovery codes */
+.auth-continue-btn {
+    display: block;
+    width: 100%;
+    margin-top: 1rem;
+    border-radius: 0.5rem;
+    background-color: #15803d;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    box-sizing: border-box;
+}
+.auth-continue-btn:hover { background-color: #166534; }
+
+/* Password requirement indicator */
+.auth-req--met   { color: #16a34a; }
+.dark .auth-req--met { color: #4ade80; }
+.auth-req--unmet { color: #9ca3af; }
+
+
+
+/* ============================================================
+  25. SIDEBAR TOGGLE  (ts.js)
+   Replaces classList.toggle('-translate-x-full').
+   sidebar--closed is toggled by ts.js on mobile.
+   Desktop default (sm:translate-x-0) set in view.html stays.
+   ============================================================ */
+
+/* Smooth slide animation for the sidebar drawer */
+.sidebar-transition {
+    transition: transform 300ms ease-in-out;
+}
+
+/* Mobile only — on desktop the sidebar is always visible */
+@media (max-width: 639px) {
+    .sidebar--closed {
+        transform: translateX(-100%);
+    }
+}
+
+/* Backdrop shown behind the sidebar when open on mobile */
+.sidebar-backdrop {
+    transition: opacity 200ms ease;
+}
+/* On desktop the sidebar is always visible — never show the backdrop */
+@media (min-width: 640px) {
+    .sidebar-backdrop {
+        display: none !important;
+    }
+}
+
+
+/* ============================================================
+  26. BACK-TO-TOP VISIBILITY  (ts.js)
+   Replaces opacity-0/invisible ↔ opacity-100/visible swap.
+   tn-visible already defined in section 1.
+   ============================================================ */
+
+.tn-invisible {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* ============================================================
+  27. FILTER MODAL FLEX STATE  (lan.js)
+   lan.js toggles both 'hidden' and 'flex' simultaneously.
+   filter-modal--open replaces the add('flex') + remove('hidden')
+   pair so JS only sets one class.
+   ============================================================ */
+
+.filter-modal--open {
+    display: flex !important;
+}
+
+/* ============================================================
+  28. FEED ITEM STRUCTURAL CLASSES  (pf.js)
+   Existing semantic class names already used — this strips
+   the trailing Tailwind tokens so JS sets only the base class.
+   CSS now owns the layout geometry.
+   ============================================================ */
+
+.feed-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+.dark .feed-item {
+    border-bottom-color: #374151;
+}
+
+.feed-item-icon {
+    flex-shrink: 0;
+    margin-right: 0.75rem;
+}
+
+.feed-item-content {
+    min-width: 0;
+    flex: 1;
+}
+
+.feed-item-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.feed-type-badge,
+.feed-protected-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.feed-url-label {
+    font-family: ui-monospace, monospace;
+    font-size: 0.875rem;
+    word-break: break-all;
+}
+
+.feed-info-box {
+    margin-bottom: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border, #e5e7eb);
+    padding: 0.75rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* ============================================================
+  29. RULE ITEM  (pf.js)
+   rule-item already named semantically — strip Tailwind suffix.
+   ============================================================ */
+
+.rule-item {
+    position: relative;
+    border-radius: 0.5rem;
+    background-color: #fff;
+    border: 1px solid #e5e7eb;
+    padding: 0.75rem;
+    transition: border-color 0.15s;
+}
+.dark .rule-item {
+    background-color: #1f2937;
+    border-color: #374151;
+}
+.rule-item:hover {
+    border-color: #60a5fa;
+}
+
+/* ============================================================
+  30. PF ENTRY  (pf.js)
+   pf-entry already named — strip Tailwind suffix.
+   ============================================================ */
+
+.pf-entry {
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-border, #e5e7eb);
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+.dark .pf-entry {
+    border-color: #374151;
+}
+
+/* ============================================================
+  31. FILE ITEM  (integrity.js)
+   file-item already named — strip Tailwind border suffix.
+   ============================================================ */
+
+.file-item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #bfdbfe;
+}
+.dark .file-item {
+    border-bottom-color: #1e3a5f;
+}
+.file-item:last-child {
+    border-bottom: none;
+}
+
+/* monitored-files-list indentation — px-4 was inline */
+.monitored-files-list {
+    padding-left: 1rem;
+}
+
+/* ============================================================
+  32. PF ENTRY ANIMATION STATES  (pf.js deleteEntry)
+   Replaces card.style.opacity and card.style.transition etc.
+   JS adds class; CSS owns the animation geometry.
+   ============================================================ */
+
+.pf-entry--pending {
+    opacity: 0.5;
+    cursor: wait;
+}
+
+.pf-entry--deleting {
+    overflow: hidden;
+    max-height: 200px;
+    opacity: 1;
+    transition: opacity 200ms ease, max-height 200ms ease;
+}
+
+.pf-entry--deleting.pf-entry--gone {
+    opacity: 0;
+    max-height: 0;
+}
+
+/* ============================================================
+  33. GEOIP LABEL  (pf.js initGeoIP cloned labels)
+   Replaces clone.style.display/marginBottom/minHeight.
+   ============================================================ */
+
+.geoip-label {
+    display: block;
+    margin-bottom: 8px;
+    min-height: 24px;
+}
+
+/* ============================================================
+  34. PF RULE TOKEN COLOURS  (pf.js ruleTokenClass)
+   Replaces Tailwind class strings returned by ruleTokenClass().
+   Used inside innerHTML template for staged rule preview.
+   ============================================================ */
+
+.pf-token--action    { color: #16a34a; font-weight: 700; }
+.pf-token--direction { color: #2563eb; font-weight: 600; }
+.pf-token--directive { color: #9333ea; }
+.pf-token--value     { color: #ea580c; }
+.pf-token--default   { color: #374151; }
+.dark .pf-token--default { color: #d1d5db; }
+
+/* ============================================================
+  35. PF RULES VIEWER SYNTAX COLOURS  (pf.js highlightRule / display)
+   Replaces Tailwind class strings in RulesLoader.display()
+   and highlightRule() span wrappers.
+   Light mode: darker saturated values for contrast on white.
+   Dark mode: lighter pastel values for contrast on dark bg.
+   Mirrors the logic from pf.css section 7 (now dead code).
+   ============================================================ */
+
+.pf-rule--pass    { color: #16a34a; }
+.pf-rule--block   { color: #dc2626; }
+.pf-rule--match   { color: #2563eb; }
+.pf-rule--table   { color: #7c3aed; }
+.pf-rule--macro   { color: #b45309; }
+.pf-rule--set     { color: #0891b2; }
+.pf-rule--comment { color: #374151; }
+.pf-rule--default { color: #4b5563; }
+.pf-rule--proto   { color: #b45309; }
+.pf-rule--number  { color: #c2410c; }
+.pf-rule--keyword { color: #4b5563; }
+
+.dark .pf-rule--pass    { color: #4ade80; }
+.dark .pf-rule--block   { color: #f87171; }
+.dark .pf-rule--match   { color: #60a5fa; }
+.dark .pf-rule--table   { color: #c084fc; }
+.dark .pf-rule--macro   { color: #facc15; }
+.dark .pf-rule--set     { color: #22d3ee; }
+.dark .pf-rule--comment { color: #6b7280; }
+.dark .pf-rule--default { color: #9ca3af; }
+.dark .pf-rule--proto   { color: #facc15; }
+.dark .pf-rule--number  { color: #fb923c; }
+.dark .pf-rule--keyword { color: #9ca3af; }
+
+/* ============================================================
+  36. PF MODAL STRUCTURE  (pf.js showVerdictModal / showFullOutput)
+   Replaces Tailwind class strings on modal container divs.
+   onclick= attributes also removed from innerHTML — see pf.js.
+   ============================================================ */
+
+.pf-modal-inner {
+    background: #fff;
+    border-radius: 0.75rem;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+    max-width: 48rem;
+    width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+.dark .pf-modal-inner {
+    background: #1f2937;
+}
+
+.pf-modal-inner--wide {
+    max-width: 64rem;
+}
+
+.pf-modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.dark .pf-modal-header {
+    border-bottom-color: #374151;
+}
+
+.pf-modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.pf-modal-footer {
+    padding: 1.5rem;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+.dark .pf-modal-footer {
+    border-top-color: #374151;
+}
+
+/* Rule number badge inside staged rules list */
+.pf-rule-badge {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    background: #dbeafe;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #2563eb;
+    font-weight: 700;
+    font-size: 0.875rem;
+}
+.dark .pf-rule-badge {
+    background: rgba(37,99,235,0.2);
+    color: #60a5fa;
+}
+
+/* Remove rule button — visible on row hover */
+.pf-rule-remove-btn {
+    flex-shrink: 0;
+    opacity: 0;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: opacity 0.15s, background 0.15s;
+}
+.rule-item:hover .pf-rule-remove-btn {
+    opacity: 1;
+}
+.pf-rule-remove-btn:hover {
+    background: #fee2e2;
+}
+
+/* ============================================================
+  37. BTN DIMMED  (services.js btn.style.opacity = 0.6)
+   A softer disabled state — still shows the button shape
+   but signals it is temporarily inactive.
+   ============================================================ */
+
+.btn--dimmed {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* ============================================================
+  38. SERVICE TIMESTAMP  (services.js lastUpdated colour)
+   Replaces lastUpdated.style.color = isDark ? ... : ...
+   Uses CSS media / .dark class instead of JS colour decision.
+   ============================================================ */
+
+.service-timestamp {
+    color: #6b7280;
+}
+.dark .service-timestamp {
+    color: #9ca3af;
+}
+
+/* ============================================================
+  39. POWERMGMT MODAL COMPONENTS  (powermgmt.js)
+   Replaces all Tailwind inside innerHTML template strings.
+   overlay uses .modal-overlay (section 23).
+   ============================================================ */
+
+.powermgmt-card {
+    background: #fff;
+    border-radius: 0.5rem;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    padding: 2rem;
+    max-width: 28rem;
+    margin: 0 1rem;
+    width: 100%;
+}
+.dark .powermgmt-card {
+    background: #1f2937;
+}
+
+.powermgmt-card--center {
+    text-align: center;
+}
+
+.powermgmt-spinner-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+.powermgmt-spinner {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    border-bottom-color: #2563eb;
+    animation: tn-icon-spin 0.8s linear infinite;
+}
+
+.powermgmt-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    color: #111827;
+}
+.dark .powermgmt-title {
+    color: #f9fafb;
+}
+
+.powermgmt-subtitle {
+    color: #4b5563;
+    margin-bottom: 2rem;
+}
+.dark .powermgmt-subtitle {
+    color: #d1d5db;
+}
+
+.powermgmt-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.powermgmt-btn--confirm {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #fff;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: filter 0.15s;
+}
+.powermgmt-btn--confirm:hover {
+    filter: brightness(0.9);
+}
+/* confirmVariant colour variants */
+.powermgmt-btn--confirm[data-variant="primary"] { background-color: #2563eb; }
+.powermgmt-btn--confirm[data-variant="safe"]    { background-color: #16a34a; }
+.powermgmt-btn--confirm[data-variant="danger"]  { background-color: #dc2626; }
+.powermgmt-btn--confirm[data-variant="neutral"] { background-color: #4b5563; }
+
+/* Message paragraph spacing variants */
+.powermgmt-msg--lg { margin-bottom: 2rem;  }
+.powermgmt-msg--sm { margin-bottom: 1rem;  }
+
+.powermgmt-btn--cancel {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    background: #f3f4f6;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.dark .powermgmt-btn--cancel {
+    color: #d1d5db;
+    background: #374151;
+}
+.powermgmt-btn--cancel:hover {
+    background: #e5e7eb;
+}
+.dark .powermgmt-btn--cancel:hover {
+    background: #4b5563;
+}
+
+.powermgmt-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    background: #fff;
+    color: #111827;
+    margin-bottom: 0.25rem;
+}
+.dark .powermgmt-input {
+    border-color: #4b5563;
+    background: #374151;
+    color: #f9fafb;
+}
+.powermgmt-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px #ef4444;
+}
+
+.powermgmt-error-msg {
+    font-size: 0.75rem;
+    color: #ef4444;
+    margin-bottom: 1.5rem;
+}
+
+/* log-empty visible state (logs.js empty state flex display) */
+.log-empty--visible {
+    display: flex !important;
+}
+
+/* ============================================================
+  40. PF PANEL CLOSE BUTTON  (showFullOutput modal header X)
+   Always-visible close button — distinct from pf-rule-remove-btn
+   which is hover-only. Used in modal headers.
+   ============================================================ */
+
+.pf-panel-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: #9ca3af;
+    border-radius: 0.25rem;
+    transition: color 0.15s;
+}
+.pf-panel-close-btn:hover {
+    color: #374151;
+}
+.dark .pf-panel-close-btn:hover {
+    color: #d1d5db;
+}
+
+/* ============================================================
+  41. PF RULES PRE  (showFullOutput pre block)
+   Replaces: text-xs font-mono pf-rules-pre whitespace-pre-wrap
+   ============================================================ */
+
+.pf-rules-pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* ============================================================
+  42. PF ENTRY CARD INTERNALS  (pf.js addEntryCard innerHTML)
+   Replaces anonymous flex wrapper divs and Tailwind on
+   pf-entry-value, pf-entry-badge, pf-entry-hint.
+   ============================================================ */
+
+.pf-entry-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.pf-entry-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.875rem;
+    word-break: break-all;
+    flex: 1;
+}
+
+.pf-entry-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.pf-entry-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.pf-entry-hint {
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    opacity: 0.6;
+}
+
+/* ============================================================
+  43. VERDICT STAT CARD WRAPPER  (renderVerdictSuccess/Error)
+   verdict-stat-* already styled in pf.css for colours.
+   These add the shared box geometry that was inline Tailwind.
+   ============================================================ */
+
+.verdict-stat-wrap {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid;
+}
+
+.verdict-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+@media (min-width: 768px) {
+    .verdict-grid-4 { grid-template-columns: repeat(4, 1fr); }
+}
+
+.verdict-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.verdict-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.verdict-stat-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.7;
+}
+
+.verdict-stat-value {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-top: 0.25rem;
+}
+
+.verdict-warn-list,
+.verdict-error-list {
+    list-style: disc;
+    list-style-position: inside;
+    font-size: 0.875rem;
+}
+.verdict-warn-list  { margin-top: 0.25rem; }
+.verdict-error-list { margin-top: 0.5rem; }
+
+.verdict-help-list {
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+/* ============================================================
+  44. FEED INFO BOX TEXT  (pf.js initFeeds infoBox)
+   Replaces: feed-info-box-text text-sm + font-bold on label span
+   ============================================================ */
+
+.feed-info-box-text {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.feed-info-box-label {
+    font-weight: 700;
+}
+
+/* ============================================================
+  45. RULE ITEM ROW  (pf.js updateRulesDisplay div.innerHTML)
+   Replaces: flex items-start gap-3 wrapper div
+   and flex-1 min-w-0 font-mono text-xs leading-relaxed break-all on tokens div
+   ============================================================ */
+
+.pf-rule-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.pf-rule-tokens {
+    flex: 1;
+    min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.75rem;
+    line-height: 1.625;
+    word-break: break-all;
+}
+
+/* ============================================================
+  46. PF RULE REMOVE ICON  (SVG inside pf-rule-remove-btn)
+   Replaces: w-4 h-4 text-red-600 on the X svg
+   ============================================================ */
+
+.pf-rule-remove-icon {
+    width: 1rem;
+    height: 1rem;
+    color: #dc2626;
+}
+
+/* ============================================================
+  47. GEOIP CONTAINER + FEED LIST SCROLL GEOMETRY
+   Previously enforced by JS .style.* in initGeoIP / initFeeds.
+   Those blocks were removed as part of CSP/decoupling surgery.
+   These rules restore the fixed-height scroll areas using
+   the exact element IDs from the HTML.
+   ============================================================ */
+
+#geoip-list-container {
+    height:     300px;
+    max-height: 300px;
+    min-height: 300px;
+    overflow-y: auto;
+    display:    block;
+    padding:    0.5rem;
+    scrollbar-width: thin;
+}
+
+#geoip-list-container::-webkit-scrollbar       { width: 6px; }
+#geoip-list-container::-webkit-scrollbar-track { background: transparent; }
+#geoip-list-container::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 3px; }
+.dark #geoip-list-container::-webkit-scrollbar-thumb { background: #4b5563; }
+
+#feed-list {
+    height:     360px;
+    max-height: 360px;
+    min-height: 360px;
+    overflow-y: auto;
+    display:    block;
+    padding:    0;
+}
+
+
+/* ============================================================
+   ============================================================
+   MERGED CSS — FORMERLY SEPARATE FILES
+   All per-page CSS consolidated here. power.css remains
+   separate (standalone page with body/html resets).
+   Load order: tangent.css → dynamic.css (this file)
+   ============================================================
+   ============================================================ */
+
+
+/* ============================================================
+   M1. SIDEBAR NAV LAYOUT + ACTION BUTTON COLOURS
+   Formerly: buttons.css
+   ============================================================ */
+
+#top-bar-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+#nav-system {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+#logout-btn  { background-color: #15803d; }
+#restart-btn { background-color: #1d4ed8; }
+#poweroff-btn { background-color: #b91c1c; }
+
+#logout-btn:hover   { background-color: #166534; }
+#restart-btn:hover  { background-color: #1e40af; }
+#poweroff-btn:hover { background-color: #991b1b; }
+
+
+/* ============================================================
+   M2. SESSION LOADING OVERLAY
+   Formerly: session.css
+   Dark mode converted from prefers-color-scheme to .dark class
+   for consistency with the rest of the app.
+   ============================================================ */
+
+html:not(.session-valid) body {
+    opacity: 0;
+}
+
+html.session-valid body {
+    opacity: 1;
+    transition: opacity 0.3s ease-in;
+}
+
+#session-loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+html.session-valid #session-loading {
+    display: none;
+}
+
+.dark #session-loading {
+    background: rgba(17, 24, 39, 0.95);
+}
+
+#session-loading .session-spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: tn-spin 1s linear infinite;
+}
+
+
+
+
+/* ============================================================
+   M3. SHARED ANIMATION KEYFRAMES
+   Single canonical set — replaces duplicate @keyframes spin,
+   fadeIn, slideUp, pulse that existed across e2g / integrity /
+   services. All consumer rules below reference these names.
+   ============================================================ */
+
+@keyframes tn-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes tn-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes tn-slide-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes tn-pulse-skeleton {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+}
+
+
+/* ============================================================
+   M4. SHARED MODAL PRIMITIVES
+   Canonical single definition merged from the three conflicting
+   copies in e2g.css / integrity.css / services.css.
+   Uses integrity.css as the best base (backdrop-filter, inset).
+   ============================================================ */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: tn-fade-in 0.2s ease-out;
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    padding: 1rem;
+}
+
+.modal-content {
+    background: #fff;
+    border-radius: 0.75rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: tn-slide-up 0.3s ease-out;
+}
+
+.dark .modal-content {
+    background: #1f2937;
+    border: 1px solid #374151;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.dark .modal-header {
+    background: #111827;
+    border-bottom-color: #374151;
+}
+
+.modal-header h2,
+.modal-header h3 {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #111827;
+}
+
+.dark .modal-header h2,
+.dark .modal-header h3 {
+    color: #f9fafb;
+}
+
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    background: #f9fafb;
+}
+
+.dark .modal-footer {
+    background: #111827;
+    border-top-color: #374151;
+}
+
+.modal-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.375rem;
+    border: none;
+    background: #e5e7eb;
+    color: #6b7280;
+    font-size: 0.875rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.modal-close:hover {
+    background: #d1d5db;
+    color: #111827;
+}
+
+.dark .modal-close {
+    background: #374151;
+    color: #9ca3af;
+}
+
+.dark .modal-close:hover {
+    background: #4b5563;
+    color: #f9fafb;
+}
+
+@media (max-width: 768px) {
+    .modal-content {
+        max-width: 95vw;
+        max-height: 95vh;
+    }
+}
+
+
+/* ============================================================
+   M5. SHARED SPINNER
+   Single definition replacing the three identical copies in
+   e2g.css / integrity.css / services.css.
+   ============================================================ */
+
+.spinner {
+    border: 4px solid #f3f4f6;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: tn-spin 1s linear infinite;
+    margin: 0 auto 1rem;
+}
+
+.loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid #e5e7eb;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: tn-spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+
+/* ============================================================
+   M6. SHARED STATUS DOT + STATUS BADGE
+   Merged from services.css and integrity.css.
+   Base geometry shared; per-state colours cover all states
+   from both consumers: running, stopped (services) +
+   verified, failed, checking, pending (integrity) +
+   starting (servicestatus.css).
+   ============================================================ */
+
+.status-dot {
+    width: 0.75rem;
+    height: 0.75rem;
+    min-width: 0.75rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-dot.running {
+    background-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.status-dot.stopped {
+    background-color: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.status-dot.verified {
+    background-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.status-dot.failed {
+    background-color: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.status-dot.checking {
+    background-color: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+    animation: pulse-checking 2s ease-in-out infinite;
+}
+
+.status-dot.pending {
+    background-color: #6b7280;
+    box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.2);
+}
+
+/* Starting state — formerly servicestatus.css */
+.status-dot.starting {
+    background: linear-gradient(135deg, #f59e0b 0%, #fb923c 100%);
+    animation: pulse-starting 2s ease-in-out infinite;
+}
+
+@keyframes pulse-checking {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.7; }
+}
+
+@keyframes pulse-starting {
+    0%, 100% { opacity: 1;   transform: scale(1);   }
+    50%       { opacity: 0.7; transform: scale(1.1); }
+}
+
+.status-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    letter-spacing: 0.025em;
+}
+
+@media (max-width: 640px) {
+    .status-badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+@media (max-width: 400px) {
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.4rem;
+    }
+}
+
+.status-badge.running {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.dark .status-badge.running {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+}
+
+.status-badge.stopped {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.dark .status-badge.stopped {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.status-badge.verified {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.dark .status-badge.verified {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+}
+
+.status-badge.failed {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.dark .status-badge.failed {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.status-badge.checking {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.dark .status-badge.checking {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+.status-badge.pending {
+    background-color: #f3f4f6;
+    color: #4b5563;
+}
+
+.dark .status-badge.pending {
+    background-color: rgba(107, 114, 128, 0.2);
+    color: #d1d5db;
+}
+
+/* Starting state badge — formerly servicestatus.css */
+.status-badge.starting {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    color: #92400e;
+    border: 1px solid #f59e0b;
+    font-weight: 600;
+}
+
+.dark .status-badge.starting {
+    background: linear-gradient(135deg, #78350f 0%, #92400e 100%);
+    color: #fde68a;
+    border: 1px solid #f59e0b;
+}
+
+.status-badge.starting .dots {
+    display: inline-block;
+    animation: dots-anim 1.5s steps(3, end) infinite;
+}
+
+@keyframes dots-anim {
+    0%, 20% { content: '.';   }
+    40%      { content: '..';  }
+    60%,100% { content: '...'; }
+}
+
+/* Disable pointer events on buttons during starting state */
+.service-card .ctrl-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+
+/* ============================================================
+   M7. MAIL INTERFACE
+   Formerly: mail.css
+   Custom checkbox + modal body text wrap.
+   ============================================================ */
+
+input[type="checkbox"].mail-checkbox,
+input[type="checkbox"]#select-all-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid #9ca3af;
+    border-radius: 0.25rem;
+    background-color: #f9fafb;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s ease-in-out;
+}
+
+input[type="checkbox"].mail-checkbox:hover,
+input[type="checkbox"]#select-all-checkbox:hover {
+    border-color: #3b82f6;
+}
+
+input[type="checkbox"].mail-checkbox:checked,
+input[type="checkbox"]#select-all-checkbox:checked {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+}
+
+input[type="checkbox"].mail-checkbox:checked::after,
+input[type="checkbox"]#select-all-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 0.25rem;
+    top: 0.05rem;
+    width: 0.35rem;
+    height: 0.6rem;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.dark input[type="checkbox"].mail-checkbox,
+.dark input[type="checkbox"]#select-all-checkbox {
+    background-color: #1f2937;
+    border-color: #4b5563;
+}
+
+.dark input[type="checkbox"].mail-checkbox:checked,
+.dark input[type="checkbox"]#select-all-checkbox:checked {
+    background-color: #93c5fd;
+    border-color: #93c5fd;
+}
+
+.dark input[type="checkbox"].mail-checkbox:checked::after,
+.dark input[type="checkbox"]#select-all-checkbox:checked::after {
+    border-color: #1f2937;
+}
+
+#modal-body {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    display: block;
+    overflow-x: hidden;
+    min-width: 0;
+    white-space: pre-wrap;
+}
+
+
+/* ============================================================
+   M8. UNBOUND MODAL
+   Formerly: unbound.css
+   ============================================================ */
+
+.unbound-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.unbound-modal {
+    min-width: 420px;
+    max-width: 640px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.unbound-spinner {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 3px solid #d1d5db;
+    border-top-color: #1d4ed8;
+    animation: tn-spin 0.75s linear infinite;
+    margin: 0 auto;
+}
+
+.unbound-output {
+    max-height: 280px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    padding: 8px;
+    border-radius: 4px;
+}
+
+
+/* ============================================================
+   M9. SERVICES DASHBOARD
+   Formerly: services.css
+   Shared primitives (modal-overlay, spinner, status-dot,
+   status-badge, stat-box etc.) replaced by M3–M6 above.
+   Remaining rules are services-specific.
+   ============================================================ */
+
+#services-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 100%;
+    padding: 0.5rem;
+    box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+    #services-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 1024px) {
+    #services-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+.service-card {
+    display: flex;
+    flex-direction: column;
+    background-color: white;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    height: 100%;
+    min-height: 280px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: all 0.2s ease;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.service-card:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+                0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    transform: translateY(-2px);
+}
+
+.dark .service-card {
+    background-color: #1f2937;
+    border: 1px solid #374151;
+}
+
+@media (max-width: 640px) {
+    .service-card { padding: 1.25rem; min-height: 260px; border-radius: 0.875rem; }
+}
+
+@media (max-width: 400px) {
+    .service-card { padding: 1rem; min-height: 240px; }
+}
+
+.card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+    .card-header { margin-bottom: 1.25rem; gap: 0.5rem; }
+}
+
+.title-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.service-name {
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 1.1rem;
+    letter-spacing: -0.025em;
+    color: #111827;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+    min-width: 0;
+    flex: 1;
+}
+
+.dark .service-name { color: #f9fafb; }
+
+@media (max-width: 640px) { .service-name { font-size: 1rem; } }
+@media (max-width: 400px)  { .service-name { font-size: 0.85rem; letter-spacing: -0.05em; } }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+}
+
+@media (max-width: 640px) { .stats-grid { gap: 0.75rem; margin-bottom: 1.5rem; } }
+@media (max-width: 400px) { .stats-grid { gap: 0.5rem;  margin-bottom: 1.25rem; } }
+
+.stat-box {
+    border-radius: 0.75rem;
+    background-color: #f9fafb;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 80px;
+}
+
+.dark .stat-box { background-color: #111827; }
+
+@media (max-width: 640px) { .stat-box { padding: 0.75rem; min-height: 70px; } }
+@media (max-width: 400px) { .stat-box { padding: 0.5rem;  min-height: 60px; } }
+
+.stat-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dark .stat-label { color: #9ca3af; }
+
+@media (max-width: 640px) { .stat-label { font-size: 0.75rem; } }
+@media (max-width: 400px) { .stat-label { font-size: 0.75rem; margin-bottom: 0.25rem; letter-spacing: 0.02em; } }
+
+.stat-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #111827;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dark .stat-value { color: #f9fafb; }
+
+@media (max-width: 640px) { .stat-value { font-size: 1.25rem; } }
+@media (max-width: 400px) { .stat-value { font-size: 1rem; letter-spacing: -0.02em; } }
+
+.button-container {
+    margin-top: auto;
+    display: flex;
+    gap: 1rem;
+}
+
+@media (max-width: 640px) { .button-container { gap: 0.75rem; } }
+@media (max-width: 400px) { .button-container { gap: 0.5rem; } }
+
+.ctrl-btn {
+    flex: 1;
+    border-radius: 0.5rem;
+    padding: 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    border: none;
+    cursor: pointer;
+    color: white;
+    transition: all 0.2s ease;
+    letter-spacing: 0.05em;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ctrl-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
+.ctrl-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.ctrl-btn.restart { background-color: #2563eb; }
+.ctrl-btn.restart:hover:not(:disabled) { background-color: #1d4ed8; }
+.ctrl-btn.stop  { background-color: #dc2626; }
+.ctrl-btn.stop:hover:not(:disabled)  { background-color: #b91c1c; }
+.ctrl-btn.start { background-color: #059669; }
+.ctrl-btn.start:hover:not(:disabled) { background-color: #047857; }
+
+@media (max-width: 640px) { .ctrl-btn { padding: 0.75rem; font-size: 0.8rem; min-height: 45px; } }
+@media (max-width: 400px) { .ctrl-btn { padding: 0.625rem; font-size: 0.7rem; min-height: 40px; } }
+
+.loading-placeholder {
+    background-color: #f3f4f6;
+    border-radius: 1rem;
+    min-height: 280px;
+    animation: tn-pulse-skeleton 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.dark .loading-placeholder { background-color: #374151; }
+
+@media (max-width: 640px) { .loading-placeholder { min-height: 260px; } }
+
+/* Services modal sizing overrides */
+.services-modal .modal-content {
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.services-modal .modal-header {
+    background: #2563eb;
+    color: white;
+    padding: 1.5rem;
+    border-radius: 1rem 1rem 0 0;
+}
+
+.services-modal .modal-header h2 { color: white; }
+
+.services-modal .modal-body { padding: 2rem; }
+
+.modal-status {
+    text-align: center;
+    padding: 2rem;
+}
+
+.status-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    margin: 0 auto 1rem;
+    font-weight: bold;
+}
+
+.status-icon.success { background: #d1fae5; color: #065f46; }
+.status-icon.error   { background: #fee2e2; color: #991b1b; }
+
+.dark .status-icon.success { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+.dark .status-icon.error   { background: rgba(239, 68, 68, 0.2);  color: #fca5a5; }
+
+.status-text { font-size: 1rem; font-weight: 600; color: #374151; }
+.status-text.success { color: #065f46; }
+.status-text.error   { color: #991b1b; }
+.dark .status-text         { color: #d1d5db; }
+.dark .status-text.success { color: #6ee7b7; }
+.dark .status-text.error   { color: #fca5a5; }
+
+.state-panel {
+    background: #f9fafb;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.dark .state-panel { background: #111827; }
+
+.state-panel h3 {
+    margin: 0 0 1rem 0;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #6b7280;
+}
+
+.dark .state-panel h3 { color: #9ca3af; }
+
+.state-table { width: 100%; border-collapse: collapse; }
+.state-table td { padding: 0.5rem; border-bottom: 1px solid #e5e7eb; }
+.dark .state-table td { border-bottom: 1px solid #374151; }
+.state-table td:first-child { font-weight: 600; color: #6b7280; width: 30%; }
+.dark .state-table td:first-child { color: #9ca3af; }
+
+.state-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 600;
+    color: #111827;
+}
+.dark .state-value { color: #f9fafb; }
+
+.error-card {
+    grid-column: 1 / -1;
+    border-radius: 1rem;
+    background-color: #fef2f2;
+    padding: 2rem;
+    text-align: center;
+}
+
+.dark .error-card { background-color: #7f1d1d; }
+
+.error-card h3 { font-weight: 900; color: #991b1b; text-transform: uppercase; font-size: 1.25rem; margin-bottom: 0.5rem; }
+.dark .error-card h3 { color: #fca5a5; }
+.error-card p { color: #dc2626; font-size: 0.9rem; }
+.dark .error-card p { color: #fecaca; }
+
+.service-card-updating { opacity: 0.7; pointer-events: none; transition: opacity 0.2s ease; }
+
+#services-grid.updating { position: relative; }
+
+#services-grid.updating::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.01);
+    z-index: 1;
+    pointer-events: none;
+}
+
+
+/* ============================================================
+   M10. INTEGRITY / SYSCHECK DASHBOARD
+   Formerly: integrity.css
+   Shared primitives (modal-overlay, spinner, status-dot,
+   status-badge, stat-box etc.) replaced by M3–M6 above.
+   Remaining rules are integrity-specific.
+   NOTE: .hidden { display: none !important } dropped — Tailwind
+   already provides this and the duplicate would fight the cascade.
+   ============================================================ */
+
+#integrity-grid,
+#syscheck-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    gap: 0.5rem;
+}
+
+@media (min-width: 768px)  { #integrity-grid, #syscheck-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { #integrity-grid, #syscheck-grid { grid-template-columns: repeat(3, 1fr); } }
+
+.syscheck-card,
+.integrity-card {
+    display: flex;
+    flex-direction: column;
+    background-color: white;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    height: 100%;
+    min-height: 300px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: all 0.2s ease;
+    overflow: hidden;
+    box-sizing: border-box;
+    border: 1px solid #e5e7eb;
+}
+
+.syscheck-card:hover,
+.integrity-card:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+                0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    transform: translateY(-2px);
+    border-color: #d1d5db;
+}
+
+.dark .syscheck-card,
+.dark .integrity-card {
+    background-color: #1f2937;
+    border: 1px solid #374151;
+}
+
+@media (max-width: 640px) {
+    .syscheck-card, .integrity-card { padding: 1.25rem; min-height: 280px; }
+}
+
+@media (max-width: 400px) {
+    .syscheck-card, .integrity-card { padding: 1rem; min-height: 260px; }
+}
+
+/* Integrity uses a centred stat-box variant */
+.integrity-card .stat-box,
+.syscheck-card  .stat-box {
+    border-radius: 0.5rem;
+    padding: 0.75rem 0.375rem;
+    align-items: center;
+    text-align: center;
+    min-height: 70px;
+}
+
+@media (max-width: 400px) {
+    .integrity-card .stat-box,
+    .syscheck-card  .stat-box { padding: 0.5rem 0.25rem; min-height: 60px; }
+}
+
+.integrity-card .stats-grid,
+.syscheck-card  .stats-grid {
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.integrity-card .stat-label,
+.syscheck-card  .stat-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 0.375rem;
+    letter-spacing: 0.025em;
+    max-width: 100%;
+}
+
+.integrity-card .stat-value,
+.syscheck-card  .stat-value {
+    font-size: 1.125rem;
+    font-weight: 800;
+    line-height: 1.3;
+    max-width: 100%;
+}
+
+.integrity-card .card-header,
+.syscheck-card  .card-header {
+    align-items: center;
+    margin-bottom: 1.25rem;
+}
+
+.integrity-card .ctrl-btn,
+.syscheck-card  .ctrl-btn {
+    flex: none;
+    border-radius: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    min-height: 28px;
+    width: auto;
+}
+
+.integrity-card .button-container,
+.syscheck-card  .button-container {
+    justify-content: flex-end;
+}
+
+.check-name {
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 1rem;
+    letter-spacing: -0.025em;
+    color: #111827;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dark .check-name { color: white; }
+
+@media (max-width: 400px) {
+    .check-name { font-size: 0.9375rem; }
+}
+
+.ctrl-btn.verify {
+    background-color: #1A56DB;
+    color: white;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.ctrl-btn.verify:hover:not(:disabled) {
+    background-color: #1E429F;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(26, 86, 219, 0.2);
+}
+
+.ctrl-btn.verify:active:not(:disabled) {
+    background-color: #1E3A8A;
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.dark .ctrl-btn.verify { background-color: #1A56DB; color: white; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+.dark .ctrl-btn.verify:hover:not(:disabled) { background-color: #2563EB; }
+
+.ctrl-btn.accept {
+    background-color: #D97706;
+    color: white;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.ctrl-btn.accept:hover:not(:disabled) {
+    background-color: #B45309;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(217, 119, 6, 0.2);
+}
+
+.ctrl-btn.accept:active:not(:disabled) {
+    background-color: #92400E;
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.dark .ctrl-btn.accept { background-color: #D97706; color: white; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+.dark .ctrl-btn.accept:hover:not(:disabled) { background-color: #F59E0B; }
+
+#verify-all {
+    border-radius: 0.375rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    background-color: #1A56DB;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    min-height: 36px;
+}
+
+#verify-all:hover:not(:disabled) { background-color: #1E429F; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(26, 86, 219, 0.2); }
+.dark #verify-all { background-color: #1A56DB; color: white; }
+.dark #verify-all:hover:not(:disabled) { background-color: #2563EB; }
+#verify-all.loading { opacity: 0.7; cursor: wait; }
+
+.check-details {
+    margin-bottom: 1.25rem;
+    padding: 0.75rem;
+    background-color: #f9fafb;
+    border-radius: 0.5rem;
+}
+
+.dark .check-details { background-color: #111827; }
+
+.detail-text {
+    font-size: 0.875rem;
+    color: #374151;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.5;
+}
+
+.detail-text:first-child { margin-bottom: 0.25rem; }
+.dark .detail-text { color: white; }
+
+@media (max-width: 400px) { .detail-text { font-size: 0.8125rem; } }
+
+/* Integrity modal sizing override */
+.integrity-modal .modal-content { max-width: 480px; }
+
+.verification-results {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f9fafb;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+    font-size: 0.8125rem;
+}
+
+.dark .verification-results { background: #111827; border-color: #374151; }
+
+.verification-results h3 {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+    margin: 0 0 0.75rem 0;
+}
+
+.dark .verification-results h3 { color: #9ca3af; }
+
+.result-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.375rem 0;
+    border-bottom: 1px solid #f3f4f6;
+    gap: 1rem;
+}
+
+.result-item:last-child { border-bottom: none; }
+.result-item.error { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
+.dark .result-item { border-bottom-color: #1f2937; }
+
+.result-label { font-size: 0.75rem; font-weight: 600; color: #6b7280; white-space: nowrap; }
+.dark .result-label { color: #9ca3af; }
+
+.result-value {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #111827;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    word-break: break-all;
+}
+
+.dark .result-value { color: #f9fafb; }
+
+/* Global status text */
+.global-status-text { font-size: 1.5rem; font-weight: 900; }
+.status-failed   { color: #dc2626; }
+.status-verified { color: #16a34a; }
+.status-pending  { color: #d97706; }
+
+/* Violation badges */
+.badge-warn { font-weight: bold; color: #dc2626; font-size: 0.75rem; }
+.badge-ok   { color: #6b7280; font-size: 0.75rem; }
+
+/* Accordion */
+.files-accordion {
+    overflow: hidden;
+    border-radius: 2rem;
+    background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.8));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow:
+        0 25px 50px -12px rgb(0 0 0 / 0.25),
+        0 0 0 1px rgb(59 130 246 / 0.1) inset,
+        0 0 30px rgb(59 130 246 / 0.2);
+    transition: box-shadow 0.3s ease;
+    margin-bottom: 1.5rem;
+}
+
+.files-accordion:hover {
+    box-shadow:
+        0 32px 60px -12px rgb(0 0 0 / 0.3),
+        0 0 0 1px rgb(59 130 246 / 0.2) inset,
+        0 0 40px rgb(59 130 246 / 0.25);
+}
+
+.dark .files-accordion {
+    background: linear-gradient(135deg, rgb(17 24 39 / 0.95), rgb(17 24 39 / 0.8));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow:
+        0 25px 50px -12px rgb(0 0 0 / 0.5),
+        0 0 0 1px rgb(96 165 250 / 0.2) inset,
+        0 0 30px rgb(59 130 246 / 0.3);
+}
+
+.dark .files-accordion:hover {
+    box-shadow:
+        0 32px 60px -12px rgb(0 0 0 / 0.6),
+        0 0 0 1px rgb(96 165 250 / 0.3) inset,
+        0 0 40px rgb(59 130 246 / 0.4);
+}
+
+.files-accordion-btn {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem 2rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1e293b;
+    transition: background 0.3s ease;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    position: relative;
+    overflow: hidden;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.files-accordion-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgb(59 130 246 / 0.12), transparent);
+    transition: left 0.5s ease;
+    pointer-events: none;
+}
+
+.files-accordion-btn:hover::before { left: 100%; }
+
+.files-accordion-btn::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+}
+
+.files-accordion-btn:hover::after { transform: scaleX(1); }
+
+.dark .files-accordion-btn { color: #f1f5f9; }
+
+.files-accordion-btn > div:first-child { display: flex; align-items: center; gap: 1rem; }
+
+.files-accordion-btn .flex.items-center.space-x-2 > div:first-child {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.75rem;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    box-shadow: 0 8px 16px -4px rgb(59 130 246 / 0.4);
+    transition: box-shadow 0.3s ease;
+}
+
+.files-accordion-btn:hover .flex.items-center.space-x-2 > div:first-child {
+    box-shadow: 0 12px 20px -6px rgb(59 130 246 / 0.5);
+}
+
+.files-accordion-btn svg { width: 1.25rem; height: 1.25rem; }
+
+.file-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 1.5rem;
+    padding: 0 0.5rem;
+    margin-left: 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #ffffff;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border-radius: 9999px;
+    box-shadow: 0 4px 6px -1px rgb(37 99 235 / 0.3), 0 0 0 2px rgb(255 255 255 / 0.5) inset;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+}
+
+.dark .file-count-badge {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    box-shadow: 0 4px 6px -1px rgb(96 165 250 / 0.4), 0 0 0 2px rgb(255 255 255 / 0.2) inset;
+}
+
+/* data-state variants — set by updateViolationAccordion() */
+.file-count-badge[data-state="violations"] {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    box-shadow: 0 4px 6px -1px rgb(220 38 38 / 0.35), 0 0 0 2px rgb(255 255 255 / 0.5) inset;
+}
+.dark .file-count-badge[data-state="violations"] {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 4px 6px -1px rgb(239 68 68 / 0.4), 0 0 0 2px rgb(255 255 255 / 0.2) inset;
+}
+.file-count-badge[data-state="clean"] {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    box-shadow: 0 4px 6px -1px rgb(22 163 74 / 0.35), 0 0 0 2px rgb(255 255 255 / 0.5) inset;
+    font-weight: 400;
+}
+.dark .file-count-badge[data-state="clean"] {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    box-shadow: 0 4px 6px -1px rgb(34 197 94 / 0.4), 0 0 0 2px rgb(255 255 255 / 0.2) inset;
+}
+
+/* ---- Integrity violation item sub-elements ---- */
+
+/* "No checks configured" empty message */
+.integrity-empty-msg {
+    padding: 1rem;
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+.dark .integrity-empty-msg { color: #9ca3af; }
+
+/* Clean-state panel (all files verified, no violations) */
+.integrity-clean-state {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #60a5fa;
+    background: #f9fafb;
+    padding: 1rem;
+}
+.dark .integrity-clean-state { background: #1f2937; }
+
+.integrity-clean-state__icon {
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #16a34a;
+}
+.dark .integrity-clean-state__icon { color: #4ade80; }
+
+.integrity-clean-state__msg {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #166534;
+}
+.dark .integrity-clean-state__msg { color: #86efac; }
+
+/* file-group-header wraps h4 title + count span */
+.file-group-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+/* file-path — monospace filepath line */
+.file-path {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 0.25rem;
+}
+.dark .file-path { color: #f3f4f6; }
+
+/* file-meta row — wraps file-meta-items */
+.file-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+/* individual meta chip (size, mode) */
+.file-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+.file-meta-item svg { width: 0.75rem; height: 0.75rem; flex-shrink: 0; }
+.dark .file-meta-item { color: #9ca3af; }
+
+/* SHA line */
+.file-sha {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: 0.25rem;
+}
+.dark .file-sha { color: #6b7280; }
+
+/* modal results panel hidden by default */
+.verification-results.hidden { display: none; }
+
+.accordion-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.1));
+    color: #64748b;
+}
+
+.files-accordion-btn[aria-expanded="true"] .accordion-icon { transform: rotate(180deg); }
+.accordion-open .accordion-icon { transform: rotate(180deg); }
+.dark .accordion-icon { color: #94a3b8; }
+
+.accordion-expand-text,
+.accordion-collapse-text {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.files-accordion-content {
+    background: linear-gradient(135deg, rgb(248 250 252 / 0.95), rgb(241 245 249 / 0.9));
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    position: relative;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.files-accordion-content:not(.hidden) { max-height: 2000px; }
+
+.files-accordion-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 5%;
+    width: 90%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #3b82f6, #8b5cf6, transparent);
+    opacity: 0.4;
+}
+
+.dark .files-accordion-content {
+    background: linear-gradient(135deg, rgb(30 41 59 / 0.95), rgb(15 23 42 / 0.9));
+}
+
+.files-accordion-content .flex.items-start {
+    margin-bottom: 1.5rem;
+    padding: 1.25rem;
+    border-radius: 1rem;
+    background: linear-gradient(135deg, rgb(59 130 246 / 0.08), rgb(139 92 246 / 0.08));
+    border-left: 4px solid #3b82f6;
+}
+
+.files-accordion-content .flex.items-start svg { width: 1.25rem; height: 1.25rem; color: #3b82f6; }
+
+.files-accordion-content .flex.items-start h4 { font-size: 0.875rem; font-weight: 700; color: #1e293b; margin-bottom: 0.25rem; }
+.dark .files-accordion-content .flex.items-start h4 { color: #f1f5f9; }
+
+.files-accordion-content .flex.items-start p { font-size: 0.75rem; color: #475569; line-height: 1.5; }
+.dark .files-accordion-content .flex.items-start p { color: #94a3b8; }
+
+.files-list-container {
+    padding: 1.5rem;
+    max-height: 32rem;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #3b82f6 #e2e8f0;
+}
+
+.files-list-container::-webkit-scrollbar { width: 6px; }
+.files-list-container::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 20px; }
+.files-list-container::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #3b82f6, #8b5cf6); border-radius: 20px; border: 1px solid #e2e8f0; }
+.dark .files-list-container::-webkit-scrollbar-track { background: #1e293b; }
+.dark .files-list-container::-webkit-scrollbar-thumb { border-color: #1e293b; }
+
+.files-list-container .loading-spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 3rem;
+    text-align: center;
+    background: linear-gradient(135deg, rgb(59 130 246 / 0.06), rgb(139 92 246 / 0.06));
+    border-radius: 1.5rem;
+}
+
+.files-list-container .loading-spinner::after {
+    content: '';
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgb(59 130 246 / 0.2);
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: tn-spin 0.8s linear infinite;
+}
+
+.files-list-container .loading-spinner span {
+    font-size: 0.875rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.files-accordion-content .grid.grid-cols-3 { margin-top: 1.5rem; gap: 0.75rem; }
+
+.files-accordion-content .grid.grid-cols-3 > div {
+    padding: 1rem;
+    border-radius: 1rem;
+    background: rgba(255,255,255,0.5);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    text-align: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.06);
+}
+
+.files-accordion-content .grid.grid-cols-3 > div:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px -4px rgb(59 130 246 / 0.2);
+    background: rgba(255,255,255,0.8);
+}
+
+.dark .files-accordion-content .grid.grid-cols-3 > div { background: rgba(31,41,55,0.5); }
+.dark .files-accordion-content .grid.grid-cols-3 > div:hover { background: rgba(31,41,55,0.8); }
+
+.files-accordion-content .grid.grid-cols-3 span:first-child {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    margin-bottom: 0.25rem;
+}
+
+.dark .files-accordion-content .grid.grid-cols-3 span:first-child { color: #94a3b8; }
+
+.files-accordion-content .grid.grid-cols-3 span:last-child {
+    font-size: 1.25rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.file-group { margin-bottom: 1.5rem; }
+.file-group:last-child { margin-bottom: 0; }
+
+.file-group h4 {
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.75rem;
+    padding-left: 0.5rem;
+    border-left: 3px solid #3b82f6;
+    color: #1e293b;
+}
+
+.dark .file-group h4 { color: #f1f5f9; border-left-color: #60a5fa; }
+
+.file-group-count { font-size: 0.75rem; font-weight: 600; color: #6b7280; margin-left: 0.5rem; }
+.dark .file-group-count { color: #9ca3af; }
+
+/* integrity.css had two conflicting .file-item definitions.
+   The accordion one (glassmorphism) takes precedence here.
+   The simpler border-bottom variant is merged as a modifier. */
+.file-item {
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: 1rem;
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
+}
+
+.file-item:hover {
+    transform: translateX(4px);
+    background: rgba(255,255,255,0.95);
+    box-shadow: 0 8px 16px -4px rgb(59 130 246 / 0.2), 0 0 0 1px rgb(59 130 246 / 0.2) inset;
+}
+
+.dark .file-item { background: rgba(31,41,55,0.7); }
+
+.dark .file-item:hover {
+    background: rgba(31,41,55,0.95);
+    box-shadow: 0 8px 16px -4px rgb(59 130 246 / 0.3), 0 0 0 1px rgb(96 165 250 / 0.3) inset;
+}
+
+@media (max-width: 640px) {
+    .files-accordion-btn { padding: 1.25rem; font-size: 0.875rem; }
+    .files-accordion-btn > div:first-child { gap: 0.75rem; }
+    .files-accordion-btn .flex.items-center.space-x-2 > div:first-child { width: 2rem; height: 2rem; }
+    .files-list-container { padding: 1rem; max-height: 24rem; }
+    .files-accordion-content .grid.grid-cols-3 { gap: 0.5rem; }
+    .files-accordion-content .grid.grid-cols-3 > div { padding: 0.75rem; }
+    .files-accordion-content .grid.grid-cols-3 span:last-child { font-size: 1rem; }
+}
+
+@media (max-width: 400px) {
+    .integrity-card .ctrl-btn,
+    .syscheck-card  .ctrl-btn { padding: 0.25rem 0.625rem; font-size: 0.75rem; min-height: 26px; }
+    .integrity-card .status-badge,
+    .syscheck-card  .status-badge { font-size: 0.75rem; padding: 0.1875rem 0.5rem; }
+    .integrity-card .stats-grid,
+    .syscheck-card  .stats-grid { gap: 0.375rem; }
+}
+
+
+/* ============================================================
+   M11. E2GUARDIAN MANAGEMENT
+   Formerly: e2g.css
+   Shared primitives replaced by M3–M6 above.
+   .btn → renamed .e2g-btn to avoid collision with btn--* pattern.
+   No dark mode existed in e2g.css — added .dark variants for
+   modal-content, modal-header, modal-footer, stat-card,
+   log-list-item, filter-btn, and notification types.
+   ============================================================ */
+
+/* Modal size overrides (base shell from M4) */
+.log-modal        { width: 1200px; max-width: 90vw; }
+.log-list-modal   { width: 800px;  max-width: 90vw; }
+.verdict-modal,
+.status-modal     { width: 700px;  max-width: 90vw; }
+
+.log-modal .modal-header { padding: 20px 24px; border-bottom: 1px solid #e5e7eb; }
+.log-modal .modal-header h3 { font-size: 20px; font-weight: 600; color: #1f2937; }
+.dark .log-modal .modal-header h3 { color: #f9fafb; }
+
+.log-modal .modal-body { padding: 0; overflow: hidden; display: flex; flex-direction: column; max-height: calc(90vh - 180px); }
+
+.log-metadata {
+    display: flex;
+    gap: 24px;
+    padding: 16px 24px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    flex-wrap: wrap;
+}
+
+.dark .log-metadata { background: #111827; border-bottom-color: #374151; }
+
+.log-meta-item { font-size: 14px; color: #6b7280; }
+.log-meta-item strong { color: #1f2937; margin-right: 8px; }
+.dark .log-meta-item { color: #9ca3af; }
+.dark .log-meta-item strong { color: #f9fafb; }
+
+.log-content-wrapper {
+    flex: 1;
+    overflow: auto;
+    background: #1e1e1e;
+    padding: 20px;
+}
+
+.log-content {
+    margin: 0;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #d4d4d4;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 500px;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.log-list-item {
+    padding: 16px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.log-list-item:hover { background: #f3f4f6; border-color: #2563eb; box-shadow: 0 2px 8px rgba(37,99,235,0.1); }
+.dark .log-list-item { background: #1f2937; border-color: #374151; }
+.dark .log-list-item:hover { background: #374151; border-color: #2563eb; }
+
+.log-item-name { font-weight: 500; color: #1f2937; margin-bottom: 8px; }
+.dark .log-item-name { color: #f9fafb; }
+.log-item-meta { display: flex; gap: 16px; font-size: 13px; color: #6b7280; }
+.dark .log-item-meta { color: #9ca3af; }
+.no-logs { text-align: center; padding: 40px; color: #6b7280; }
+
+.status-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; padding: 8px 0; }
+.status-item { font-size: 14px; color: #374151; padding: 8px 0; }
+.dark .status-item { color: #d1d5db; }
+
+.verdict-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    padding: 24px;
+}
+
+.stat-card {
+    padding: 20px;
+    background: #f9fafb;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid #e5e7eb;
+}
+
+.dark .stat-card { background: #374151; border-color: #4b5563; }
+
+/* stat-card uses .stat-label / .stat-value — shared with services/integrity above */
+
+.reload-status {
+    padding: 16px 24px;
+    margin: 0 24px 24px;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 500;
+    font-size: 16px;
+}
+
+.reload-status.success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+.reload-status.error   { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+.progress-section { text-align: center; padding: 2rem; }
+.progress-text    { font-weight: 600; margin-bottom: 0.5rem; }
+.progress-detail  { color: #6b7280; font-size: 0.875rem; }
+.dark .progress-detail { color: #9ca3af; }
+
+.success-icon,
+.error-icon { font-size: 3rem; margin-bottom: 1rem; }
+
+/* e2g buttons — renamed from .btn to .e2g-btn */
+.e2g-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.e2g-btn-primary   { background: #2563eb; color: white; border-color: #2563eb; }
+.e2g-btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+.e2g-btn-secondary { background: #6b7280; color: white; border-color: #6b7280; }
+.e2g-btn-secondary:hover { background: #4b5563; }
+
+.filter-status {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    margin: 16px 0;
+}
+
+.filter-status.filter-user      { background: #dbeafe; color: #1e40af; }
+.filter-status.filter-childsafe { background: #d1fae5; color: #065f46; }
+.filter-status.filter-adult     { background: #fef3c7; color: #92400e; }
+
+.filter-btn {
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: 2px solid #e5e7eb;
+    background: white;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.filter-btn:hover { border-color: #2563eb; background: #eff6ff; }
+.filter-btn.active { border-color: #2563eb; background: #2563eb; color: white; }
+.filter-btn.active::after { content: '\2713'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); }
+.dark .filter-btn { background: #1f2937; border-color: #374151; color: #d1d5db; }
+.dark .filter-btn:hover { border-color: #2563eb; background: #1e3a5f; }
+.dark .filter-btn.active { background: #1d4ed8; border-color: #1d4ed8; color: white; }
+
+/* ---- E2G Mode Tab active state ---- */
+/* span[data-tab] uses data-active="true/false" set by updateUIForActiveMode() */
+span[data-tab] { cursor: pointer; transition: background 0.15s; }
+span[data-tab][data-active="true"]  { background: #1d4ed8; }
+span[data-tab][data-active="false"] { background: #374151; }
+
+/* ---- E2G Status Display (updateStatusDisplay) ---- */
+.e2g-status-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.e2g-status-card {
+    border-radius: 0.5rem;
+    background: #f9fafb;
+    padding: 1rem;
+}
+.dark .e2g-status-card { background: #111827; }
+
+.e2g-status-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+.e2g-status-mode-name {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #374151;
+}
+.dark .e2g-status-mode-name { color: #fff; }
+
+.e2g-status-updated {
+    font-size: 0.75rem;
+    color: #374151;
+}
+.dark .e2g-status-updated { color: #fff; }
+
+.e2g-status-description {
+    font-size: 0.875rem;
+    color: #374151;
+    margin-bottom: 0.5rem;
+}
+.dark .e2g-status-description { color: #fff; }
+
+.e2g-status-script-line {
+    font-size: 0.75rem;
+    color: #374151;
+}
+.dark .e2g-status-script-line { color: #fff; }
+
+.e2g-status-code {
+    display: inline;
+    border-radius: 0.25rem;
+    background: #e5e7eb;
+    padding: 0.125rem 0.5rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.dark .e2g-status-code { background: #374151; }
+
+.e2g-select-card {
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+    background: #f9fafb;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+}
+.dark .e2g-select-card { border-color: #374151; background: #111827; }
+
+.e2g-select-title {
+    font-size: 0.875rem;
+    color: #374151;
+    margin-bottom: 0.5rem;
+}
+.dark .e2g-select-title { color: #fff; }
+
+.e2g-select-list {
+    list-style: disc;
+    padding-left: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: #4b5563;
+    margin-bottom: 0.5rem;
+}
+.dark .e2g-select-list { color: #9ca3af; }
+
+.e2g-select-hint {
+    font-size: 0.75rem;
+    color: #4b5563;
+}
+.dark .e2g-select-hint { color: #fff; }
+
+/* ---- E2G Modal Progress (updateModalError/Success) ---- */
+.e2g-progress-error-icon {
+    font-size: 1.5rem;
+    color: #ef4444;
+    margin-bottom: 0.5rem;
+}
+.e2g-progress-text--error { font-size: 0.875rem; color: #dc2626; }
+.dark .e2g-progress-text--error { color: #f87171; }
+
+.e2g-progress-text--success { font-size: 0.875rem; font-weight: 700; color: #111827; }
+.dark .e2g-progress-text--success { color: #fff; }
+
+.e2g-progress-text--muted { font-size: 0.75rem; color: #4b5563; }
+.dark .e2g-progress-text--muted { color: #9ca3af; }
+
+.e2g-progress-warning-box {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: #fefce8;
+    border-radius: 0.25rem;
+    border: 1px solid #fde68a;
+}
+.dark .e2g-progress-warning-box { background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.3); }
+
+.e2g-progress-warning-text {
+    font-size: 0.75rem;
+    color: #92400e;
+}
+.dark .e2g-progress-warning-text { color: #fcd34d; }
+
+.e2g-progress-warning-note {
+    font-size: 0.75rem;
+    color: #b45309;
+    margin-top: 0.25rem;
+}
+.dark .e2g-progress-warning-note { color: #fbbf24; }
+
+/* ---- E2G Log Viewer info bar ---- */
+.e2g-log-info-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.75rem;
+}
+.e2g-log-info-filename {
+    font-weight: 600;
+    color: #374151;
+}
+.dark .e2g-log-info-filename { color: #d1d5db; }
+
+.e2g-log-info-meta { color: #6b7280; }
+.dark .e2g-log-info-meta { color: #9ca3af; }
+
+/* ---- E2G Feeds (renderFeeds) ---- */
+.e2g-no-feeds {
+    padding: 2rem;
+    text-align: center;
+    color: #6b7280;
+}
+.dark .e2g-no-feeds { color: #9ca3af; }
+
+.e2g-category-card {
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    padding: 1rem;
+}
+.dark .e2g-category-card { border-color: #374151; background: #1f2937; }
+
+.e2g-category-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+.e2g-category-name {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #111827;
+}
+.dark .e2g-category-name { color: #fff; }
+
+.e2g-category-count {
+    display: inline-block;
+    border-radius: 9999px;
+    background: #dbeafe;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #1e40af;
+}
+.dark .e2g-category-count { background: #1e3a5f; color: #93c5fd; }
+
+.e2g-feeds-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.e2g-feed-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #f3f4f6;
+    background: #f9fafb;
+    padding: 0.75rem;
+    transition: border-color 0.15s, background 0.15s;
+}
+.e2g-feed-row:hover { border-color: #bfdbfe; background: #eff6ff; }
+.dark .e2g-feed-row { border-color: #374151; background: #111827; }
+.dark .e2g-feed-row:hover { border-color: #1e40af; background: rgba(30,64,175,0.1); }
+
+.e2g-feed-body { flex: 1; overflow: hidden; }
+.e2g-feed-tags { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
+
+.e2g-feed-tag {
+    display: inline-block;
+    border-radius: 0.25rem;
+    background: #e5e7eb;
+    padding: 0.0625rem 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #374151;
+}
+.dark .e2g-feed-tag { background: #374151; color: #d1d5db; }
+
+.e2g-feed-tag--user {
+    background: #f3e8ff;
+    color: #6b21a8;
+}
+.dark .e2g-feed-tag--user { background: rgba(88,28,135,0.4); color: #d8b4fe; }
+
+.e2g-feed-url {
+    display: block;
+    word-break: break-all;
+    font-size: 0.75rem;
+    color: #2563eb;
+    text-decoration: none;
+}
+.e2g-feed-url:hover { text-decoration: underline; }
+.dark .e2g-feed-url { color: #60a5fa; }
+
+.e2g-feed-delete {
+    flex-shrink: 0;
+    border-radius: 0.5rem;
+    background: #fee2e2;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #b91c1c;
+    border: none;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s;
+}
+.e2g-feed-row:hover .e2g-feed-delete { opacity: 1; }
+.e2g-feed-delete:hover { background: #fecaca; }
+.dark .e2g-feed-delete { background: rgba(153,27,27,0.3); color: #f87171; }
+.dark .e2g-feed-delete:hover { background: rgba(153,27,27,0.5); }
+
+/* ---- E2G Refresh SVG spin ---- */
+.e2g-refresh-spin { animation: tn-spin 0.6s linear; }
+
+/* ---- E2G Mode Switch Modal inline content ---- */
+.e2g-modal-title-icon {
+    display: inline-block;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+}
+
+
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 16px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10000;
+}
+
+.notification-success, .notification[data-type="success"] { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
+.notification-error,   .notification[data-type="error"]   { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
+.notification-info,    .notification[data-type="info"]     { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
+.notification-warning, .notification[data-type="warning"]  { background: #fef3c7; color: #92400e; border-left: 4px solid #f59e0b; }
+
+.dark .notification-success, .dark .notification[data-type="success"] { background: #14291a; color: #86efac; }
+.dark .notification-error,   .dark .notification[data-type="error"]   { background: #2d1515; color: #fca5a5; }
+.dark .notification-info,    .dark .notification[data-type="info"]    { background: #0c1a2e; color: #93c5fd; }
+.dark .notification-warning, .dark .notification[data-type="warning"] { background: #1c1208; color: #fcd34d; }
+
+/* E2g log scrollbar */
+.log-content-wrapper::-webkit-scrollbar { width: 12px; height: 12px; }
+.log-content-wrapper::-webkit-scrollbar-track { background: #252526; }
+.log-content-wrapper::-webkit-scrollbar-thumb { background: #3e3e42; border-radius: 6px; }
+.log-content-wrapper::-webkit-scrollbar-thumb:hover { background: #4e4e52; }
+
+@media (max-width: 768px) {
+    .log-modal, .log-list-modal, .verdict-modal, .status-modal { width: 95vw; }
+    .log-metadata { flex-direction: column; gap: 8px; }
+    .verdict-stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .e2g-btn { flex: 1 1 auto; justify-content: center; }
+    .notification { right: 10px; left: 10px; top: 10px; }
+}
+
+@media print {
+    .log-content-wrapper { background: white; max-height: none; overflow: visible; }
+    .log-content { color: black; font-size: 10pt; }
+}
+
+
+/* ============================================================
+   M12. PF MANAGEMENT
+   Formerly: pf.css (managepf.css)
+   Now merged here. pf.css can be deleted from disk.
+   NOTE: pf.css section 7 (.pf-rules-pre .text-*-400 colour
+   overrides) is intentionally OMITTED — those Tailwind class
+   names are no longer emitted by pf.js. Section 35 in this
+   file (pf-rule--*) is the live replacement.
+   ============================================================ */
+
+/* Tab navigation */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+.tab-btn {
+    border: none;
+    cursor: pointer;
+    border-radius: 0.375rem;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.tab-btn.active             { background-color: #2563eb; color: #ffffff; }
+.dark .tab-btn.active       { background-color: #1d4ed8; }
+.tab-btn:not(.active)       { background-color: #4b5563; color: #ffffff; }
+.dark .tab-btn:not(.active) { background-color: #374151; }
+.tab-btn:not(.active):hover { background-color: #6b7280; }
+.dark .tab-btn:not(.active):hover { background-color: #4b5563; }
+.tab-btn.active:hover       { background-color: #1d4ed8; }
+.dark .tab-btn.active:hover { background-color: #1e40af; }
+
+/* Block/Pass action toggle pill — CSS :has(), no JS needed */
+.action-toggle > div { color: #6b7280; }
+.dark .action-toggle > div { color: #9ca3af; }
+.action-toggle:has(input[value="block"]:checked) > div { background-color: #dc2626; color: #ffffff; }
+.action-toggle:has(input[value="pass"]:checked)  > div { background-color: #16a34a; color: #ffffff; }
+
+.feed-filter.active      { background-color: #2563eb; color: #ffffff; }
+.dark .feed-filter.active { background-color: #1d4ed8; }
+
+/* Page fade-in */
+.animate-fade-in { animation: managepf-fadein 0.5s ease-in-out; }
+
+@keyframes managepf-fadein {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* Feed list scrollbar (height/min-height in section 47) */
+#feed-list { max-height: 320px; overflow-y: auto; scrollbar-width: thin; }
+#feed-list::-webkit-scrollbar       { width: 6px; }
+#feed-list::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+#feed-list::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
+#feed-list::-webkit-scrollbar-thumb:hover { background: #555; }
+.dark #feed-list::-webkit-scrollbar-track { background: #374151; }
+.dark #feed-list::-webkit-scrollbar-thumb { background: #6b7280; }
+.dark #feed-list::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* Default PF rules accordion */
+.pf-accordion-btn:hover { background-color: rgba(0,0,0,0.02); }
+.dark .pf-accordion-btn:hover { background-color: rgba(255,255,255,0.05); }
+
+.pf-rules-pre::-webkit-scrollbar { width: 8px; }
+.pf-rules-pre::-webkit-scrollbar-track { background: #374151; border-radius: 4px; }
+.pf-rules-pre::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 4px; }
+.pf-rules-pre::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+.pf-copy-btn:hover  { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.pf-copy-btn:active { transform: scale(0.98); }
+
+@keyframes managepf-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+.pf-refresh-btn .pf-refresh-icon { transition: transform 500ms ease; }
+.pf-refresh-btn.spinning .pf-refresh-icon { animation: managepf-spin 1s linear infinite; }
+
+/* PF rules viewer — light/dark background override */
+.pf-rules-container { background-color: #ffffff !important; border-color: #d1d5db !important; }
+.pf-rules-pre       { background-color: #ffffff !important; color: #1f2937 !important; }
+.dark .pf-rules-container { background-color: #111827 !important; border-color: #4b5563 !important; }
+.dark .pf-rules-pre       { background-color: #111827 !important; color: #f3f4f6 !important; }
+
+/* Geoip scroll area */
+.geoip-scroll-area { height: 300px !important; max-height: 300px !important; min-height: 300px !important; overflow-y: auto !important; display: block !important; padding: 0.5rem !important; }
+.geoip-inner-wrapper { height: auto !important; min-height: 100% !important; overflow: visible !important; }
+
+/* Entry cards */
+.pf-entry              { background-color: #f9fafb; border-color: #e5e7eb; }
+.pf-entry[data-action="block"] { background-color: #fef2f2; border-color: #fecaca; }
+.pf-entry[data-action="pass"]  { background-color: #f0fdf4; border-color: #bbf7d0; }
+.pf-entry-value { color: #111827; }
+.pf-entry-hint  { color: #6b7280; }
+.pf-entry-badge { color: #6b7280; }
+.pf-entry[data-action="block"] .pf-entry-badge { color: #dc2626; }
+.pf-entry[data-action="pass"]  .pf-entry-badge { color: #16a34a; }
+
+.dark .pf-entry              { background-color: #1f2937; border-color: #374151; }
+.dark .pf-entry[data-action="block"] { background-color: #2d1515; border-color: #7f1d1d; }
+.dark .pf-entry[data-action="pass"]  { background-color: #14291a; border-color: #14532d; }
+.dark .pf-entry-value { color: #f9fafb; }
+.dark .pf-entry-hint  { color: #9ca3af; }
+.dark .pf-entry[data-action="block"] .pf-entry-badge { color: #fca5a5; }
+.dark .pf-entry[data-action="pass"]  .pf-entry-badge { color: #86efac; }
+
+/* Feed item cards */
+.feed-item      { background-color: #f9fafb; border-color: #e5e7eb; }
+.dark .feed-item { background-color: #1f2937; border-color: #374151; }
+.dark .feed-item svg { color: #93c5fd; }
+
+.feed-info-box { background-color: #eff6ff; border-color: #bfdbfe; }
+.dark .feed-info-box { background-color: #0c1a2e; border-color: #1e3a5f; }
+.feed-info-box p { color: #1e3a5f; }
+.dark .feed-info-box p { color: #93c5fd; }
+
+.feed-type-badge      { background-color: #dbeafe; color: #1e40af; }
+.dark .feed-type-badge { background-color: #1e3a5f; color: #93c5fd; }
+
+.feed-protected-badge      { background-color: #dcfce7; color: #14532d; }
+.dark .feed-protected-badge { background-color: #14291a; color: #86efac; }
+
+.feed-url-label      { color: #374151; }
+.dark .feed-url-label { color: #d1d5db; }
+
+/* Verdict modal */
+.verdict-header-green { background-color: #f0fdf4; border-bottom: 1px solid #bbf7d0; }
+.verdict-header-red   { background-color: #fef2f2; border-bottom: 1px solid #fecaca; }
+.dark .verdict-header-green { background-color: #14291a; border-bottom-color: #14532d; }
+.dark .verdict-header-red   { background-color: #2d1515; border-bottom-color: #7f1d1d; }
+
+.verdict-title-green      { color: #14532d; }
+.verdict-title-red        { color: #7f1d1d; }
+.dark .verdict-title-green { color: #86efac; }
+.dark .verdict-title-red   { color: #fca5a5; }
+
+.verdict-stat-green  { background-color: #f0fdf4; border-color: #bbf7d0; }
+.verdict-stat-blue   { background-color: #eff6ff; border-color: #bfdbfe; }
+.verdict-stat-purple { background-color: #faf5ff; border-color: #e9d5ff; }
+.verdict-stat-cyan   { background-color: #ecfeff; border-color: #a5f3fc; }
+.verdict-stat-orange { background-color: #fff7ed; border-color: #fed7aa; }
+.verdict-stat-yellow { background-color: #fefce8; border-color: #fde68a; }
+.verdict-stat-red    { background-color: #fef2f2; border-color: #fecaca; }
+.verdict-stat-gray   { background-color: #f9fafb; border-color: #e5e7eb; }
+
+.dark .verdict-stat-green  { background-color: #14291a; border-color: #14532d; }
+.dark .verdict-stat-blue   { background-color: #0c1a2e; border-color: #1e3a5f; }
+.dark .verdict-stat-purple { background-color: #1a0e2e; border-color: #4c1d95; }
+.dark .verdict-stat-cyan   { background-color: #0a1f22; border-color: #164e63; }
+.dark .verdict-stat-orange { background-color: #1c1208; border-color: #78350f; }
+.dark .verdict-stat-yellow { background-color: #1c1208; border-color: #78350f; }
+.dark .verdict-stat-red    { background-color: #2d1515; border-color: #7f1d1d; }
+.dark .verdict-stat-gray   { background-color: #1f2937; border-color: #374151; }
+
+.verdict-num-green  { color: #16a34a; }
+.verdict-num-blue   { color: #2563eb; }
+.verdict-num-purple { color: #7c3aed; }
+.verdict-num-cyan   { color: #0891b2; }
+.verdict-num-orange { color: #c2410c; }
+.verdict-num-yellow { color: #b45309; }
+.verdict-num-red    { color: #dc2626; }
+.verdict-num-gray   { color: #4b5563; }
+
+.dark .verdict-num-green  { color: #86efac; }
+.dark .verdict-num-blue   { color: #93c5fd; }
+.dark .verdict-num-purple { color: #c084fc; }
+.dark .verdict-num-cyan   { color: #67e8f9; }
+.dark .verdict-num-orange { color: #fdba74; }
+.dark .verdict-num-yellow { color: #fcd34d; }
+.dark .verdict-num-red    { color: #fca5a5; }
+.dark .verdict-num-gray   { color: #9ca3af; }
+
+/* Rule builder */
+.pf-rules-manager { max-width: 100% !important; width: 100% !important; }
+
+.pf-rules-manager input[type="checkbox"].peer ~ div {
+    position: relative; width: 1.75rem; height: 1rem;
+    background-color: #d1d5db; border-radius: 9999px;
+    transition: background-color 200ms ease;
+}
+
+.dark .pf-rules-manager input[type="checkbox"].peer ~ div { background-color: #4b5563; }
+.pf-rules-manager input[type="checkbox"].peer:checked ~ div { background-color: #1d4ed8; }
+
+.pf-rules-manager input[type="checkbox"].peer ~ div::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 0.75rem; height: 0.75rem; background-color: #ffffff;
+    border-radius: 9999px; transition: transform 200ms ease;
+}
+
+.pf-rules-manager input[type="checkbox"].peer:checked ~ div::after { transform: translateX(0.75rem); }
+
+.pf-rules-manager input[type="radio"].peer ~ span {
+    display: block; padding: 0.375rem 0.75rem; font-size: 0.75rem; font-weight: 700;
+    color: #6b7280; background-color: transparent; border-radius: 0.375rem;
+    transition: all 200ms ease; cursor: pointer;
+}
+
+.dark .pf-rules-manager input[type="radio"].peer ~ span { color: #9ca3af; }
+.pf-rules-manager input[type="radio"].peer ~ span:hover { background-color: #f3f4f6; }
+.dark .pf-rules-manager input[type="radio"].peer ~ span:hover { background-color: #374151; }
+.pf-rules-manager input[type="radio"].peer:checked ~ span { background-color: #1d4ed8; color: #ffffff; }
+
+.pf-rules-manager .space-x-2.rounded-lg.bg-gray-100.p-1 {
+    display: inline-flex; padding: 0.25rem; gap: 0.25rem;
+    background-color: #f3f4f6; border-radius: 0.5rem;
+}
+
+.dark .pf-rules-manager .space-x-2.rounded-lg.bg-gray-100.p-1 { background-color: #1f2937; }
+
+.pf-rules-manager input[type="text"]:focus,
+.pf-rules-manager input[type="number"]:focus,
+.pf-rules-manager select:focus {
+    outline: none; border-color: #1d4ed8 !important;
+    box-shadow: 0 0 0 2px rgba(29,78,216,0.2);
+}
+
+.dark .pf-rules-manager input[type="text"]:focus,
+.dark .pf-rules-manager input[type="number"]:focus,
+.dark .pf-rules-manager select:focus { box-shadow: 0 0 0 2px rgba(29,78,216,0.3); }
+
+.pf-rules-manager button[type="submit"],
+.pf-rules-manager button[data-action="validate"] {
+    background-color: #1d4ed8; color: #ffffff;
+    transition: all 200ms ease; cursor: pointer;
+}
+
+.pf-rules-manager button[type="submit"]:hover,
+.pf-rules-manager button[data-action="validate"]:hover { background-color: #1e40af; transform: translateY(-1px); }
+.pf-rules-manager button[type="submit"]:active,
+.pf-rules-manager button[data-action="validate"]:active { transform: scale(0.98); }
+
+.pf-rules-manager button[type="reset"] { background-color: #6b7280; color: #ffffff; cursor: pointer; }
+.pf-rules-manager button[type="reset"]:hover { background-color: #4b5563; }
+
+#rule-preview { background-color: #f9fafb; color: #1f2937; font-family: 'Courier New', Consolas, monospace; }
+.dark #rule-preview { background-color: #1f2937; color: #f9fafb; }
+
+#rule-preview.pf-preview--empty { color: #9ca3af; font-style: italic; }
+.dark #rule-preview.pf-preview--empty { color: #6b7280; }
+
+.pf-rules-manager label.border-b { border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; margin-bottom: 0.5rem; }
+.dark .pf-rules-manager label.border-b { border-bottom-color: #374151; }
+
+.pf-rules-manager .gap-4.md\:grid-cols-3.grid.grid-cols-1 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.pf-rules-manager .space-x-2.grid.grid-cols-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; }
+
+@media (max-width: 1024px) {
+    .pf-rules-manager .gap-4.md\:grid-cols-3.grid.grid-cols-1 { grid-template-columns: 1fr; }
+    #rule-builder-form .space-x-2.pb-4.flex.flex-wrap.items-start { flex-direction: column; }
+    #rule-builder-form .space-x-2.pb-4.flex.flex-wrap.items-start > * { width: 100%; flex: 1 1 auto; }
+    .pf-rules-manager .space-x-2.grid.grid-cols-4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Entry delete button */
+.pf-entry-delete-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 1.25rem; height: 1.25rem; border: none; background: transparent;
+    border-radius: 0.25rem; cursor: pointer; padding: 0; opacity: 0.4;
+    transition: opacity 150ms, background-color 150ms;
+}
+
+.pf-entry:hover .pf-entry-delete-btn { opacity: 1; }
+.pf-entry-delete-btn:hover      { background-color: #fee2e2; }
+.dark .pf-entry-delete-btn:hover { background-color: #450a0a; }
+
+.pf-entry-delete-icon { width: 0.875rem; height: 0.875rem; color: #dc2626; }
+.dark .pf-entry-delete-icon { color: #fca5a5; }
+
+/* Feed info box inner text */
+.feed-info-box-text { color: #1e3a5f; font-size: 0.875rem; margin: 0; }
+.dark .feed-info-box-text { color: #93c5fd; }
+.feed-info-box-label { font-weight: 700; }
+
+
+/* ============================================================
+   M13. PF MODAL REDESIGN
+   Replaces .pf-modal-inner / .pf-modal-header / .pf-modal-footer
+   with the canonical .modal-content / .modal-header / .modal-footer
+   shell from M4. All PF modals now share the same structure
+   as services, mail, e2g, and integrity modals.
+   ============================================================ */
+
+/* Verdict modal — sized wider than the default 600px */
+.pf-verdict-modal {
+    max-width: 640px;
+}
+
+/* Pass/Fail header colour bands — applied alongside .modal-header */
+.modal-header--pass {
+    background: #f0fdf4;
+    border-bottom-color: #bbf7d0;
+}
+.modal-header--fail {
+    background: #fef2f2;
+    border-bottom-color: #fecaca;
+}
+.dark .modal-header--pass {
+    background: #14291a;
+    border-bottom-color: #14532d;
+}
+.dark .modal-header--fail {
+    background: #2d1515;
+    border-bottom-color: #7f1d1d;
+}
+
+/* Title row inside verdict header — icon + text */
+.pf-verdict-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.pf-verdict-title-wrap h2 {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.modal-header--pass .pf-verdict-title-wrap h2 { color: #14532d; }
+.modal-header--fail .pf-verdict-title-wrap h2 { color: #7f1d1d; }
+.dark .modal-header--pass .pf-verdict-title-wrap h2 { color: #86efac; }
+.dark .modal-header--fail .pf-verdict-title-wrap h2 { color: #fca5a5; }
+
+/* Pass/Fail icon dot */
+.pf-verdict-icon {
+    flex-shrink: 0;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 9999px;
+    display: inline-block;
+}
+.pf-verdict-icon--pass { background: #16a34a; }
+.pf-verdict-icon--fail { background: #dc2626; }
+.dark .pf-verdict-icon--pass { background: #4ade80; }
+.dark .pf-verdict-icon--fail { background: #f87171; }
+
+/* ── Verdict stat cards — border only, no fill ── */
+/* Override the existing background fills in M12 */
+.verdict-stat-wrap {
+    padding: 0.875rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid;
+    background: transparent;
+}
+.dark .verdict-stat-wrap {
+    background: transparent;
+}
+
+/* Stat label — smaller, uppercase track */
+.verdict-stat-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.75;
+    margin-bottom: 0.375rem;
+}
+
+/* Stat value — tighter sizing for 3/4-column grids */
+.verdict-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-top: 0;
+}
+
+/* ── Grid variants ── */
+.verdict-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+}
+@media (max-width: 480px) {
+    .verdict-grid-3 { grid-template-columns: repeat(2, 1fr); }
+    .verdict-grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .verdict-stat-value { font-size: 1.25rem; }
+}
+
+/* ── Verdict modal footer buttons ── */
+/* Named pf-verdict-btn to avoid collision with .btn / .ctrl-btn */
+.pf-verdict-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1.125rem;
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: filter 120ms ease, transform 80ms ease;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+}
+.pf-verdict-btn:active {
+    transform: scale(0.97);
+}
+
+.pf-verdict-btn--neutral {
+    background: #f3f4f6;
+    color: #374151;
+}
+.pf-verdict-btn--neutral:hover { background: #e5e7eb; }
+.dark .pf-verdict-btn--neutral {
+    background: #374151;
+    color: #d1d5db;
+}
+.dark .pf-verdict-btn--neutral:hover { background: #4b5563; }
+
+.pf-verdict-btn--success {
+    background: #16a34a;
+    color: #ffffff;
+}
+.pf-verdict-btn--success:hover { filter: brightness(0.9); }
+
+.pf-verdict-btn--primary {
+    background: #2563eb;
+    color: #ffffff;
+}
+.pf-verdict-btn--primary:hover { filter: brightness(0.9); }
+
+.pf-verdict-btn--danger {
+    background: #dc2626;
+    color: #ffffff;
+}
+.pf-verdict-btn--danger:hover { filter: brightness(0.9); }
+
+/* ── Verdict warn/error/help lists — tighter ── */
+.verdict-warn-list,
+.verdict-error-list,
+.verdict-help-list {
+    list-style: disc;
+    list-style-position: inside;
+    font-size: 0.8125rem;
+    margin-top: 0.375rem;
+    line-height: 1.6;
+}
+
+/* ── Full output modal — wider than verdict ── */
+.pf-modal-inner--wide {
+    max-width: 72rem;
+}
+
+/* ── Deprecate old pf-modal-* shell classes ──
+   These selectors are kept for any other callers but
+   now inherit the modal-content geometry. */
+.pf-modal-inner {
+    background: #fff;
+    border-radius: 0.75rem;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+    max-width: 48rem;
+    width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    animation: tn-slide-up 0.3s ease-out;
+}
+.dark .pf-modal-inner {
+    background: #1f2937;
+}
+
+/* ============================================================
+   FW-CARD / FW-BADGE / FW-EMPTY sub-element classes
+   (firewall.js / wan.js createLogCard, updateStatus,
+    renderPreviewLogs, loadModalPage)
+   ============================================================ */
+
+/* Retry button inside error card */
+.btn--retry {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1rem;
+    padding: 0.375rem 0.875rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    border: 1px solid #6b7280;
+    border-radius: 0.375rem;
+    background: transparent;
+    color: #374151;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.btn--retry:hover { background-color: #f3f4f6; }
+.dark .btn--retry { color: #d1d5db; border-color: #4b5563; }
+.dark .btn--retry:hover { background-color: #374151; }
+
+/* Log card sub-elements */
+.fw-card-body    { display: flex; flex-direction: column; gap: 0.25rem; }
+.fw-card-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem; }
+
+.fw-card-time {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #2563eb;
+}
+.dark .fw-card-time { color: #60a5fa; }
+
+.fw-card-payload {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: #374151;
+    opacity: 0.9;
+    word-break: break-all;
+}
+.dark .fw-card-payload { color: #d1d5db; }
+
+/* Empty state sub-elements */
+.fw-empty-icon { width: 3rem; height: 3rem; color: #9ca3af; margin-bottom: 1rem; }
+.fw-empty-msg  { color: #6b7280; font-weight: 700; }
+.dark .fw-empty-msg { color: #9ca3af; }
+.fw-empty-hint { font-size: 0.875rem; color: #9ca3af; margin-top: 0.5rem; }
+
+/* Status badge label text */
+.fw-badge-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; }
+
+/* Copy feedback SVG icon (firewall.js / wan.js / lan.js showCopyFeedback) */
+.fw-copy-icon {
+    width:  1rem;
+    height: 1rem;
+    margin-right: 0.25rem;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   FW-FLOW card sub-elements  (wan.js createFlowCard)
+   Replaces the Tailwind-heavy innerHTML template entirely.
+   ============================================================ */
+
+/* Outer card row — mirrors card--log-entry but flex row */
+.card--flow-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
+    transition: background-color 0.15s;
+}
+.card--flow-entry:hover      { background-color: rgba(59, 130, 246, 0.05); }
+.dark .card--flow-entry:hover { background-color: rgba(59, 130, 246, 0.08); }
+
+/* Left column: icon + address */
+.fw-flow-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+/* Protocol icon badge */
+.fw-flow-icon--ipv4,
+.fw-flow-icon--ipv6,
+.fw-flow-icon--default {
+    width:  2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fw-flow-icon--ipv4    { color: #3b82f6; background-color: rgba(59, 130, 246, 0.1); }
+.fw-flow-icon--ipv6    { color: #a855f7; background-color: rgba(168, 85, 247, 0.1); }
+.fw-flow-icon--default { color: #6b7280; background-color: rgba(107, 114, 128, 0.1); }
+
+/* SVG inside the icon badge */
+.fw-flow-svg { width: 1rem; height: 1rem; }
+
+/* Address block */
+.fw-flow-addr-block { min-width: 0; }
+
+.fw-flow-addr {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #111827;
+    word-break: break-all;
+    line-height: 1.25;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.125rem;
+}
+.dark .fw-flow-addr { color: #ffffff; }
+
+/* Arrow SVG between src → dst */
+.fw-flow-arrow {
+    width:  0.75rem;
+    height: 0.75rem;
+    color: #374151;
+    flex-shrink: 0;
+}
+.dark .fw-flow-arrow { color: #ffffff; }
+
+/* Protocol + timestamp meta line */
+.fw-flow-meta {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #6b7280;
+    margin-top: 0.25rem;
+    letter-spacing: 0.05em;
+}
+.dark .fw-flow-meta { color: #9ca3af; }
+
+/* Right column: bytes */
+.fw-flow-right {
+    text-align: right;
+    flex-shrink: 0;
+    margin-left: 1rem;
+}
+
+.fw-flow-bytes {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #2563eb;
+    white-space: nowrap;
+}
+.dark .fw-flow-bytes { color: #60a5fa; }
+
+/* ============================================================
+   MAIL LIST ITEM sub-element classes  (mail.js createMailItem)
+   Replaces the Tailwind-heavy renderMailItem() innerHTML string.
+   ============================================================ */
+
+/* Base list item */
+.mail-item {
+    padding: 1rem;
+    transition: background-color 0.15s;
+}
+.mail-item:hover { background-color: #f9fafb; }
+.dark .mail-item:hover { background-color: #1f2937; }
+
+/* Row layout inside each item */
+.mail-item-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Clickable content block */
+.mail-item-content {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+    margin-left: 1rem;
+}
+
+/* Subject line: dot + subject text */
+.mail-item-subject-line {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.125rem;
+}
+
+/* Read/unread indicator dot */
+.mail-dot--unread,
+.mail-dot--read {
+    display: inline-block;
+    width:  0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+    margin-right: 0.5rem;
+}
+.mail-dot--unread { background-color: #3b82f6; }
+.mail-dot--read   { background-color: #9ca3af; }
+
+/* Subject text */
+.mail-item-subject {
+    font-weight: 500;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.dark .mail-item-subject { color: #ffffff; }
+
+/* From / sender line */
+.mail-item-from {
+    font-size: 0.875rem;
+    color: #4b5563;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.dark .mail-item-from { color: #9ca3af; }
+
+/* Actions column (delete button) */
+.mail-item-actions {
+    display: flex;
+    align-items: center;
+    margin-left: 1rem;
+    flex-shrink: 0;
+}
+
+/* Delete button */
+.delete-mail-btn {
+    padding: 0.5rem;
+    color: #ef4444;
+    border-radius: 0.5rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+.delete-mail-btn:hover { background-color: #fef2f2; }
+.dark .delete-mail-btn:hover { background-color: rgba(239, 68, 68, 0.15); }
+
+/* ============================================================
+   LOGS.JS — supplemental classes
+   All classes referenced by logs.js DOM construction that are
+   not already present in dynamic.css sections 11, 22, or M10.
+   ============================================================ */
+
+/* Rotation status line below date selector */
+.log-rotation-status {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+    padding: 0 0.25rem;
+}
+.dark .log-rotation-status { color: #9ca3af; }
+
+/* Rotation status inner rows */
+.log-rotation-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.log-rotation-row + .log-rotation-row { margin-top: 0.25rem; }
+
+/* Rotation status icons */
+.log-rotation-icon {
+    width:  0.75rem;
+    height: 0.75rem;
+    flex-shrink: 0;
+}
+.log-rotation-icon--ok      { color: #22c55e; }
+.log-rotation-icon--warn    { color: #f59e0b; }
+.log-rotation-icon--unknown { color: #9ca3af; }
+
+/* Smart error panel — replaces Tailwind bgColor/borderColor/textColor vars */
+.log-smart-error {
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    border: 1px solid;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+.log-smart-error--offline {
+    background-color: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.2);
+    color: #d97706;
+}
+.dark .log-smart-error--offline { color: #fbbf24; }
+
+.log-smart-error--empty,
+.log-smart-error--future {
+    background-color: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.2);
+    color: #2563eb;
+}
+.dark .log-smart-error--empty,
+.dark .log-smart-error--future { color: #60a5fa; }
+
+.log-smart-error--missing {
+    background-color: rgba(249, 115, 22, 0.1);
+    border-color: rgba(249, 115, 22, 0.2);
+    color: #ea580c;
+}
+.dark .log-smart-error--missing { color: #fb923c; }
+
+.log-smart-error--default {
+    background-color: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #dc2626;
+}
+.dark .log-smart-error--default { color: #f87171; }
+
+/* Large icon inside smart error */
+.log-smart-error-icon {
+    width:  2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    /* color inherited from parent .log-smart-error--* */
+}
+
+/* Text body inside smart error */
+.log-smart-error-body { flex: 1; }
+
+.log-smart-error-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    /* color inherited */
+}
+
+.log-smart-error-msg {
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+    /* color inherited */
+}
+
+/* Details key/value table inside smart error */
+.log-smart-error-details {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 0.375rem;
+    border: 1px solid #e5e7eb;
+}
+.dark .log-smart-error-details {
+    background-color: rgba(31, 41, 55, 0.5);
+    border-color: #374151;
+}
+
+.log-smart-error-dl { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; }
+
+.log-smart-error-row { display: flex; justify-content: space-between; }
+
+.log-smart-error-dt { font-weight: 600; color: #374151; }
+.dark .log-smart-error-dt { color: #d1d5db; }
+
+.log-smart-error-dd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.875rem;
+    color: #4b5563;
+}
+.dark .log-smart-error-dd { color: #9ca3af; }
+
+/* Suggestion box at bottom of smart error */
+.log-smart-error-suggestion {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background-color: #eff6ff;
+    border-radius: 0.5rem;
+    border: 1px solid #bfdbfe;
+    font-size: 0.875rem;
+    color: #1e40af;
+}
+.dark .log-smart-error-suggestion {
+    background-color: rgba(30, 58, 138, 0.2);
+    border-color: #1e40af;
+    color: #bfdbfe;
+}
+
+/* Empty file warning (blue variant of smart error) */
+.log-empty-file-warn {
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    background-color: rgba(59, 130, 246, 0.1);
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.log-empty-file-body { flex: 1; }
+
+.log-empty-file-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #2563eb;
+    margin-bottom: 0.5rem;
+}
+.dark .log-empty-file-title { color: #60a5fa; }
+
+.log-empty-file-msg {
+    font-size: 0.875rem;
+    color: #2563eb;
+    margin-bottom: 1rem;
+}
+.dark .log-empty-file-msg { color: #60a5fa; }
+
+/* Quiet mode / note box inside empty file warning */
+.log-empty-file-note {
+    padding: 1rem;
+    border-radius: 0.375rem;
+    border: 1px solid;
+    font-size: 0.875rem;
+}
+.log-empty-file-note--quiet {
+    background-color: #fffbeb;
+    border-color: #fde68a;
+    color: #92400e;
+}
+.dark .log-empty-file-note--quiet {
+    background-color: rgba(120, 53, 15, 0.2);
+    border-color: #78350f;
+    color: #fde68a;
+}
+.log-empty-file-note--default {
+    background-color: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1e40af;
+}
+.dark .log-empty-file-note--default {
+    background-color: rgba(30, 58, 138, 0.2);
+    border-color: #1e40af;
+    color: #bfdbfe;
+}
+
+/* Log line inner spans */
+.log-timestamp {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+.dark .log-timestamp { color: #9ca3af; }
+
+.log-service {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #2563eb;
+}
+.dark .log-service { color: #60a5fa; }
+
+.log-text {
+    font-size: 0.875rem;
+    color: #374151;
+}
+.dark .log-text { color: #ffffff; }
+
+/* ============================================================
+   LAN.JS — flow card sub-element classes
+   lan-flow-card replaces the Tailwind-heavy createFlowCard() innerHTML.
+   Also adds fw-flow-icon--multicast (missing from wan.js section).
+   ============================================================ */
+
+/* Multicast icon variant (supplements fw-flow-icon--ipv4/ipv6/default) */
+.fw-flow-icon--multicast { color: #f97316; background-color: rgba(249, 115, 22, 0.1); }
+
+/* Flow card outer wrapper */
+.lan-flow-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+.lan-flow-card:hover       { background-color: rgba(59, 130, 246, 0.05); }
+.dark .lan-flow-card:hover { background-color: rgba(59, 130, 246, 0.08); }
+
+/* Left section: icon + address block */
+.lan-flow-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+/* Address/proto text block */
+.lan-flow-addr-block { min-width: 0; }
+
+/* Source→Dest IP line */
+.lan-flow-addr {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #111827;
+    word-break: break-all;
+    line-height: 1.25;
+}
+.dark .lan-flow-addr { color: #ffffff; }
+
+/* Arrow span between src and dst */
+.lan-flow-arrow {
+    display: inline-flex;
+    align-items: center;
+    margin: 0 0.25rem;
+}
+
+/* Protocol • timestamp meta line */
+.lan-flow-meta {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #6b7280;
+    margin-top: 0.25rem;
+    letter-spacing: 0.05em;
+}
+.dark .lan-flow-meta { color: #9ca3af; }
+
+/* Right section: bytes */
+.lan-flow-bytes {
+    text-align: right;
+    flex-shrink: 0;
+    margin-left: 1rem;
+}
+
+.lan-flow-bytes-value {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #2563eb;
+    white-space: nowrap;
+}
+.dark .lan-flow-bytes-value { color: #60a5fa; }
+
+/* Empty state inside lan preview */
+.lan-empty-state {
+    padding: 2rem;
+    text-align: center;
+}
+
+.lan-empty-title {
+    font-weight: 700;
+    color: #6b7280;
+}
+.dark .lan-empty-title { color: #9ca3af; }
+
+.lan-empty-hint {
+    font-size: 0.875rem;
+    color: #9ca3af;
+    margin-top: 0.5rem;
+}
+
+/* Loading spinner row for modal page load */
+.lan-modal-loading {
+    display: flex;
+    justify-content: center;
+    padding: 5rem 0;
+}
+
+/* ============================================================
+   PFSTATS.JS — rule audit table + throughput bar sub-elements
+   ============================================================ */
+
+/* Audit table row */
+/* table-layout: fixed forces browser to respect column widths */
+#rule-audit-body,
+#rule-audit-body ~ * { }
+table:has(#rule-audit-body) {
+    table-layout: fixed;
+    width: 100%;
+}
+
+/* Audit table — fixed layout so width declarations are honoured */
+#rule-audit-body { font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+#rule-audit-body tr { border-bottom: 1px solid #e5e7eb; transition: background-color 0.15s; }
+.dark #rule-audit-body tr { border-bottom-color: #374151; }
+#rule-audit-body tr:hover      { background-color: #f9fafb; }
+.dark #rule-audit-body tr:hover { background-color: #1f2937; }
+
+/* Audit table cells — py-4 text-right added by JS */
+#rule-audit-body .pf-audit-id {
+    width: 22%;
+    font-weight: 700;
+    color: #6b7280;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+.dark #rule-audit-body .pf-audit-id { color: #9ca3af; }
+
+#rule-audit-body .pf-audit-packets {
+    width: 20%;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #111827;
+}
+.dark #rule-audit-body .pf-audit-packets { color: #f9fafb; }
+
+#rule-audit-body .pf-audit-evals {
+    width: 16%;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: #374151;
+}
+.dark #rule-audit-body .pf-audit-evals { color: #d1d5db; }
+
+#rule-audit-body .pf-audit-ratio {
+    width: 18%;
+    font-size: 0.8125rem;
+    font-style: italic;
+    color: #4b5563;
+    white-space: nowrap;
+}
+.dark #rule-audit-body .pf-audit-ratio { color: #d1d5db; }
+
+#rule-audit-body .pf-audit-status-cell {
+    width: 24%;
+}
+
+/* Status badge */
+.pf-audit-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+.pf-audit-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+}
+.pf-audit-label {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.75rem;
+}
+
+/* Status colour variants — boosted for dark mode readability */
+.pf-audit-status--efficient .pf-audit-dot   { background-color: #10b981; }
+.pf-audit-status--efficient .pf-audit-label { color: #059669; }
+.dark .pf-audit-status--efficient .pf-audit-label { color: #34d399; }
+
+.pf-audit-status--review .pf-audit-dot   { background-color: #f59e0b; }
+.pf-audit-status--review .pf-audit-label { color: #d97706; }
+.dark .pf-audit-status--review .pf-audit-label { color: #fbbf24; }
+
+.pf-audit-status--unused .pf-audit-dot   { background-color: #9ca3af; }
+.pf-audit-status--unused .pf-audit-label { color: #6b7280; }
+.dark .pf-audit-status--unused .pf-audit-label { color: #d1d5db; }
+.pf-audit-li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 0;
+}
+.pf-audit-li-left { flex: 1; min-width: 0; }
+.pf-audit-li-rule {
+    font-weight: 700;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-bottom: 0.25rem;
+}
+.dark .pf-audit-li-rule { color: #9ca3af; }
+
+.pf-audit-li-nums {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+}
+.pf-audit-li-pkts { font-weight: 700; color: #374151; }
+.dark .pf-audit-li-pkts { color: #f9fafb; }
+
+.pf-audit-li-evals { color: #4b5563; }
+.dark .pf-audit-li-evals { color: #d1d5db; }
+
+.pf-audit-li-ratio {
+    font-size: 0.75rem;
+    font-style: italic;
+    color: #6b7280;
+}
+.dark .pf-audit-li-ratio { color: #9ca3af; }
+
+/* Throughput bar row */
+.pf-vol-row { /* spacing between volume bars */ margin-bottom: 0.75rem; }
+
+.pf-vol-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 0.25rem;
+}
+.pf-vol-rule-label {
+    font-size: 0.75rem;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9ca3af;
+}
+.pf-vol-bytes-label {
+    font-size: 0.75rem;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    color: #374151;
+}
+.dark .pf-vol-bytes-label { color: #e5e7eb; }
+
+.pf-vol-track {
+    width: 100%;
+    height: 0.5rem;
+    background-color: #f3f4f6;
+    border-radius: 9999px;
+    overflow: hidden;
+}
+.dark .pf-vol-track { background-color: rgba(55, 65, 81, 0.5); }
+
+/* pf-vol-bar: throughput bar fill inside pf-vol-track.
+   Width is set directly via el.style.width (CSP-safe geometry).
+   Distinct from pf-bar which uses --tn-bar-width custom property. */
+.pf-vol-bar {
+    height: 100%;
+    background-color: #3b82f6;
+    border-radius: 9999px;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+    min-width: 2px;
+}
+
+.pf-vol-footer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #6b7280;
+}
+.dark .pf-vol-footer { color: #9ca3af; }
+
+
+/* ================================================================
+   M15: Parsed Rules List and Diff Preview Modal
+
+   Class naming:
+     parsed-rules-*        == the custom rules sub-section
+     parsed-rule-*         == individual rule items
+     diff-*                == diff preview lines
+     deletion-preview-*    == the preview modal itself
+     cascade-warning       == cascade auto-selection banner
+   ================================================================ */
+
+/* === Parsed rules section wrapper === */
+.parsed-rules-section {
+    margin-top: 2rem;
+    border-radius: 0.75rem;
+    border: 1px solid #e5e7eb;
+    background-color: #f9fafb;
+    overflow: hidden;
+}
+.dark .parsed-rules-section {
+    border-color: #374151;
+    background-color: #111827;
+}
+
+/* Force all children to inherit the section background rather than
+   letting the Tailwind bg-white/dark:bg-gray-800 on the card body
+   bleed through transparent descendants. */
+.parsed-rules-section .parsed-rules-list,
+.parsed-rules-section .parsed-rules-section-block,
+.parsed-rules-section .parsed-rules-section-header,
+.parsed-rules-section .parsed-rule-item {
+    background-color: #f9fafb;
+}
+.parsed-rules-section .parsed-rule-item:hover {
+    background-color: #f3f4f6;
+}
+.dark .parsed-rules-section .parsed-rules-list,
+.dark .parsed-rules-section .parsed-rules-section-block,
+.dark .parsed-rules-section .parsed-rules-section-header,
+.dark .parsed-rules-section .parsed-rule-item {
+    background-color: #111827;
+}
+.dark .parsed-rules-section .parsed-rule-item:hover {
+    background-color: #1f2937;
+}
+.dark .parsed-rules-section .parsed-rules-header {
+    background-color: #1f2937;
+    border-bottom-color: #374151;
+}
+
+/* === Sub-header === */
+.parsed-rules-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    background-color: #f3f4f6;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.dark .parsed-rules-header {
+    border-color: #374151;
+    background-color: #1f2937;
+}
+
+.parsed-rules-header-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+}
+.parsed-rules-header-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    color: #2563eb;
+    margin-top: 0.125rem;
+}
+.dark .parsed-rules-header-icon { color: #60a5fa; }
+
+.parsed-rules-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #111827;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.dark .parsed-rules-title { color: #f9fafb; }
+
+.parsed-rules-subtitle {
+    font-size: 0.7rem;
+    color: #6b7280;
+    margin-top: 0.125rem;
+}
+.dark .parsed-rules-subtitle { color: #9ca3af; }
+
+.parsed-rules-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
+.parsed-rules-sel-count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #4b5563;
+}
+.dark .parsed-rules-sel-count { color: #d1d5db; }
+
+/* Preview Removal button */
+.parsed-rules-preview-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.4rem 0.875rem;
+    border: none;
+    border-radius: 0.5rem;
+    background-color: #1d4ed8;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 120ms, opacity 120ms;
+}
+.parsed-rules-preview-btn:hover:not(:disabled) { background-color: #1e40af; }
+.parsed-rules-preview-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.parsed-btn-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex-shrink: 0;
+}
+
+/* === Cascade warning banner === */
+.cascade-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin: 0.5rem 0.75rem;
+    padding: 0.625rem 0.875rem;
+    border-radius: 0.5rem;
+    background-color: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+    font-size: 0.8rem;
+}
+.dark .cascade-warning {
+    background-color: #1c1208;
+    border-color: #78350f;
+    color: #fcd34d;
+}
+.cascade-warning-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+
+/* === Rules list === */
+.parsed-rules-list {
+    padding: 0.5rem 0;
+    background: transparent;
+}
+.parsed-rules-loading,
+.parsed-rules-error {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    font-size: 0.8125rem;
+    color: #6b7280;
+}
+.dark .parsed-rules-loading,
+.dark .parsed-rules-error { color: #9ca3af; }
+.parsed-rules-loading-spinner {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid #d1d5db;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+/* === Section block === */
+.parsed-rules-section-block {
+    padding: 0.25rem 0;
+    background: transparent;
+}
+.parsed-rules-section-divider {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 0.25rem 0.75rem;
+}
+.dark .parsed-rules-section-divider { border-color: #374151; }
+.parsed-rules-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.75rem 0.25rem;
+    cursor: pointer;
+    background: transparent;
+}
+.parsed-section-toggle {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: #2563eb;
+    margin: 0;
+}
+.parsed-rules-section-name {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #374151;
+    cursor: pointer;
+    flex: 1;
+}
+.dark .parsed-rules-section-name { color: #d1d5db; }
+.parsed-rules-section-count {
+    font-size: 0.65rem;
+    color: #9ca3af;
+}
+
+/* === Individual rule item === */
+.parsed-rule-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.15rem 0.75rem 0.15rem 1.75rem;
+    transition: background-color 100ms;
+    border-radius: 0;
+    background: transparent;
+}
+.parsed-rule-item:hover {
+    background-color: rgba(0,0,0,0.04);
+}
+.dark .parsed-rule-item:hover {
+    background-color: rgba(255,255,255,0.05);
+}
+
+/* Cascade-selected rule — amber highlight */
+.parsed-rule-item--cascade {
+    background-color: #fffbeb !important;
+    border-left: 2px solid #f59e0b;
+    padding-left: calc(1.75rem - 2px);
+}
+.dark .parsed-rule-item--cascade {
+    background-color: rgba(245,158,11,0.07) !important;
+    border-left-color: #d97706;
+}
+
+.parsed-rule-checkbox {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    accent-color: #dc2626;
+    cursor: pointer;
+    margin: 0;
+}
+.parsed-rule-label {
+    font-size: 0.75rem;
+    color: #374151;
+    cursor: pointer;
+    line-height: 1.4;
+    word-break: break-all;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1;
+    min-width: 0;
+}
+.dark .parsed-rule-label { color: #d1d5db; }
+
+/* code element — no background, no border, plain monospace */
+.parsed-rule-line {
+    font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    font-size: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    display: inline;
+}
+
+.parsed-rule-dep-badge {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.2rem;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: transparent;
+    color: #9ca3af;
+    white-space: nowrap;
+}
+.dark .parsed-rule-dep-badge {
+    color: #6b7280;
+}
+
+
+/* ================================================================
+   DIFF PREVIEW MODAL — dp-* classes
+   The modal shell (overlay, content, header, body, footer, close,
+   buttons) all use the existing native classes. Only genuinely
+   new elements need styling here.
+   ================================================================ */
+
+/* Status indicator — centred icon + message inside modal-body */
+.dp-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 0 0.25rem;
+    text-align: center;
+}
+
+.dp-status-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+
+/* Working — blue spinner ring */
+.dp-status--working .dp-status-icon {
+    background: #eff6ff;
+    color: #2563eb;
+}
+.dark .dp-status--working .dp-status-icon {
+    background: rgba(37,99,235,0.15);
+    color: #93c5fd;
+}
+.dp-spinner {
+    width: 1.5rem;
+    height: 1.5rem;
+    animation: dp-spin 0.9s linear infinite;
+    color: currentColor;
+}
+@keyframes dp-spin { to { transform: rotate(360deg); } }
+
+/* Pass — green circle with checkmark */
+.dp-status--pass .dp-status-icon {
+    background: #f0fdf4;
+    color: #16a34a;
+}
+.dark .dp-status--pass .dp-status-icon {
+    background: rgba(22,163,74,0.15);
+    color: #4ade80;
+}
+
+/* Fail — red circle with × */
+.dp-status--fail .dp-status-icon {
+    background: #fef2f2;
+    color: #dc2626;
+}
+.dark .dp-status--fail .dp-status-icon {
+    background: rgba(220,38,38,0.15);
+    color: #f87171;
+}
+
+.dp-status-text {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+}
+.dark .dp-status-text { color: #d1d5db; }
+.dp-status--pass .dp-status-text { color: #14532d; }
+.dark .dp-status--pass .dp-status-text { color: #86efac; }
+.dp-status--fail .dp-status-text { color: #7f1d1d; }
+.dark .dp-status--fail .dp-status-text { color: #fca5a5; }
+
+/* Summary row — removed / kept count badges */
+.dp-summary-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.5rem 0 0.25rem;
+    border-top: 1px solid #f3f4f6;
+    margin-top: 0.5rem;
+}
+.dark .dp-summary-row { border-top-color: #1f2937; }
+
+.dp-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    letter-spacing: 0.02em;
+}
+.dp-badge--del {
+    background: #fee2e2;
+    color: #991b1b;
+}
+.dark .dp-badge--del {
+    background: rgba(220,38,38,0.15);
+    color: #fca5a5;
+}
+.dp-badge--keep {
+    background: #dcfce7;
+    color: #14532d;
+}
+.dark .dp-badge--keep {
+    background: rgba(22,163,74,0.15);
+    color: #86efac;
+}
+
+/* Legend dots */
+.dp-legend {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.65rem;
+    color: #6b7280;
+    letter-spacing: 0.02em;
+}
+.dark .dp-legend { color: #9ca3af; }
+.dp-legend-pip {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    display: inline-block;
+    margin-left: 0.25rem;
+}
+.dp-legend-pip--del     { background: #ef4444; }
+.dp-legend-pip--keep    { background: #22c55e; }
+.dp-legend-pip--comment { background: #6b7280; }
+
+/* Diff area — dark code block, max 18 lines visible, scrollable */
+.dp-diff {
+    background: #0d1117;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0;
+    font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', monospace;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    max-height: 22rem;
+    overflow-y: auto;
+    overflow-x: auto;
+    margin-top: 0.5rem;
+    border: 1px solid #21262d;
+    /* Force children to fill full width — eliminates white gaps */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Diff line types */
+.diff-line {
+    display: block;
+    padding: 0.05rem 0.75rem;
+    white-space: pre;
+    width: 100%;
+    box-sizing: border-box;
+    /* Ensure line fills the dark background — no gaps */
+    background: #0d1117;
+}
+.diff-line--blank {
+    min-height: 0.9rem;
+    background: #0d1117;
+}
+.diff-line--comment { background: #0d1117; }
+.diff-line--comment code { color: #8b949e; }
+.diff-line--keep    { background: #0d1117; }
+.diff-line--keep    code { color: #c9d1d9; }
+.diff-line--del {
+    background: rgba(248,81,73,0.12);
+}
+.diff-line--del code { color: #f85149; }
+
+/* All code elements inside diff — no browser default styling */
+.dp-diff code {
+    font-family: inherit;
+    font-size: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+}
+
+.diff-separator {
+    display: block;
+    text-align: center;
+    background: #161b22;
+    color: #484f58;
+    font-size: 0.65rem;
+    padding: 0.2rem 0;
+    letter-spacing: 0.05em;
+    border-top: 1px solid #21262d;
+    border-bottom: 1px solid #21262d;
+}
+
+/* === Stale rule warning (B2 — referenced object was deleted) ======================== */
+.rule-item--stale {
+    border-left: 3px solid #f59e0b;
+    background-color: #fffbeb;
+    opacity: 0.85;
+    position: relative;
+}
+.dark .rule-item--stale {
+    background-color: rgba(245, 158, 11, 0.08);
+    border-left-color: #fbbf24;
+}
+.rule-item--stale::after {
+    content: 'stale ref';
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #92400e;
+    background-color: #fde68a;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+}
+.dark .rule-item--stale::after {
+    color: #fef3c7;
+    background-color: #78350f;
+}
+
+/* === Inspect / Entry Manager modal enhancements ========================================== */
+.addon-inspect-search-wrap {
+    margin-bottom: 0.5rem;
+}
+.addon-inspect-search {
+    width: 100%;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    outline: none;
+    box-sizing: border-box;
+}
+.dark .addon-inspect-search {
+    background: #1f2937;
+    border-color: #4b5563;
+    color: #f3f4f6;
+}
+.addon-inspect-select-all-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 0.25rem;
+    font-size: 0.7rem;
+}
+.dark .addon-inspect-select-all-row { border-bottom-color: #374151; }
+.addon-inspect-select-all-lbl {
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    user-select: none;
+}
+.dark .addon-inspect-select-all-lbl { color: #d1d5db; }
+.addon-inspect-sel-count {
+    margin-left: auto;
+    color: #6b7280;
+    font-size: 0.7rem;
+}
+.dark .addon-inspect-sel-count { color: #9ca3af; }
+
+/* Scrollable entry list — max 10 rows */
+.addon-inspect-list-wrap {
+    max-height: calc(10 * 2.1rem);
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+}
+.dark .addon-inspect-list-wrap { border-color: #374151; }
+.addon-inspect-entry-list--checkable {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.addon-inspect-entry-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 0.72rem;
+    font-family: ui-monospace, monospace;
+}
+.dark .addon-inspect-entry-row { border-bottom-color: #1f2937; }
+.addon-inspect-entry-row:last-child { border-bottom: none; }
+.addon-inspect-entry-row:hover { background-color: #f9fafb; }
+.dark .addon-inspect-entry-row:hover { background-color: #1f2937; }
+.addon-inspect-cb { cursor: pointer; flex-shrink: 0; }
+.addon-inspect-entry-lbl {
+    cursor: pointer;
+    user-select: none;
+    color: #111827;
+    flex: 1;
+    word-break: break-all;
+}
+.dark .addon-inspect-entry-lbl { color: #f3f4f6; }
+.addon-inspect-no-match {
+    padding: 0.75rem;
+    font-size: 0.75rem;
+    color: #9ca3af;
+    font-style: italic;
+    list-style: none;
+}
+
+/* Status bar inside modal */
+.addon-inspect-status {
+    margin-top: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.375rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+.addon-inspect-status--working {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+.dark .addon-inspect-status--working { background: rgba(29,78,216,0.15); color: #93c5fd; }
+.addon-inspect-status--pass {
+    background: #f0fdf4;
+    color: #15803d;
+}
+.dark .addon-inspect-status--pass { background: rgba(21,128,61,0.15); color: #86efac; }
+.addon-inspect-status--error {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+.dark .addon-inspect-status--error { background: rgba(185,28,28,0.15); color: #fca5a5; }
+
+/* === Per-section inline Preview Removal button ==========================================─ */
+/* Injected by JS into .parsed-rules-section-header when ≥1 rule is selected */
+.parsed-section-inline-preview {
+    margin-left: auto;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border-radius: 0.375rem;
+    border: none;
+    cursor: pointer;
+    background-color: #2563eb;
+    color: #fff;
+    transition: background-color 120ms;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.parsed-section-inline-preview:hover {
+    background-color: #1d4ed8;
+}
+.dark .parsed-section-inline-preview {
+    background-color: #3b82f6;
+}
+.dark .parsed-section-inline-preview:hover {
+    background-color: #2563eb;
+}
+
+/* === Parsed rules section highlight pulse (on scroll-to from card) === */
+@keyframes parsed-section-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(37,99,235,0.4); }
+    70%  { box-shadow: 0 0 0 8px rgba(37,99,235,0); }
+    100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+}
+.parsed-rules-section--highlight {
+    animation: parsed-section-pulse 0.6s ease-out 2;
+    border-radius: 0.75rem;
+}
+
+/* === Policy grid card fixed height (replaces h-[560px] Tailwind arbitrary value) ===
+   The four cards (IP/CIDR, ASN, GeoIP, IP List Feeds) need a fixed height with
+   overflow-y-auto on their body to prevent unbounded growth when entries are added.
+   Target: first direct children of the primary policy grid. */
+#pf-content .grid.lg\:grid-cols-4 > div {
+    height: 560px;
+    max-height: 560px;
+}
+/* The flex-grow body div inside each card already has overflow-y-auto in the HTML.
+   Ensure it respects the parent constraint. */
+#pf-content .grid.lg\:grid-cols-4 > div .flex-grow {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* === Parsed rules refresh button === */
+.parsed-rules-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.375rem;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    transition: background 120ms, color 120ms;
+    padding: 0;
+}
+.parsed-rules-refresh-btn:hover {
+    background: #e5e7eb;
+    color: #111827;
+}
+.dark .parsed-rules-refresh-btn { color: #9ca3af; }
+.dark .parsed-rules-refresh-btn:hover {
+    background: #374151;
+    color: #f9fafb;
+}
+
+/* === Table rule row — compact summary style === */
+.parsed-rule-label--table {
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Manage IPs button inline in parsed rule row */
+.parsed-rule-inspect-btn {
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border-radius: 0.3rem;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    color: #374151;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 120ms, border-color 120ms;
+}
+.parsed-rule-inspect-btn:hover {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+}
+.dark .parsed-rule-inspect-btn {
+    background: #1f2937;
+    border-color: #374151;
+    color: #d1d5db;
+}
+.dark .parsed-rule-inspect-btn:hover {
+    background: #374151;
+    border-color: #4b5563;
+}
+
+/* =========================================================
+   SERVICES STYLES FOR SERVICES SPA
+   ========================================================= */
+
+.status-dot.launching {
+  background-color: #f59e0b;
+  animation: pulse-launching 1.1s ease-in-out infinite;
+}
+@keyframes pulse-launching {
+  0%, 100% { opacity: 1;   transform: scale(1);   }
+  50%       { opacity: 0.4; transform: scale(1.35); }
+}
+.status-badge.launching {
+  background-color: #fef3c7;
+  color: #92400e;
+  font-weight: 700;
+}
+.dark .status-badge.launching {
+  background-color: #78350f;
+  color: #fde68a;
+}
+
+/* ── Processing badge / dot (client-side: job queued, waiting for first poll) ── */
+.status-dot.processing {
+  background-color: #6366f1;
+  animation: pulse-launching 1.1s ease-in-out infinite;
+}
+.status-badge.processing {
+  background-color: #e0e7ff;
+  color: #3730a3;
+  font-weight: 700;
+}
+.dark .status-badge.processing {
+  background-color: #312e81;
+  color: #c7d2fe;
+}
+
+/* ── Dismiss button for feed-info-box ── */
+.feed-info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.feed-info-box-dismiss {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+.feed-info-box-dismiss:hover { opacity: 1; }
+

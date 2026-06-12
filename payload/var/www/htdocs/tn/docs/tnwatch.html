@@ -1,0 +1,447 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>This document covers TNWatch from the operator perspective: what it monitors, how the alert and digest system works, how to query the event database, and how to manage alert rules. For the internal module API and platform-agnostic developer reference see <code>/usr/local/share/doc/TN/dev/tnwatch.md</code>. Read the TNAudit document first. TNWatch reads from TNAudit.db directly and the two systems are closely integrated.</p>
+</div>
+
+<h1>TNWatch: Log Analysis and Alerting</h1>
+
+<p>TNWatch parses log files and service status data from across the system, stores normalised events in a SQLite database, evaluates alert rules against those events, and delivers email notifications. It produces two kinds of email: immediate alerts when a threshold is crossed, and a daily digest summarising the past 24 hours of activity across all monitored sources.</p>
+
+<p>TNWatch runs on a one-minute cycle via cron. Each cycle it parses all log sources incrementally, reading only new lines since the last run, then evaluates all alert rules. The daily digest runs separately at 09:00.</p>
+
+<h2>Architecture</h2>
+
+<p>TNWatch consists of one command-line script and three modules:</p>
+
+<dl>
+  <dt><code>/usr/local/sbin/TNWatch.pl</code></dt>
+  <dd>The main script. Dispatches to one of eleven commands: init-db, parse, parse-all, check-alerts, send-digest, query, stats, add-rule, test-email, purge, status.</dd>
+
+  <dt><code>/etc/TNWatch/TNWatchParser.pm</code></dt>
+  <dd>Log parsing engine. One parser per source. Each parser reads its log file incrementally using a byte-position state stored in the database, emits normalised event hashrefs, and returns a new state. The PF parser calls <code>pfctl</code> directly rather than reading a log file.</dd>
+
+  <dt><code>/etc/TNWatch/TNWatchDatabase.pm</code></dt>
+  <dd>All SQLite operations. Manages the events, alert_rules, digest_schedule, and parse_state tables. Provides event insertion, querying, alert rule management, parse state tracking, and maintenance functions.</dd>
+
+  <dt><code>/etc/TNWatch/TNWatchMail.pm</code></dt>
+  <dd>Email delivery. Renders HTML and plain-text versions of both the digest and immediate alert emails. Delivers via <code>/usr/sbin/sendmail</code> (femail on this system). All output is 7-bit ASCII; UTF-8 is stripped before sending.</dd>
+</dl>
+
+<p>The modules live at <code>/etc/TNWatch/</code>, outside the httpd chroot. TNWatch runs as root. It never runs inside the chroot and has no CGI counterpart.</p>
+
+<p>The event database is at:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>/var/www/htdocs/tn/data/db/TNWatch.db</code></pre>
+</div>
+
+<h2>Log Sources</h2>
+
+<p>TNWatch parses 13 log sources. Each source has its own parser in TNWatchParser.pm and its own position state in the parse_state table.</p>
+
+<dl>
+  <dt>tnaudit</dt>
+  <dd>Reads <code>TNAudit.db</code> directly via SQLite. Emits a <code>file_change</code> event for every file with status other than ok, verified, or baseline. Always emits one <code>integrity_check</code> summary event per parse cycle.</dd>
+
+  <dt>pf</dt>
+  <dd>Calls <code>pfctl -si</code> and <code>pfctl -s info</code> directly; no log file is read. Records PF status, state table counts, inserts and removals per second, and state churn rate. Emits a <code>pf_summary</code> event every cycle and a <code>block_spike</code> event if more than 500 new states were inserted since the last cycle.</dd>
+
+  <dt>authlog</dt>
+  <dd>Reads <code>/var/log/authlog</code>. Captures SSH authentication failures, invalid user attempts, root login refusals, doas executions, and successful SSH logins. Disconnection lines are suppressed as too noisy.</dd>
+
+  <dt>httpd</dt>
+  <dd>Reads <code>/var/www/htdocs/tn/data/logs/httpd/httpd_error.log</code>. Captures 4xx and 5xx responses. 4xx responses to suspicious URIs (admin panels, PHP paths, environment files, shell tools) are elevated to warning severity.</dd>
+
+  <dt>tnwaf_access</dt>
+  <dd>Reads <code>/var/www/htdocs/tn/data/logs/waf/access.log</code>. Captures requests with suspicious URI patterns (XSS strings, SQL injection fragments, path traversal).</dd>
+
+  <dt>tnwaf_security</dt>
+  <dd>Reads <code>/var/www/htdocs/tn/data/logs/waf/security.log</code>. Captures WAF security events: rate limits, pattern blocks, XSS attempts, SQL injection attempts.</dd>
+
+  <dt>tnwaf_error</dt>
+  <dd>Reads <code>/var/www/htdocs/tn/data/logs/waf/error.log</code>. Captures HTTP 429, 400, 403, and 5xx responses from the WAF error stream. 404s are only captured if the URI is suspicious. 500-level errors are always critical severity.</dd>
+
+  <dt>snort</dt>
+  <dd>Reads <code>/var/www/htdocs/tn/data/logs/snort/alert.log</code>. Parses Snort fast alert format. Priority 1 alerts are critical, priority 2 are high, priority 3 and above are low.</dd>
+
+  <dt>e2guardian</dt>
+  <dd>Reads <code>/var/www/htdocs/tn/data/logs/e2guardian/access.log</code>. Captures DENIED and BLOCKED actions. Domains categorised as malware, phishing, or virus are critical severity.</dd>
+
+  <dt>unbound</dt>
+  <dd>Reads <code>/var/www/htdocs/tn/data/logs/unbound/unbound.log</code>. Captures NXDOMAIN and REFUSED responses.</dd>
+
+  <dt>syslog</dt>
+  <dd>Reads <code>/var/www/htdocs/tn/data/logs/system/messages</code>. Captures lines containing error, crit, emerg, alert, or panic keywords. Suppresses known noisy patterns (motd, prelogin). Skips integrity runner housekeeping lines.</dd>
+
+  <dt>daemon</dt>
+  <dd>Reads <code>/var/www/htdocs/tn/data/logs/system/daemon</code>. Captures signal-level events from smtpd, ntpd, dhcpd, unbound, pflogd, and collectd. Suppresses routine operational noise (peer adjustments, delivery confirmations, lease activity).</dd>
+
+  <dt>services</dt>
+  <dd>Reads <code>/var/www/htdocs/tn/data/logs/bootlog/services.json</code>, the live service status file updated every 15 seconds by the process monitor. Emits <code>service_down</code>, <code>service_degraded</code>, <code>service_high_mem</code> (above 10% memory), and <code>services_summary</code> events. Uses file mtime to skip re-parsing an unchanged file.</dd>
+</dl>
+
+<h2>Incremental Parsing</h2>
+
+<p>Every parser stores the byte position of the last-read line in the parse_state table. On the next run the parser seeks to that position and reads only new lines. Running <code>--parse-all</code> or <code>--parse &lt;source&gt;</code> multiple times is safe; already-seen events are never duplicated.</p>
+
+<p>If a log file is rotated and the stored position is larger than the current file size, the seek is skipped and parsing starts from the beginning of the new file. This prevents reading stale position data after a log rotation.</p>
+
+<p>The PF and services parsers do not use byte positions. The PF parser tracks kernel counter values between runs to compute delta rates. The services parser compares the file mtime and skips parsing if it has not changed since the last run.</p>
+
+<h2>Cron Schedule</h2>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">cron</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Parse all sources and check alert rules every minute
+* * * * *   root  /usr/local/sbin/TNWatch_runner.sh >/dev/null 2>&1
+
+# Daily digest at 09:00
+0 9 * * *   root  /usr/local/sbin/TNWatch.pl --send-digest
+
+# Weekly purge: remove events older than 7 days (Sunday 08:00)
+0 8 * * 0   root  /usr/local/sbin/TNWatch.pl --purge --days 7</code></pre>
+</div>
+
+<p>The runner uses a lock file at <code>/var/run/TNWatch.lock</code> to prevent overlapping runs. If a previous run is still active when the next minute fires, the new invocation exits immediately. The lock is cleaned up on exit via a trap.</p>
+
+<p>The runner log is at <code>/var/log/TNWatch_runner.log</code>. The main TNWatch script logs to <code>/var/log/TNWatch.log</code>. Both are separate files.</p>
+
+<h2>Alert Rules</h2>
+
+<p>Alert rules are stored in the <code>alert_rules</code> table in TNWatch.db. Each rule watches a specific source and event type. When the count of matching events in the rule's time window reaches the threshold, an immediate email is sent. An alert is suppressed if the same rule fired within the last window period; this prevents alert storms from a single sustained incident.</p>
+
+<p>Eight default rules are seeded when the database is initialised:</p>
+
+<dl>
+  <dt>tnaudit_change</dt>
+  <dd>Source: tnaudit, event: file_change. Threshold: 1 event in 300 seconds. Severity: critical. Fires immediately on the first integrity change detected.</dd>
+
+  <dt>pf_block_spike</dt>
+  <dd>Source: pf, event: block_spike. Threshold: 1 in 300 seconds. Severity: warning. Fires when more than 500 new PF states are inserted in a single parse interval.</dd>
+
+  <dt>tnwaf_rate_limit</dt>
+  <dd>Source: tnwaf, event: rate_limit. Threshold: 1 in 300 seconds. Severity: warning.</dd>
+
+  <dt>snort_critical</dt>
+  <dd>Source: snort, event: alert_critical. Threshold: 1 in 300 seconds. Severity: critical. Fires on any Snort priority-1 alert.</dd>
+
+  <dt>snort_high</dt>
+  <dd>Source: snort, event: alert_high. Threshold: 1 in 300 seconds. Severity: warning. Fires on any Snort priority-2 alert.</dd>
+
+  <dt>auth_failures</dt>
+  <dd>Source: authlog, event: auth_failure. Threshold: 5 in 600 seconds. Severity: warning. Fires on a burst of SSH authentication failures.</dd>
+
+  <dt>httpd_5xx_burst</dt>
+  <dd>Source: httpd, event: 5xx_error. Threshold: 10 in 300 seconds. Severity: warning.</dd>
+
+  <dt>service_down</dt>
+  <dd>Source: services, event: service_down. Threshold: 1 in 300 seconds. Severity: critical. Fires immediately when any monitored service stops.</dd>
+</dl>
+
+<h2>Command Reference</h2>
+
+<h3>Initialise the database</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNWatch.pl --init-db</code></pre>
+</div>
+
+<p>Creates the database schema and seeds the default alert rules. Safe to run on an existing database; uses <code>CREATE TABLE IF NOT EXISTS</code> and <code>INSERT OR IGNORE</code> throughout. Run after first install or after upgrading TNWatch.</p>
+
+<h3>Parse log sources</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Parse all sources (what cron runs)
+TNWatch.pl --parse-all
+
+# Parse one source
+TNWatch.pl --parse authlog
+TNWatch.pl --parse tnaudit
+TNWatch.pl --parse pf</code></pre>
+</div>
+
+<h3>Check alert rules</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNWatch.pl --check-alerts</code></pre>
+</div>
+
+<p>Evaluates all enabled rules against recent events. Sends immediate email for any rule whose threshold is reached. Called by the runner after every <code>--parse-all</code>.</p>
+
+<h3>Query events</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># All critical events in the last 24 hours
+TNWatch.pl --query --severity critical
+
+# SSH failures in the last 6 hours
+TNWatch.pl --query --source authlog --event-type auth_failure --since 6h
+
+# All events from a specific IP
+TNWatch.pl --query --src-ip 203.0.113.42
+
+# PF block spikes as JSON
+TNWatch.pl --query --source pf --event-type block_spike --json
+
+# Integrity changes in the last 7 days, limit 20
+TNWatch.pl --query --source tnaudit --since 7d --limit 20</code></pre>
+</div>
+
+<p>The <code>--since</code> option accepts: <code>Xh</code> (hours), <code>Xd</code> (days), <code>Xm</code> (minutes), <code>Xw</code> (weeks), or a raw Unix timestamp. The default window without <code>--since</code> is the last 24 hours.</p>
+
+<h3>Statistics</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Event counts grouped by source and severity (last 24h)
+TNWatch.pl --stats
+
+# Last 7 days
+TNWatch.pl --stats --since 7d
+
+# One source, as JSON
+TNWatch.pl --stats --source tnwaf --since 48h --json</code></pre>
+</div>
+
+<h3>Add an alert rule</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Alert on SSH brute force: 20 failures in 5 minutes
+TNWatch.pl --add-rule ssh_brute \
+  --source authlog \
+  --event-type auth_failure \
+  --threshold 20 \
+  --window 300 \
+  --severity critical
+
+# Alert on WAF flood: 100 rate limits in 60 seconds
+TNWatch.pl --add-rule waf_flood \
+  --source tnwaf \
+  --event-type rate_limit \
+  --threshold 100 \
+  --window 60</code></pre>
+</div>
+
+<h3>Send the daily digest manually</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNWatch.pl --parse-all &amp;&amp; TNWatch.pl --send-digest</code></pre>
+</div>
+
+<h3>Test email delivery</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNWatch.pl --test-email
+# Then check the mail UI at /tn/view/mail</code></pre>
+</div>
+
+<p>Sends a digest with synthetic test data to root. Does not use live database data. Use this after install or after mail configuration changes to confirm delivery is working.</p>
+
+<h3>Operational status</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNWatch.pl --status</code></pre>
+</div>
+
+<p>Shows database path, size, event count, oldest and newest event timestamps, and all active alert rules with their thresholds and windows.</p>
+
+<h3>Purge old events</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Default: purge events older than 90 days
+TNWatch.pl --purge
+
+# Aggressive retention for space-constrained hardware
+TNWatch.pl --purge --days 7</code></pre>
+</div>
+
+<p>The cron schedule runs a 7-day purge every Sunday at 08:00, aligned with the RPi 5 deployment target where database growth must be managed. On larger hardware increase this to 30 or 90 days.</p>
+
+<h2>The Daily Digest</h2>
+
+<p>The digest covers the previous 24 hours and includes sections for: file integrity (TNAudit status, changed file list), PF (firewall status, state table counts, block spikes), HTTP errors, TNWAF events (rate limits, pattern blocks, XSS and SQLi attempts), services (running/down/degraded counts), Snort alerts by severity, e2guardian blocks, unbound NXDOMAIN and refused counts, and authentication (SSH failures, successes, doas executions, root login attempts, top source IPs).</p>
+
+<p>The subject line is appended with <code>[!] CHANGES DETECTED</code> if any of the following conditions are true: TNAudit reports changed files, any service is down, any Snort critical alert fired, or any root login was attempted. This makes the digest immediately identifiable in a mailbox without opening it.</p>
+
+<p>Email is delivered to root via <code>/usr/sbin/sendmail</code> (femail on this system). The mail is readable in the Tangent Networks mail UI at <code>/tn/view/mail</code>. All email content is filtered to 7-bit ASCII before delivery; no UTF-8 characters appear in the output regardless of what the log files contain.</p>
+
+<h2>Typical Diagnostic Workflows</h2>
+
+<p>Investigate recent SSH failures:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNWatch.pl --query --source authlog --severity critical --since 6h</code></pre>
+</div>
+
+<p>Check what fired overnight:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNWatch.pl --stats --since 24h</code></pre>
+</div>
+
+<p>Find all events from a suspected source IP:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNWatch.pl --query --src-ip 203.0.113.42 --since 7d --json</code></pre>
+</div>
+
+<p>Check integrity status directly from the TNWatch event database:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNWatch.pl --query --source tnaudit --since 7d --json</code></pre>
+</div>
+
+<h2>Troubleshooting</h2>
+
+<p>Check that the database, modules, and executables are present:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>ls -l /var/www/htdocs/tn/data/db/TNWatch.db
+ls -l /etc/TNWatch/
+ls -l /usr/local/sbin/TNWatch.pl /usr/local/sbin/TNWatch_runner.sh</code></pre>
+</div>
+
+<p>Confirm the database is healthy and contains events:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNWatch.pl --status</code></pre>
+</div>
+
+<p>Check the runner log for recent activity and errors:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>tail -40 /var/log/TNWatch_runner.log
+tail -40 /var/log/TNWatch.log</code></pre>
+</div>
+
+<p>Check that the lock file is not stale. A stale lock prevents the runner from executing.</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>cat /var/run/TNWatch.lock
+# If the PID is not running, the lock is stale. Remove it:
+rm /var/run/TNWatch.lock</code></pre>
+</div>
+
+<p>If the database is stale or the events table is missing after a schema change:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># TNWatch.db is rebuilt from live log sources on every parse-all.
+# It is safe to delete and re-initialise.
+rm /var/www/htdocs/tn/data/db/TNWatch.db
+TNWatch.pl --init-db
+TNWatch.pl --parse-all</code></pre>
+</div>
+
+<p>Test email delivery end-to-end:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>TNWatch.pl --test-email</code></pre>
+</div>
+
+<div class="callout callout-note">
+  <p>TNWatch.db is a derived database. All its content can be reconstructed from the live log files by running <code>TNWatch.pl --parse-all</code>. It does not need to be backed up with the same priority as TNAudit.db, auth.db, or the configuration files. The audit history in TNAudit.db is the primary integrity record.</p>
+</div>
+
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>TNWatch parses 13 log sources every minute, stores normalised events in <code>TNWatch.db</code>, and evaluates 8 default alert rules after every parse cycle. Immediate email alerts fire when a threshold is crossed.</li>
+    <li>The daily digest runs at 09:00. It covers file integrity, PF state, HTTP errors, WAF events, services, Snort, e2guardian, unbound, and SSH authentication. The subject line is flagged when any critical condition is present.</li>
+    <li>All parsing is incremental. Byte position per source is stored in the parse_state table. Re-running any parse command is safe and never duplicates events.</li>
+    <li>TNWatch.db is a derived cache. It can be deleted and rebuilt from live logs at any time with <code>--init-db</code> followed by <code>--parse-all</code>.</li>
+    <li>Events are purged after 7 days by a cron job every Sunday at 08:00. Increase the retention period on hardware with more storage.</li>
+    <li>The runner lock file is at <code>/var/run/TNWatch.lock</code>. A stale lock prevents the runner from executing. Remove it manually if the previous run exited without cleaning up.</li>
+  </ul>
+</div>

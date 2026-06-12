@@ -1,0 +1,6 @@
+e2guardian:\
+    :openfiles-cur=2048:\
+    :openfiles-max=4096:\
+    :datasize-cur=256M:\
+    :datasize-max=512M:\
+    :tc=daemon:

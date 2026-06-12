@@ -1,0 +1,230 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!DOCTYPE html>
+<html lang="en" class="">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Take control of your network security with Tangent Networks Firewall and Router. Easily manage access, configure settings, and protect your devices.">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TN">
+    <title>Tangent Networks | Web interface for managing your firewall and router</title>
+    <link rel="stylesheet" href="./assets/css/tangent.css">
+    <!-- token.js MUST load before auth.js: auth.js's IIFE references window.TNToken -->
+    <script src="./assets/js/token.js" defer integrity="sha384-klUKP7N3iOfziRPsL6XrgPgO3JQbkMUofalL1p+6OQ5SG/UOWlgH79KnPTaqHeUn" crossorigin="anonymous"></script>
+    <script src="./assets/js/auth.js" defer integrity="sha384-zxVXOdCbp5CF2QfNoz+nbGhpNTQl/P6AzaGhSTQMXhWOQZERnBpdrHWUghEmWlkq" crossorigin="anonymous"></script>
+    <!--BEGIN: PWA Setup -->
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/10.5__iPad_Air_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash_screens/iPhone_11_Pro_Max__iPhone_XS_Max_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash_screens/iPhone_16_Plus__iPhone_15_Pro_Max__iPhone_15_Plus__iPhone_14_Pro_Max_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1210px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/11__iPad_Pro_M4_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 744px) and (device-height: 1133px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/8.3__iPad_Mini_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/4__iPhone_SE__iPod_touch_5th_generation_and_later_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash_screens/iPhone_14_Plus__iPhone_13_Pro_Max__iPhone_12_Pro_Max_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" href="./splash_screens/iPhone_8_Plus__iPhone_7_Plus__iPhone_6s_Plus__iPhone_6_Plus_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash_screens/iPhone_13_mini__iPhone_12_mini__iPhone_11_Pro__iPhone_XS__iPhone_X_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/10.9__iPad_Air_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 810px) and (device-height: 1080px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/10.2__iPad_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" href="./splash_screens/iPhone_16e__iPhone_14__iPhone_13_Pro__iPhone_13__iPhone_12_Pro__iPhone_12_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash_screens/iPhone_16__iPhone_15_Pro__iPhone_15__iPhone_14_Pro_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash_screens/iPhone_Air_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" href="./splash_screens/iPhone_14_Plus__iPhone_13_Pro_Max__iPhone_12_Pro_Max_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/4__iPhone_SE__iPod_touch_5th_generation_and_later_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" href="./splash_screens/iPhone_17_Pro__iPhone_17__iPhone_16_Pro_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/iPhone_11__iPhone_XR_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 810px) and (device-height: 1080px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/10.2__iPad_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/iPhone_8__iPhone_7__iPhone_6s__iPhone_6__4.7__iPhone_SE_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/9.7__iPad_Pro__7.9__iPad_mini__9.7__iPad_Air__9.7__iPad_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/12.9__iPad_Pro_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 1032px) and (device-height: 1376px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/13__iPad_Pro_M4_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash_screens/iPhone_17_Pro__iPhone_17__iPhone_16_Pro_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash_screens/iPhone_8_Plus__iPhone_7_Plus__iPhone_6s_Plus__iPhone_6_Plus_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/11__iPad_Pro__10.5__iPad_Pro_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/11__iPad_Pro__10.5__iPad_Pro_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 744px) and (device-height: 1133px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/8.3__iPad_Mini_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" href="./splash_screens/iPhone_16_Plus__iPhone_15_Pro_Max__iPhone_15_Plus__iPhone_14_Pro_Max_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 1032px) and (device-height: 1376px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/13__iPad_Pro_M4_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/iPhone_11__iPhone_XR_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" href="./splash_screens/iPhone_13_mini__iPhone_12_mini__iPhone_11_Pro__iPhone_XS__iPhone_X_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/10.9__iPad_Air_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1210px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/11__iPad_Pro_M4_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" href="./splash_screens/iPhone_17_Pro_Max__iPhone_16_Pro_Max_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/iPhone_8__iPhone_7__iPhone_6s__iPhone_6__4.7__iPhone_SE_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./splash_screens/12.9__iPad_Pro_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" href="./splash_screens/iPhone_16__iPhone_15_Pro__iPhone_15__iPhone_14_Pro_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash_screens/iPhone_17_Pro_Max__iPhone_16_Pro_Max_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/10.5__iPad_Air_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="./splash_screens/9.7__iPad_Pro__7.9__iPad_mini__9.7__iPad_Air__9.7__iPad_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" href="./splash_screens/iPhone_11_Pro_Max__iPhone_XS_Max_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: landscape)" href="./splash_screens/iPhone_Air_landscape.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./splash_screens/iPhone_16e__iPhone_14__iPhone_13_Pro__iPhone_13__iPhone_12_Pro__iPhone_12_portrait.png">
+    <link rel="apple-touch-icon" sizes="57x57" href="./assets/images/pwa/ios/57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="./assets/images/pwa/ios/60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="./assets/images/pwa/ios/72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="./assets/images/pwa/ios/76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="./assets/images/pwa/ios/114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="./assets/images/pwa/ios/120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="./assets/images/pwa/ios/144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="./assets/images/pwa/ios/152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/images/pwa/ios/180.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/images/pwa/ios/32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./assets/images/pwa/ios/16.png">
+    <link rel="manifest" href="./manifest.json">
+    <meta name="msapplication-TileColor" content="#8936FF">
+    <meta name="theme-color" content="#8936FF">
+  </head>
+  <!-- BEGIN: Page -->
+  <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
+    <!-- BEGIN: NAVIGATION -->
+    <header id="layout-navigation-block">
+      <!-- BEGIN: NAVBAR -->
+      <nav class="bg-white dark:bg-gray-900 fixed w-full z-20 top-0 start-0 border-b border-gray-200 dark:border-gray-700 shadow-lg">
+        <div class="max-w-screen-xl flex items-center justify-between mx-auto p-4">
+          <!-- NOTE: Logo/Brand -->
+          <button class="inline-flex items-center justify-center p-2 rounded-lg text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90 shadow-md">
+            <div class="flex items-center">
+              <!-- NOTE: Mobile Icon Logo -->
+              <img src="./assets/images/logo/icon.svg" alt="TN logo icon" class="h-5 w-auto object-contain md:hidden">
+              <!-- NOTE: Desktop Full Logo -->
+              <img src="./assets/images/logo/tnw.svg" alt="TN logo full" class="h-5 w-auto object-contain hidden md:block">
+            </div>
+          </button>
+          <!-- END: Logo/Brand -->
+          <div class="flex items-center space-x-2">
+            <!-- BEGIN: Theme Toggle Button -->
+            <button id="theme-toggle" type="button" class="inline-flex items-center justify-center p-2 rounded-lg text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90 shadow-md">
+              <!-- NOTE: Dark Mode -->
+              <svg id="theme-toggle-dark-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+              </svg>
+              <!-- NOTE: Light Mode-->
+              <svg id="theme-toggle-light-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"></path>
+              </svg>
+            </button>
+            <!-- END: Theme Toggle Button -->
+            <!-- BEGIN: User Dropdown Container -->
+            <div class="relative">
+              <!-- NOTE: User Dropdown Toggle Button -->
+              <button id="user-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90" aria-expanded="false">
+                <span class="sr-only">Open user menu</span>
+                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <path stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M5 7h14M5 12h14M5 17h14"></path>
+                </svg>
+              </button>
+              <!-- NOTE: Dropdown Menu -->
+              <div id="dropdown-user" class="z-50 absolute right-0 mt-2 bg-gray-50 dark:bg-gray-900 border border-default rounded-lg shadow-lg w-44 hidden">
+                <ul class="p-2 text-sm font-medium" role="none">
+                  <li>
+                    <a href="pwreset.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Reset Password</a>
+                  </li>
+                  <li>
+                    <a href="documentation.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Documentation</a>
+                  </li>
+                  <li>
+                    <a href="privacy.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Privacy</a>
+                  </li>
+                  <li>
+                    <a href="legal.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Legal</a>
+                  </li>
+                  <li>
+                    <a href="license.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">License</a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <!-- END: User Dropdown Container -->
+          </div>
+          <!-- END: Action Buttons -->
+        </div>
+      </nav>
+    </header>
+    <!-- END: NAVIGATION -->
+    <!-- BEGIN: Main Content - LOGIN FORM -->
+    <main class="relative flex-grow flex items-center justify-center">
+      <!-- BEGIN: Login Card Container -->
+      <div class="max-w-md w-full p-8 mt-20 mb-10 mx-4 bg-white dark:bg-gray-800 rounded-xl shadow-2xl space-y-8 border border-gray-200 dark:border-gray-700 transition-all duration-300 hover:shadow-blue-500/50">
+        <div class="text-center">
+          <h2 class="text-3xl font-extrabold text-gray-600 dark:text-white">Tangent Networks Login</h2>
+          <p class="mt-2 text-sm text-gray-600 dark:text-white">Access your Firewall and Router management interface securely.</p>
+        </div>
+        <!-- BEGIN: Error reporting -->
+        <div id="loginError" class="hidden mb-4 rounded-lg bg-red-50 dark:bg-red-900 p-4 border border-red-200 dark:border-red-800 text-center">
+          <p class="text-sm text-red-800 dark:text-white">Incorrect username or password.</p>
+        </div>
+        <!-- END: Error reporting -->
+        <!-- BEGIN: Sign In Form -->
+        <form class="space-y-6" id="loginForm" aria-labelledby="login-heading" action="#" method="POST">
+          <h1 id="login-heading" class="text-center text-xl font-medium text-gray-600 dark:text-white">Ready to check network infrastructure?</h1>
+          <div>
+            <label for="username" class="mb-2 block text-sm font-medium text-gray-600 dark:text-white">Username</label>
+            <input type="text" name="username" id="username" class="block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2.5 text-sm text-gray-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 placeholder-gray-500 dark:placeholder-gray-400" placeholder="Enter your username" autocomplete="username" required>
+          </div>
+          <div>
+            <label for="password" class="mb-2 block text-sm font-medium text-gray-600 dark:text-white">Your password</label>
+            <input type="password" name="password" id="password" placeholder="Your Password" class="block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2.5 text-sm text-gray-600 dark:text-white focus:border-blue-500 focus:ring-blue-500 placeholder-gray-500 dark:placeholder-gray-400" autocomplete="current-password" required>
+          </div>
+          <div class="flex items-center justify-between">
+            <div class="flex items-start">
+              <div class="flex h-5 items-center">
+                <input id="remember" type="checkbox" value="" class="mr-2 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+              </div>
+              <label for="remember" class="ms-2 text-sm font-medium text-gray-600 dark:text-white cursor-pointer">Remember</label>
+            </div>
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <a href="register.html" target="_blank" rel="noopener noreferrer" class="hover:underline text-blue-500 hover:text-blue-400">Register</a>
+            </p>
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <a href="pwreset.html" target="_blank" rel="noopener noreferrer" class="hover:underline text-blue-500 hover:text-blue-400">Reset</a>
+            </p>
+          </div>
+          <button type="submit" id="loginBtn" class="relative inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-100 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70 dark:focus:ring-offset-gray-800">
+            <span id="loginBtnText" class="block">Login to your account</span>
+            <span id="loginBtnSpinner" class="absolute inset-0 flex hidden items-center justify-center">
+              <svg class="h-5 w-5 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </span>
+          </button>
+        </form>
+        <!-- END: Sign In Form -->
+      </div>
+    </main>
+    <!-- END: Main Content -->
+    <!-- BEGIN: Back To Top -->
+    <button id="backToTop" type="button" class="back-to-top text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-full text-lg p-3 text-center opacity-0 invisible transition-opacity duration-300 shadow-xl">
+      <svg class="w-6 h-6 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v13m0-13 4 4m-4-4-4 4"></path>
+      </svg>
+    </button>
+    <!-- END: Back To Top -->
+    <!-- BEGIN: Footer -->
+    <footer class="bg-white dark:bg-gray-900 rounded-t-xl shadow-inner border-t border-gray-200 dark:border-gray-700 mt-auto">
+      <div class="w-full mx-auto max-w-screen-xl p-4 md:flex md:items-center md:justify-between">
+        <span class="text-xs text-gray-600 dark:text-white sm:text-center">© 2023 <a href="https://tangentnet.top/" class="hover:underline text-blue-500 hover:text-blue-400">Tangent Networkss™</a>. All Rights Reserved. </span>
+        <ul class="flex flex-wrap items-center mt-3 text-sm font-medium text-body sm:mt-0">
+          <li>
+            <a href="privacy.html" target="_blank" rel="noopener noreferrer" class="hover:underline text-blue-500 hover:text-blue-400 me-4 md:me-6">Privacy</a>
+          </li>
+          <li>
+            <a href="legal.html" target="_blank" rel="noopener noreferrer" class="hover:underline text-blue-500 hover:text-blue-400 me-4 md:me-6">Legal</a>
+          </li>
+          <li>
+            <a href="license.html" target="_blank" rel="noopener noreferrer" class="hover:underline text-blue-500 hover:text-blue-400 me-4 md:me-6">License</a>
+          </li>
+        </ul>
+      </div>
+    </footer>
+    <!-- END: Footer -->
+    <!-- BEGIN: JavaScript -->
+    <script src="./assets/js/ts.js" integrity="sha384-TH4RWg6PiUgp3X5p0KFpJPI48AYQL3BjUGLmYsswiOPb3uRy6AfJ0OawHKaN2lmo" defer crossorigin="anonymous"></script>
+    <script src="./assets/js/register-sw.js" integrity="sha384-02PFGWnvDB3qAPOlnw1ZrSp7XD7EBa01mKDEcOMvutz3jvWFWQzkmY8aAeCsDrHS" defer crossorigin="anonymous"></script>
+  </body>
+</html>

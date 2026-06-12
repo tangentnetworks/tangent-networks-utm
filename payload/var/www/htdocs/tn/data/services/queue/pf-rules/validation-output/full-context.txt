@@ -1,0 +1,18 @@
+=== pf_validator.pl started ===
+WARNING: GeoIP PH - no data files
+WARNING: GeoIP VN - no data files
+Fetching feed 1: https://raw.githubusercontent.com/firehol/blocklist-ipsets/refs/heads/master/iblocklist_abuse_spyeye.netset
+Feed 1: 83 IPs loaded (block)
+Custom rules: 10 added
+Staged config written: /var/www/htdocs/tn/data/services/queue/pf-rules/staging/pf-addons.conf (115 lines)
+Stats: ip=0 asn=0 geoip=0 feeds=1 custom=10 rejected=0 dupes=0
+Warnings (3):
+  - GeoIP: PH - no data files found (checked /var/www/htdocs/tn/data/db/GeoIP/ipv4/PH.txt and /var/www/htdocs/tn/data/db/GeoIP/ipv6/PH.txt)
+  - GeoIP: VN - no data files found (checked /var/www/htdocs/tn/data/db/GeoIP/ipv4/VN.txt and /var/www/htdocs/tn/data/db/GeoIP/ipv6/VN.txt)
+  - GeoIP: no country data loaded - ensure get_geoip_data.pl has been run
+STATS_JSON:{"custom_rules":10,"asn_added":0,"feeds_added":1,"duplicates":0,"rejected":0,"ip_added":0,"geoip_countries":0}
+WARNINGS_JSON:["GeoIP: PH - no data files found (checked /var/www/htdocs/tn/data/db/GeoIP/ipv4/PH.txt and /var/www/htdocs/tn/data/db/GeoIP/ipv6/PH.txt)","GeoIP: VN - no data files found (checked /var/www/htdocs/tn/data/db/GeoIP/ipv4/VN.txt and /var/www/htdocs/tn/data/db/GeoIP/ipv6/VN.txt)","GeoIP: no country data loaded - ensure get_geoip_data.pl has been run"]
+=== pf_validator.pl complete ===
+
+=== pfctl -a addons -nf output ===
+

@@ -1,0 +1,98 @@
+#
+#-------------
+# LOCAL RULES
+#-------------
+
+# -----------------------------------------------------------------------------
+# SSLproxy operational monitoring
+# Fires once per connection on the first packet containing the SSLproxy header.
+# Safe volume — one alert per proxied connection.
+# -----------------------------------------------------------------------------
+alert tcp any any -> any any (msg:"SSLPROXY - Connection Translated"; \
+    flow:established; content:"SSLproxy:"; depth:10; \
+    sid:1000001; rev:1;)
+
+# -----------------------------------------------------------------------------
+# SOCKS exit detection (existing, confirmed working)
+# -----------------------------------------------------------------------------
+alert tcp any any -> any any (msg:"SOCKS-EXIT-DETECTED"; \
+    content:"GET"; http_method; \
+    sid:1000002; rev:1;)
+
+# -----------------------------------------------------------------------------
+# SSH brute force — rate limited, feeds snortsentry intentionally
+# Tracks by real client IP after SSLproxy translation.
+# Threshold: 5 failed attempts in 60 seconds.
+# Note: SSH is LAN-only per pf.conf so WAN exposure is not a concern.
+# -----------------------------------------------------------------------------
+alert tcp $HOME_NET any -> any 22 (msg:"SSH - Brute Force Attempt"; \
+    flow:to_server; flags:S; \
+    threshold:type both, track by_src, count 5, seconds 60; \
+    sid:1000010; rev:1;)
+
+# -----------------------------------------------------------------------------
+# Tor exit node traffic — feeds snortsentry intentionally
+# -----------------------------------------------------------------------------
+alert tcp $HOME_NET any -> any [9001,9030,9050,9051] \
+    (msg:"TOR - Outbound Tor Connection"; \
+    flow:to_server; \
+    sid:1000020; rev:1;)
+
+# -----------------------------------------------------------------------------
+# IRC (common C2 channel)
+# -----------------------------------------------------------------------------
+alert tcp $HOME_NET any -> any 6667 (msg:"IRC - Outbound IRC"; \
+    flow:to_server,established; \
+    sid:1000021; rev:1;)
+
+# -----------------------------------------------------------------------------
+# Suspicious user-agents in HTTP — omit flow: direction for now
+# Covers wget/curl/python/perl used as malware downloaders
+# -----------------------------------------------------------------------------
+alert tcp $HOME_NET any -> any $HTTP_PORTS \
+    (msg:"MALWARE - Suspicious User-Agent"; \
+    flow:established; \
+    content:"User-Agent|3a|"; http_header; \
+    pcre:"/User-Agent\x3a[^\r\n]*(python-requests|Go-http-client|masscan|zgrab)/i"; \
+    sid:1000030; rev:1;)
+
+# -----------------------------------------------------------------------------
+# NULL and XMAS scan detection
+# These flag combinations are never legitimate — safe to alert without threshold
+# -----------------------------------------------------------------------------
+alert tcp any any -> $HOME_NET any (msg:"SCAN - NULL Scan"; \
+    flags:0; \
+    sid:1000040; rev:1;)
+
+alert tcp any any -> $HOME_NET any (msg:"SCAN - XMAS Scan"; \
+    flags:FPU; \
+    sid:1000041; rev:1;)
+
+# -----------------------------------------------------------------------------
+# IPv6 tunnel bypass attempts — block tunnels that bypass inspection
+# 6in4 and Teredo already blocked by pf.conf [J] but belt-and-braces alert
+# -----------------------------------------------------------------------------
+alert ip any any -> any any (msg:"IPv6 - 6in4 Tunnel Bypass Attempt"; \
+    ip_proto:41; \
+    sid:1000050; rev:1;)
+
+alert udp any any -> any 3544 (msg:"IPv6 - Teredo Tunnel Bypass Attempt"; \
+    sid:1000051; rev:1;)
+
+# -----------------------------------------------------------------------------
+# SSLv3 detection (deprecated protocol, POODLE attack vector)
+# -----------------------------------------------------------------------------
+alert tcp $HOME_NET any -> any 443 (msg:"SSL - SSLv3 Detected"; \
+    flow:established; \
+    content:"|16 03 00|"; depth:3; \
+    sid:1000060; rev:1;)
+
+# -----------------------------------------------------------------------------
+# Port scan detection — feeds snortsentry intentionally
+# High threshold to avoid false positives from legitimate scanners/updaters
+# -----------------------------------------------------------------------------
+alert tcp any any -> $HOME_NET any (msg:"SCAN - Port Scan"; \
+    flags:S; \
+    threshold:type both, track by_src, count 30, seconds 10; \
+    sid:1000070; rev:1;)
+

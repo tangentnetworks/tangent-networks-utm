@@ -1,0 +1,6 @@
+{
+  "success": true,
+  "request_id": "1775048796149_45132",
+  "output": "The following name servers are used for lookup of cnn.com.\nforwarding request:\nDelegation with 0 names, of which 0 can be examined to query further addresses.\nIt provides 4 IP addresses.\n9.9.9.11        \tnot in infra cache.\n149.112.112.11  \tnot in infra cache.\n2620:fe::11     \tnot in infra cache.\n2620:fe::fe:11  \tnot in infra cache.",
+  "timestamp": 1775048796
+}

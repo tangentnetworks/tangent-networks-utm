@@ -1,0 +1,4 @@
+snortsentry is a Perl script that enhances system security by monitoring
+Snort alert logs and automatically adding source addresses of suspicious
+traffic to a pf(4) table or anchor. Hosts added to the table will have
+their packets dropped by the packet filter.

@@ -1,0 +1,1671 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    This document covers the PF firewall configuration of Tangent Networks:
+    the rule structure, packet logging architecture, table management, the
+    full divert chain that routes traffic through the inspection stack, NAT
+    strategy, the blocklist automation that keeps threat intelligence current,
+    and the WebUI-driven addons anchor system that allows live rule changes
+    without reloading the base ruleset. It assumes you have read the Network
+    Overview document. Interface names, addresses, NAT configuration, and the
+    BPF buffer requirement are all covered there and are not repeated here.
+  </p>
+  <p>
+    The firewall document is the bridge between the network layer and the
+    content inspection layer. Every divert rule documented here has a
+    corresponding service documented in the Content Filtering fragment. This
+    document explains what PF does with a packet; the Content Filtering
+    document explains what happens to it after diversion.
+  </p>
+  <p>
+    All addresses shown are for the VM-based development and testing
+    environment and are for illustration purposes only. Replace them with
+    your actual interface addresses before deploying on hardware.
+  </p>
+</div>
+
+<h1>Firewall</h1>
+
+<h2>Architecture Overview</h2>
+<p>
+  PF is the sole packet filter on the system. It handles stateful filtering,
+  NAT, traffic normalisation, and the diversion of traffic into the content
+  inspection stack. The inspection stack itself (SSLproxy, Snort, e2guardian,
+  p3scan, smtp-gated, imspector) runs as a set of user-space daemons. PF
+  connects them to the traffic stream through divert rules without needing to
+  understand application-layer content itself.
+</p>
+<p>
+  The firewall configuration is split across two files. The base ruleset lives
+  in <code>/etc/pf.conf</code> and is loaded at boot. User-managed rules
+  (IPs blocked or passed via the WebUI, custom rules, GeoIP policies) are
+  applied through a named anchor and managed separately without touching the
+  base ruleset.
+</p>
+
+<h2>IPv6 Architecture</h2>
+<p>
+  The firewall operates in full dual-stack mode. Every IPv6 LAN flow receives
+  the same inspection coverage as IPv4 flows, despite several proxy daemons
+  (p3scan, smtp-gated, imspector, ClamAV) being IPv4-only codebases.
+</p>
+<p>
+  SSLproxy acts as the IPv6/IPv4 protocol boundary. IPv6 flows from LAN
+  clients are diverted to SSLproxy's <code>::1</code> listeners via
+  <code>divert-to lo</code> with an <code>inet6</code> qualifier. SSLproxy
+  decrypts, inspects, and re-originates traffic as IPv4 on loopback. All
+  downstream daemons see only IPv4 loopback connections regardless of whether
+  the originating client used IPv4 or IPv6.
+</p>
+<p>
+  Each protocol divert uses two rules, one <code>inet</code> and one
+  <code>inet6</code>, both with <code>divert-to lo</code>. The
+  <code>inet</code>/<code>inet6</code> qualifier is required: without it PF
+  resolves <code>lo</code> to <code>::1</code> only, generating only IPv6
+  divert rules and silently leaving IPv4 clients unintercepted. With the
+  qualifier, PF resolves <code>lo</code> to <code>127.0.0.1</code> for
+  <code>inet</code> rules and <code>::1</code> for <code>inet6</code> rules.
+</p>
+<p>
+  The path for a LAN client (IPv4 or IPv6) connecting to an HTTPS destination:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>LAN client (%%INT_NET4%% or %%INT_NET6%%)
+      |
+      | PF divert-to lo port 8443  [R]
+      v
+SSLproxy (::1:8443 / 127.0.0.1:8443) -- TLS decryption
+      |
+      | forwards decrypted stream to lo:8080 (e2guardian)
+      v
+PF divert-packet port 700  [D] -- intercepts traffic to port 8080
+      v
+Snort IPS -- deep packet inspection, rejects or reinjects
+      |
+      v
+e2guardian (127.0.0.1:8080) -- content filtering
+      |
+      v
+NAT44 / NAT66 / NAT64 match out $ext_if
+      |
+      v
+pass out $ext_if</code></pre>
+</div>
+
+<h2>Packet Traversal Order</h2>
+<p>
+  The ruleset is structured in labelled sections. Understanding this order is
+  essential when diagnosing why a packet was passed, blocked, or diverted.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>[A] Performance limits, variables, tables
+[B] Logging -- real interfaces only, NOT loopback
+[C] Default deny
+[D] Loopback -- Snort IPS divert-packet rule
+[E] FTP proxy anchor
+[F] Scrub -- per-interface, per-family
+[G] NDP/MLD exemptions (MUST precede bogon blocks)
+[H] Loopback source spoofing blocks
+[H2] LAN antispoofing
+[I] Bogon blocks -- IPv4 and IPv6 on WAN ingress
+[J] Additional spoofing blocks (link-local, Teredo, 6to4)
+[K] Dynamic blocklists (snort_block, blocklist, bogons)
+[L] Addons anchor
+[M] User and daemon isolation
+[N] ICMPv4 and ICMPv6 (RFC 4890)
+[O] DHCPv4 and DHCPv6
+[P] SSH
+[Q] DNS
+[R] Application proxy diverts -- MUST precede broad LAN pass
+[S] Broad LAN pass -- after diverts so quick divert rules fire first
+[T] WAN ping -- inbound echo to ($ext_if), any source
+[U] NAT44, NAT66, NAT64
+[V] Outbound general
+[W] Application pass rules</code></pre>
+</div>
+
+<h2>Dual Logging Architecture</h2>
+<p>
+  Two pflog interfaces serve distinct purposes and are managed entirely
+  differently. Understanding this split is essential before reading the rest
+  of the firewall configuration.
+</p>
+
+<dl>
+  <dt><code>pflog0</code> -- standard block log</dt>
+  <dd>
+    Managed by <code>pflogd</code>, started by <code>rc.d</code>. Receives
+    PF block events in binary pcap format. Written to
+    <code>/var/log/pflog</code> with a 160-byte snaplen
+    (<code>pflogd_flags=-s 160 -i pflog0 -f /var/log/pflog</code> in
+    <code>/etc/rc.conf.local</code>). Tangent tooling does not touch this
+    interface or its log file.
+  </dd>
+  <dt><code>pflog1</code> -- all-traffic sovereign interface</dt>
+  <dd>
+    Not managed by <code>pflogd</code>. Brought up by
+    <code>/etc/hostname.pflog1</code> (contains only <code>up</code>) during
+    <code>netstart</code>. The rule
+    <code>match log (to pflog1) on { %%INT_IF%% %%EXT_IF%% }</code> directs a copy
+    of every packet on the real interfaces to pflog1. Loopback is deliberately
+    excluded: proxy relay traffic on loopback produces enormous volume with
+    no security value. The pf-tcpdump pipeline reads from pflog1 continuously,
+    writing to the MFS rolling window for real-time WebUI display and to a
+    7-day persistent archive. Full pipeline details are in the System
+    Orchestration document.
+  </dd>
+</dl>
+
+<div class="callout callout-warning">
+  <p><strong>pflog1 requires /etc/hostname.pflog1 to exist.</strong>
+  If the file is absent, pflog1 is never created and
+  <code>set loginterface pflog1</code> fails silently at PF load time.
+  The pf-tcpdump pipeline will start but find nothing to read. The WebUI
+  PF log panel will be permanently empty. After a sysupgrade, verify it is
+  still present: <code>stat /etc/hostname.pflog1</code></p>
+</div>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Verify both pflog interfaces are up
+ifconfig pflog0
+ifconfig pflog1
+
+# Check pflogd is running on pflog0 only
+ps aux | grep pflogd
+
+# Check the pf-tcpdump pipeline is reading pflog1
+ps aux | grep tcpdump</code></pre>
+</div>
+
+<h2>Performance Limits</h2>
+<p>
+  PF's in-kernel limits are set before any rules are evaluated. These are hard
+  ceilings: when a limit is reached, new connections are rejected. The values
+  are sized for sustained traffic on an 8 GB system running the full service
+  stack.
+</p>
+
+<dl>
+  <dt><code>set limit states 200000</code></dt>
+  <dd>Maximum concurrent tracked connections. Each stateful pass rule creates
+  an entry. 200,000 is comfortable for a home or small office gateway; reduce
+  on low-RAM hardware.</dd>
+
+  <dt><code>set limit src-nodes 100000</code></dt>
+  <dd>Maximum tracked source nodes. Used when sticky-address or source-hash
+  options are in effect.</dd>
+
+  <dt><code>set limit frags 8192</code></dt>
+  <dd>Maximum fragment reassembly entries. The scrub rule handles reassembly;
+  this limit caps memory used for in-flight fragments. Loopback traffic is
+  local and unfragmented, so this limit is sized conservatively.</dd>
+
+  <dt><code>set limit table-entries 1000000</code></dt>
+  <dd>Maximum total entries across all PF tables. The blocklist and bogon
+  tables can grow large. One million entries accommodates a full Spamhaus
+  DROP list plus bogon ranges plus per-user blocks with room to spare.</dd>
+</dl>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check current state table usage against limits
+pfctl -s info | grep -A5 'State Table'
+
+# Check table entry counts
+pfctl -s Tables
+pfctl -t blocklist -T show | wc -l
+pfctl -t bogons    -T show | wc -l</code></pre>
+</div>
+
+<h2>TCP Timeout Tuning</h2>
+<p>
+  PF maintains state for every tracked connection. Timeouts control how long
+  state is kept after a connection reaches each TCP phase. A router that
+  accumulates tens of thousands of connections needs aggressive timeout
+  values to keep the state table from filling with dead entries.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>set timeout tcp.established 86400   # keep established state for 24 hours
+set timeout tcp.closing      60     # wait 60s for FIN/ACK exchange
+set timeout tcp.finwait      30     # wait 30s after FIN before cleanup
+set timeout tcp.closed       10     # remove closed state after 10 seconds</code></pre>
+</div>
+
+<p>
+  The 24-hour <code>tcp.established</code> value is intentionally long: it
+  preserves state for idle but legitimate long-lived connections (SSH sessions,
+  persistent WebSocket connections, overnight downloads). The
+  <code>tcp.closed</code> value of 10 seconds is aggressive; it reclaims
+  state table entries promptly after clean TCP teardown, complementing the
+  kernel-level keepalive tuning in <code>sysctl.conf</code>.
+</p>
+
+<h2>Variables and Tables</h2>
+<p>
+  Variables declared at the top of <code>pf.conf</code> are expanded wherever
+  they appear in rules. All interface references use these variables; updating
+  the variable updates every rule that references it.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>ext_if = "%%EXT_IF%%"            # WAN interface
+int_if = "%%INT_IF%%"            # LAN interface
+
+int_net4 = "%%INT_NET4%%"        # LAN IPv4 CIDR
+int_net6 = "%%INT_NET6%%"        # LAN IPv6 ULA prefix
+
+ssh_port  = 22
+im_ports  = "{ 1863, 5190, 5050, 6667 }"   # Instant Messaging ports
+fb_ports  = "{ 5228, 5229, 5230 }"         # Firebase Cloud Messaging
+nat64_pfx = "%%NAT64_PFX%%"                 # NAT64 well-known prefix (RFC 6052)
+nat64_int_ip4 = "%%NAT64_INT_IP4%%"        # NAT64 form of %%INT_IP4%% (int_if)</code></pre>
+</div>
+
+<p>
+  Tables are kernel-resident address sets that can be updated at runtime
+  without reloading <code>pf.conf</code>. They are the mechanism through which
+  pfblock.sh, snortsentry, and the WebUI firewall panel add and remove
+  addresses from the active ruleset atomically.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>table &lt;lan_nets&gt;     { %%INT_NET4%%, %%INT_NET6%% }
+table &lt;blocklist&gt;    persist
+table &lt;bogons&gt;       persist
+table &lt;snort_block&gt;  persist</code></pre>
+</div>
+
+<dl>
+  <dt><code>&lt;lan_nets&gt;</code></dt>
+  <dd>Both LAN prefixes (IPv4 and IPv6) in a single table. Used in the broad
+  LAN pass rule at section [S] to allow traffic from either address family
+  without writing two separate rules.</dd>
+
+  <dt><code>&lt;blocklist&gt;</code> and <code>&lt;bogons&gt;</code></dt>
+  <dd>Runtime-populated threat intelligence tables. Start empty at PF load.
+  Populated by <code>pfblock.sh</code> using <code>pfctl -T replace</code>,
+  which swaps the entire table contents in a single kernel operation with no
+  gap in enforcement. The <code>persist</code> flag keeps the table allocated
+  in kernel memory even when empty.</dd>
+
+  <dt><code>&lt;snort_block&gt;</code></dt>
+  <dd>Populated by <code>snortsentry</code> when Snort triggers a block alert.
+  Both IPv4 and IPv6 addresses are supported. Entries persist until PF is
+  reloaded or the table is explicitly flushed.</dd>
+</dl>
+
+<h2>Base Policy and Rule Ordering</h2>
+<p>
+  PF evaluates rules in order and the last matching rule wins, except where
+  <code>quick</code> is specified, which stops evaluation immediately. The
+  opening directives establish the foundation everything else builds on.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>set loginterface pflog1
+match log (to pflog1) on { $ext_if $int_if }
+block return on { $ext_if $int_if } all</code></pre>
+</div>
+
+<p>
+  The <code>match</code> rule is not a pass or block decision: it applies the
+  log attribute to every packet on the real interfaces before any pass or
+  block rule is evaluated. Because <code>match</code> rules do not terminate
+  evaluation, the log attribute sticks through all subsequent rule processing.
+  Every packet that PF touches on $ext_if or $int_if is logged to pflog1
+  regardless of the eventual pass or block decision.
+</p>
+<p>
+  The default deny uses <code>block return</code> on real interfaces, which
+  sends TCP RST or ICMP unreachable to blocked sources. Spoofed and bogon
+  sources use <code>block drop</code> selectively (see sections [H] through
+  [K]) because sending a response to a known-bad source is wasteful and
+  reveals the firewall's presence.
+</p>
+<p>
+  Loopback is deliberately not included in the default deny and has no
+  <code>set skip on lo</code>. PF must see loopback traffic so the Snort IPS
+  <code>divert-packet</code> rule fires on proxy re-originated flows. A global
+  block on loopback would catch reinjected packets and break the inspection
+  chain. After Snort reinjects a diverted packet on loopback it must pass
+  freely.
+</p>
+
+<div class="callout callout-note">
+  <p><strong>Why loopback is not skipped.</strong>
+  The standard OpenBSD pattern is <code>set skip on lo</code>, which bypasses
+  all PF processing on loopback. This ruleset omits it because the Snort IPS
+  <code>divert-packet</code> rule at section [D] must fire on loopback traffic.
+  Without PF processing on loopback, the entire post-decryption inspection
+  chain is bypassed. This follows the UTMFW reference implementation. If Snort
+  inline inspection stops working after a PF configuration change, verify that
+  no <code>set skip on lo</code> has been introduced.</p>
+</div>
+
+<h2>Loopback -- Snort IPS Divert</h2>
+<p>
+  The single loopback rule intercepts traffic destined for the proxy daemon
+  ports and sends it to Snort's ipfw DAQ on divert port 700.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pass in quick on lo proto tcp to port { 8080 8110 9199 } divert-packet port 700</code></pre>
+</div>
+
+<p>
+  The three ports are loopback destinations used after SSLproxy decryption:
+  8080 for HTTP/HTTPS (to e2guardian), 8110 for POP3/POP3S/IMAPS (to p3scan),
+  and 9199 for SMTP/SMTPS/SUBMISSION (to smtp-gated). Snort inspects the
+  plaintext content and either drops the packet or reinjects it to continue to
+  the downstream daemon. No scrub rule is applied to loopback: adding one
+  causes PF to implicitly set <code>flags S/SA</code>, which breaks matching
+  on established flows (only SYN packets would match the divert rule).
+  Loopback traffic is local and not fragmented, so reassembly is not needed.
+</p>
+
+<h2>FTP Proxy</h2>
+<p>
+  Active-mode FTP requires the server to initiate a data connection back to
+  the client, which breaks through NAT without special handling. The
+  <code>ftp-proxy/*</code> anchor must appear before the FTP divert rules so
+  ftp-proxy's dynamically created rules for data connections are evaluated at
+  the correct point in the chain. Both IPv4 and IPv6 are covered.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>anchor "ftp-proxy/*"
+
+pass in quick on $int_if inet  proto tcp from $int_net4 to !$int_if port 21 \
+    divert-to lo port 8021
+pass in quick on $int_if inet6 proto tcp from $int_net6 to !$int_if port 21 \
+    divert-to lo port 8021</code></pre>
+</div>
+
+<h2>Traffic Normalisation</h2>
+<p>
+  Scrub rules are applied per-interface and per-family. IPv4 and IPv6 require
+  different treatment: <code>no-df</code> and <code>random-id</code> are
+  IPv4-only options (IPv6 has no DF bit and no IP identification field), so
+  only <code>max-mss</code> applies to IPv6.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># IPv6 -- max-mss only
+match in on $ext_if inet6 scrub (max-mss $PF_MAX_MSS_EXT_IF)
+match in on $int_if inet6 scrub (max-mss $PF_MAX_MSS_INT_IF)
+
+# IPv4 -- full normalisation
+match in on $ext_if inet  scrub (no-df random-id max-mss $PF_MAX_MSS4_EXT_IF)
+match in on $int_if inet  scrub (no-df random-id max-mss $PF_MAX_MSS4_INT_IF)</code></pre>
+</div>
+
+<p>
+  MSS values are determined at boot by <code>tn-mtu-probe.sh</code>, which
+  discovers path MTU and writes confirmed values to <code>/etc/tn-interfaces</code>
+  for use by this ruleset, <code>rad.conf</code>, and the hostname files.
+  MSS derivation: IPv6 MSS = wire MTU - 60 (IPv6 + TCP headers); IPv4 MSS =
+  wire MTU - 40 (IPv4 + TCP headers). The <code>no-df</code> option clears
+  the Don't Fragment bit to prevent PMTUD black holes. <code>random-id</code>
+  replaces predictable IP ID fields to prevent OS fingerprinting.
+</p>
+
+<h2>NDP and MLD Exemptions</h2>
+<p>
+  These rules must appear before the bogon blocks at section [I]. NDP uses
+  <code>fe80::/10</code> (link-local) as source addresses, and MLD uses
+  <code>ff00::/8</code> (multicast) -- both would be caught by the bogon block
+  below. The <code>quick</code> pass rules here preempt the bogon blocks for
+  these specific message types.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># NDP on WAN
+pass in  quick on $ext_if inet6 proto icmp6 from fe80::/10 \
+    icmp6-type { neighbrsol neighbradv routeradv } keep state
+pass out quick on $ext_if inet6 proto icmp6 to fe80::/10 \
+    icmp6-type { neighbrsol neighbradv routersol } keep state
+
+# MLD on WAN
+pass in  quick on $ext_if inet6 proto icmp6 icmp6-type { 130 131 132 143 } keep state
+pass out quick on $ext_if inet6 proto icmp6 icmp6-type { 130 131 132 143 } keep state</code></pre>
+</div>
+
+<h2>Anti-Spoofing</h2>
+<p>
+  Four categories of spoofing are blocked. Loopback-sourced packets arriving
+  on real interfaces are silently dropped. Packets arriving on $int_if with a
+  source address outside the legitimate LAN subnets are dropped; this prevents
+  compromised LAN hosts from forging source addresses to bypass source-based
+  firewall rules. NDP link-local traffic already passed at [G] is unaffected
+  by the LAN antispoofing rule.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Loopback source spoofing
+block drop in quick on !lo inet  from 127.0.0.0/8 to any
+block drop in quick on !lo inet6 from ::1 to any
+block drop in quick        inet6 from ::1 to any
+
+# LAN antispoofing -- block sources outside legitimate LAN subnets
+block drop in quick on $int_if inet  from !$int_net4 to any
+block drop in quick on $int_if inet6 from !$int_net6 to any</code></pre>
+</div>
+
+<h2>Bogon Blocks</h2>
+<p>
+  Bogon blocks apply to WAN ingress only. The development environment uses
+  RFC1918 addresses on the WAN side and a ULA upstream, so those ranges are
+  excluded from the blocks. Restore them before deploying on hardware with a
+  real ISP connection.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># IPv4 bogon block on WAN ingress
+# PRODUCTION: restore 10/8, 172.16/12, 192.168/16 before deployment
+block drop in quick on $ext_if inet from {
+    0.0.0.0/8, 100.64.0.0/10,
+    127.0.0.0/8, 169.254.0.0/16,
+    192.0.0.0/24, 192.0.2.0/24,
+    198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24,
+    240.0.0.0/4, 255.255.255.255/32 } to any
+
+# IPv6 bogon block on WAN ingress
+# PRODUCTION: restore fc00::/7 before deployment with real ISP GUA on WAN
+block drop in quick on $ext_if inet6 from {
+    ::1/128, ::/128, ::ffff:0:0/96, 100::/64,
+    2001::/32, 2001:2::/48, 2001:db8::/32, 2001:10::/28,
+    fec0::/10, ff00::/8 } to any</code></pre>
+</div>
+
+<h2>Additional Spoofing Blocks</h2>
+<p>
+  Link-local addresses arriving on $int_if with a non-link-local destination
+  are spoofed and dropped silently. Teredo (UDP port 3544) and 6to4 (protocol
+  41) create unmonitored IPv6 tunnels that bypass the inspection chain; native
+  dual-stack via NAT66 and NAT64 makes them unnecessary, so both are blocked
+  on $ext_if.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>block drop in quick on $int_if inet6 from fe80::/10 to !fe80::/10
+block drop in quick on $ext_if proto udp to port 3544
+block drop in quick on $ext_if proto 41</code></pre>
+</div>
+
+<h2>Dynamic Blocklists</h2>
+<p>
+  Three tables apply early block rules after the spoofing sections. All three
+  use <code>block drop</code> (silent discard) rather than
+  <code>block return</code>: sending a response to a known malicious source
+  reveals the firewall's presence and wastes bandwidth. The <code>quick</code>
+  keyword stops evaluation immediately; no downstream pass rule can override
+  these for matching traffic.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>block drop quick from &lt;snort_block&gt;
+block drop quick from &lt;blocklist&gt;
+block drop quick from &lt;bogons&gt;</code></pre>
+</div>
+
+<p>
+  All three are logged to pflog1 via the earlier
+  <code>match log (to pflog1)</code> rule. Tables accept both IPv4 and IPv6
+  entries natively. <code>&lt;snort_block&gt;</code> is populated by
+  snortsentry in response to Snort alerts; <code>&lt;blocklist&gt;</code> and
+  <code>&lt;bogons&gt;</code> are populated daily by <code>pfblock.sh</code>.
+</p>
+
+<h2>The Addons Anchor</h2>
+<p>
+  The <code>addons</code> anchor is the injection point for all user-managed
+  firewall rules. It sits after the global blocks and before the ICMP and
+  service rules, giving user rules access to the same enforcement position as
+  the base ruleset.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>anchor "addons"</code></pre>
+</div>
+
+<p>
+  Rules are loaded into the anchor from <code>/etc/pf/pf-addons.conf</code>
+  by the WebUI's PF management pipeline. The anchor contents can be replaced,
+  flushed, or inspected without touching or reloading <code>pf.conf</code>.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Load rules into the anchor
+pfctl -a addons -f /etc/pf/pf-addons.conf
+
+# View currently active addon rules
+pfctl -a addons -s rules
+
+# Flush all addon rules (leaves base ruleset intact)
+pfctl -a addons -F rules
+
+# View the anchor tables
+pfctl -a addons -s Tables</code></pre>
+</div>
+
+<h2>User and Daemon Isolation</h2>
+<p>
+  PF enforces network isolation for inspection daemon users to prevent a
+  compromised daemon from initiating its own outbound connections or bypassing
+  the inspection chain. Daemons receive traffic only via PF divert; direct
+  connections from their user accounts are blocked on all interfaces.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Block remote X11 on all non-loopback interfaces
+block return in on !lo proto tcp to port 6000:6010
+
+# Ports build user -- no outbound internet
+block return out proto { tcp udp } user _pbuild
+
+# Proxy daemons -- no direct network connections on any interface
+block drop on any proto { tcp udp } user { _e2guardian _p3scan _smtp-gated }
+
+# Dante -- no inbound connections except via SOCKS listener rules at [W]
+block drop in on any proto { tcp udp } user _sockd
+
+# Snort -- no outbound traffic generation
+block drop out on any proto { tcp udp } user _snort</code></pre>
+</div>
+
+<h2>ICMPv4</h2>
+<p>
+  ICMP unreachables and time-exceeded are permitted inbound for path MTU
+  discovery and network diagnostics. Outbound is unrestricted. Inbound echo
+  requests on the WAN interface are handled separately at section [T] and are
+  not included here.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pass in  inet proto icmp icmp-type { unreach timex } keep state
+pass out inet proto icmp                              keep state</code></pre>
+</div>
+
+<h2>ICMPv6 -- RFC 4890 Compliance</h2>
+<p>
+  ICMPv6 rules are split into three groups following RFC 4890. Group 1 covers
+  Packet Too Big (type 2), which is stateless and must be passed quickly on
+  all interfaces. Group 2 covers error messages (types 1, 3, 4), which are
+  stateful. Group 3 covers informational messages: NDP, MLD, and echo.
+</p>
+<p>
+  NDP and MLD on $ext_if are already handled at section [G] before the bogon
+  blocks. The rules here cover $int_if NDP and MLD, and WAN outbound echo.
+  Inbound WAN echo is consolidated at section [T].
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Group 1: Packet Too Big -- stateless, quick, all interfaces
+pass in  quick on { $ext_if $int_if } inet6 proto icmp6 icmp6-type toobig
+pass out quick on { $ext_if $int_if } inet6 proto icmp6 icmp6-type toobig
+
+# Group 2: Error messages -- stateful
+pass in  on $ext_if inet6 proto icmp6 icmp6-type { unreach timex paramprob } keep state
+pass out on $ext_if inet6 proto icmp6 icmp6-type { unreach timex paramprob } keep state
+pass in  on $int_if inet6 proto icmp6 icmp6-type { unreach timex paramprob } keep state
+pass out on $int_if inet6 proto icmp6 icmp6-type { unreach timex paramprob } keep state
+
+# Group 3: Echo on WAN outbound -- unrestricted. Inbound handled at [T].
+pass out on $ext_if inet6 proto icmp6 \
+    icmp6-type { echoreq echorep } keep state
+
+# NDP on LAN -- mandatory for IPv6 address resolution
+pass in  on $int_if inet6 proto icmp6 \
+    icmp6-type { neighbrsol neighbradv routersol } keep state
+pass out on $int_if inet6 proto icmp6 \
+    icmp6-type { neighbradv routeradv } keep state
+
+# MLD on LAN -- mandatory for IPv6 multicast group management
+pass in  on $int_if inet6 proto icmp6 icmp6-type { 130 131 132 143 } keep state
+pass out on $int_if inet6 proto icmp6 icmp6-type { 130 131 132 143 } keep state
+
+# Echo on LAN -- full allow
+pass in  on $int_if inet6 proto icmp6 from &lt;lan_nets&gt; \
+    icmp6-type { echoreq echorep } keep state
+pass out on $int_if inet6 proto icmp6 to &lt;lan_nets&gt; \
+    icmp6-type { echoreq echorep } keep state</code></pre>
+</div>
+
+<h2>DHCP</h2>
+<p>
+  DHCPv4 requires both unicast and broadcast forms because clients without an
+  assigned address cannot use unicast. DHCPv6 covers the router as a client
+  on $ext_if (requesting prefix delegation) and as a server on $int_if
+  (responding to LAN client solicitations via <code>rad</code>). DHCPv6
+  solicitations use multicast as their destination and are passed without state
+  because multicast has no predictable return path for PF to track.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># DHCPv4
+pass in on $int_if inet proto udp from any port 68 to ($int_if)      port 67 keep state
+pass in on $int_if inet proto udp from any port 68 to 255.255.255.255 port 67 keep state
+
+# DHCPv6 -- WAN (router as client)
+pass out on $ext_if inet6 proto udp from fe80::/10 to ff02::1:2 port 547 no state
+pass in  on $ext_if inet6 proto udp from fe80::/10 port 547 \
+    to fe80::/10 port 546 keep state
+
+# DHCPv6 -- LAN (router as server via rad)
+pass in  on $int_if inet6 proto udp from fe80::/10 to ff02::1:2 port 547 keep state
+pass out on $int_if inet6 proto udp to fe80::/10 port 546 keep state</code></pre>
+</div>
+
+<h2>SSH</h2>
+<p>
+  SSH is accepted on both interfaces ($int_if and $ext_if). The
+  <code>flags S/SA</code> match restricts to SYN packets only, preventing
+  mid-stream packet injection from establishing state. Brute-force protection
+  limits concurrent connections and connection rate per source; offending
+  addresses are added to <code>&lt;blocklist&gt;</code> and their existing
+  states are flushed globally.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pass in quick on { $int_if $ext_if } proto tcp \
+    to { ($int_if) ($ext_if) } port $ssh_port \
+    flags S/SA keep state \
+    (max-src-conn 10, max-src-conn-rate 5/30, overload &lt;blocklist&gt; flush global)</code></pre>
+</div>
+
+<h2>DNS</h2>
+<p>
+  LAN clients are restricted to querying Unbound on the router; they cannot
+  send queries directly to external resolvers. Unbound binds both IPv4 and
+  IPv6 on the LAN interface, so both families are covered. The outbound rules
+  on $ext_if permit Unbound's own upstream queries. Gateway processes querying
+  Unbound on loopback use <code>no state</code> rules (local only, no return
+  path tracking needed).
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pass in on $int_if inet  proto { udp tcp } from $int_net4 to ($int_if) port 53 keep state
+pass in on $int_if inet6 proto { udp tcp } from $int_net6 to ($int_if) port 53 keep state
+
+pass out on $ext_if inet  proto { udp tcp } from ($ext_if) to any port 53 keep state
+pass out on $ext_if inet6 proto { udp tcp } to any port 53 keep state
+
+# Local processes querying Unbound on loopback
+pass on lo inet  proto { udp tcp } to 127.0.0.1 port 53 no state
+pass on lo inet6 proto { udp tcp } to ::1       port 53 no state</code></pre>
+</div>
+
+<h2>Application Proxy Diverts</h2>
+<p>
+  The divert rules are the most operationally critical section of the ruleset.
+  They must appear before the broad LAN pass rule at section [S]; all use
+  <code>quick</code> so evaluation stops at the first matching divert rule and
+  the broad pass at [S] never fires for diverted traffic.
+</p>
+<p>
+  Every protocol uses two rules (one <code>inet</code>, one <code>inet6</code>)
+  both with <code>divert-to lo</code>. The <code>to !$int_if</code> match
+  excludes all $int_if addresses (both IPv4 and IPv6 including link-local),
+  preventing the router's own traffic from being diverted.
+</p>
+
+<h3>SSLproxy -- HTTP and HTTPS</h3>
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># HTTP -- SSLproxy listens on 127.0.0.1:8081 and ::1:8081
+pass in quick on $int_if inet  proto tcp from $int_net4 to !$int_if port www \
+    divert-to lo port 8081
+pass in quick on $int_if inet6 proto tcp from $int_net6 to !$int_if port www \
+    divert-to lo port 8081
+
+# HTTPS -- SSLproxy listens on 127.0.0.1:8443 and ::1:8443
+pass in quick on $int_if inet  proto tcp from $int_net4 to !$int_if port https \
+    divert-to lo port 8443
+pass in quick on $int_if inet6 proto tcp from $int_net6 to !$int_if port https \
+    divert-to lo port 8443</code></pre>
+</div>
+<p>
+  All HTTP and HTTPS traffic from LAN clients is intercepted by SSLproxy.
+  SSLproxy decrypts TLS connections using a locally installed CA certificate,
+  passes decrypted content to e2guardian for content filtering, and
+  re-encrypts outbound. IPv6 clients are handled identically to IPv4 clients;
+  SSLproxy re-originates the decrypted traffic as IPv4 on loopback.
+</p>
+
+<h3>SSLproxy to p3scan -- POP3, POP3S, and IMAPS</h3>
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># POP3 -- SSLproxy listens on 127.0.0.1:8994 and ::1:8994
+pass in quick on $int_if inet  proto tcp from $int_net4 to !$int_if port pop3 \
+    divert-to lo port 8994
+pass in quick on $int_if inet6 proto tcp from $int_net6 to !$int_if port pop3 \
+    divert-to lo port 8994
+
+# POP3S -- SSLproxy listens on 127.0.0.1:8995 and ::1:8995
+pass in quick on $int_if inet  proto tcp from $int_net4 to !$int_if port pop3s \
+    divert-to lo port 8995
+pass in quick on $int_if inet6 proto tcp from $int_net6 to !$int_if port pop3s \
+    divert-to lo port 8995
+
+# IMAPS -- SSLproxy listens on 127.0.0.1:8993 and ::1:8993
+pass in quick on $int_if inet  proto tcp from $int_net4 to !$int_if port imaps \
+    divert-to lo port 8993
+pass in quick on $int_if inet6 proto tcp from $int_net6 to !$int_if port imaps \
+    divert-to lo port 8993</code></pre>
+</div>
+<p>
+  POP3, POP3S, and IMAPS are all diverted through SSLproxy to p3scan, which
+  scans message attachments for malware using ClamAV before delivering them
+  to the mail client. POP3S and IMAPS are decrypted by SSLproxy before
+  reaching p3scan. The decrypted stream passes through the Snort IPS
+  divert-packet rule at [D] on loopback port 8110 before reaching the daemon.
+  Both IPv4 and IPv6 are fully covered for all three protocols.
+</p>
+
+<h3>SSLproxy to smtp-gated -- SMTP, SMTPS, Submission</h3>
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># SMTP -- SSLproxy listens on 127.0.0.1:8464 and ::1:8464
+pass in quick on $int_if inet  proto tcp from $int_net4 to !$int_if port smtp \
+    divert-to lo port 8464
+pass in quick on $int_if inet6 proto tcp from $int_net6 to !$int_if port smtp \
+    divert-to lo port 8464
+
+# SMTPS -- SSLproxy listens on 127.0.0.1:8465 and ::1:8465
+pass in quick on $int_if inet  proto tcp from $int_net4 to !$int_if port 465 \
+    divert-to lo port 8465
+pass in quick on $int_if inet6 proto tcp from $int_net6 to !$int_if port 465 \
+    divert-to lo port 8465
+
+# SUBMISSION -- SSLproxy listens on 127.0.0.1:8466 and ::1:8466
+pass in quick on $int_if inet  proto tcp from $int_net4 to !$int_if port submission \
+    divert-to lo port 8466
+pass in quick on $int_if inet6 proto tcp from $int_net6 to !$int_if port submission \
+    divert-to lo port 8466</code></pre>
+</div>
+<p>
+  Outbound mail on all three standard ports (SMTP 25, SMTPS 465, submission
+  587) is intercepted by smtp-gated for content scanning. SMTPS and submission
+  TLS is decrypted by SSLproxy before reaching smtp-gated.
+</p>
+
+<h3>imspector -- Instant Messaging</h3>
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># IPv4 IM -- diverted to imspector
+pass in quick on $int_if inet  proto tcp from $int_net4 to !$int_if \
+    port $im_ports divert-to lo port 16667
+
+# IPv6 IM -- explicit quick pass; imspector has no IPv6 socket
+pass in quick on $int_if inet6 proto tcp from $int_net6 to !$int_if \
+    port $im_ports</code></pre>
+</div>
+<p>
+  Instant messaging protocols (MSN/Live 1863, AIM/ICQ 5190, Yahoo 5050,
+  IRC 6667) are diverted to imspector for logging and optional filtering on
+  IPv4. imspector binds an IPv4 wildcard socket only and has no IPv6 socket
+  support. The explicit <code>quick pass</code> on inet6 makes the gap visible
+  in the ruleset and prevents IPv6 IM traffic from falling through silently to
+  the broad LAN pass at [S]. If IM policy requires IPv6 inspection, block
+  <code>$im_ports</code> on inet6 here instead.
+</p>
+
+<h3>NAT64 Local SOCKS</h3>
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pass in quick on $int_if inet6 proto tcp \
+    from $int_net6 to $nat64_int_ip4 port 1080 \
+    divert-to %%INT_IP6%% port 1080
+pass in quick on $int_if inet6 proto udp \
+    from $int_net6 to $nat64_int_ip4 port 1080 \
+    divert-to %%INT_IP6%% port 1080</code></pre>
+</div>
+<p>
+  <code>nat64_int_ip4</code> is the NAT64 representation of the $int_if IPv4
+  address (<code>%%INT_IP4%%</code> maps to <code>%%NAT64_INT_IP4%%</code>).
+  When an IPv6 LAN client tries to reach the SOCKS proxy via its NAT64-mapped
+  address, this rule intercepts before the NAT64 <code>af-to</code> rule fires
+  and diverts directly to Dante's IPv6 listener. The connection stays IPv6
+  end-to-end with no protocol translation needed.
+</p>
+
+<h2>Broad LAN Pass</h2>
+<p>
+  This rule is placed after all divert rules. The <code>quick</code> divert
+  rules above fire first for any matching traffic; everything else falls
+  through to this broad pass.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pass in on $int_if from &lt;lan_nets&gt; keep state</code></pre>
+</div>
+
+<p>
+  This covers all remaining LAN traffic: router-addressed packets and
+  forwarded traffic destined for $ext_if. Both IPv4 ($int_net4) and IPv6
+  ($int_net6) sources are covered via the <code>&lt;lan_nets&gt;</code> table.
+  The WebUI is also reachable here; its traffic is not caught by the SSLproxy
+  diverts which use <code>to !$int_if</code>, and is explicitly permitted at
+  [W] as well.
+</p>
+
+<h2>WAN Ping</h2>
+<p>
+  Inbound ICMP echo requests to <code>($ext_if)</code> are permitted from any
+  source on both IPv4 and IPv6. <code>($ext_if)</code> resolves the current
+  WAN address dynamically, correctly tracking both DHCP-assigned IPv4 and
+  SLAAC/DHCPv6-PD-assigned IPv6 without requiring a rule reload. This section
+  consolidates all WAN inbound echo -- it is not handled in the ICMPv4 or
+  ICMPv6 sections above.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pass in on $ext_if inet  proto icmp  to ($ext_if) icmp-type  echoreq keep state
+pass in on $ext_if inet6 proto icmp6 to ($ext_if) icmp6-type echoreq keep state</code></pre>
+</div>
+
+<h2>NAT Strategy</h2>
+<p>
+  Three NAT mechanisms operate simultaneously. NAT44 masquerades IPv4 LAN
+  clients behind the $ext_if IPv4 address. NAT66 masquerades IPv6 ULA LAN
+  clients behind the $ext_if GUA. NAT64 allows IPv6 LAN clients to reach
+  IPv4-only internet destinations via DNS64 (Unbound) and PF
+  <code>af-to</code> translation.
+</p>
+<p>
+  <code>($ext_if)</code> with parentheses rather than a literal address
+  resolves the current WAN address at translation time. This is correct for
+  DHCP-assigned or SLAAC-assigned WAN addresses: no rule reload is needed if
+  the WAN address changes.
+</p>
+
+<h3>NAT44</h3>
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>match out on $ext_if inet from $int_net4 to any nat-to ($ext_if)</code></pre>
+</div>
+
+<h3>NAT66</h3>
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>match out on $ext_if inet6 from $int_net6 to any nat-to ($ext_if)
+pass out quick on $ext_if inet6 from ($ext_if) to any keep state</code></pre>
+</div>
+<p>
+  LAN clients use ULA addresses (<code>%%INT_NET6%%</code>) which are not
+  globally routable. NAT66 masquerades them behind the WAN GUA assigned by
+  SLAAC or DHCPv6-PD. The <code>keep state</code> on the outbound pass rule
+  handles the return path automatically; no explicit inbound pass is needed.
+</p>
+
+<div class="callout callout-note">
+  <p><strong>NAT66 PMTUD limitation.</strong>
+  The OpenBSD kernel does not generate ICMPv6 Packet Too Big messages for
+  oversized forwarded packets through NAT66. This is a known, documented
+  kernel limitation. Mitigation is source-based: <code>rad</code> advertises
+  the confirmed wire MTU via the RA MTU option so SLAAC clients self-limit,
+  and the PF scrub <code>max-mss</code> rule clamps TCP MSS on ingress for all
+  clients regardless of their local MTU configuration.</p>
+</div>
+
+<div class="callout callout-note">
+  <p><strong>Production: prefer native IPv6 routing over NAT66.</strong>
+  If your ISP delegates a DHCPv6-PD prefix, assign it to $int_if, advertise
+  it via <code>rad</code>, and remove the NAT66 match rule. Native routing is
+  always preferred over NAT66 where globally routable prefixes are available.</p>
+</div>
+
+<h3>NAT64</h3>
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pass in on $int_if inet6 from $int_net6 to $nat64_pfx \
+    af-to inet from ($ext_if) keep state
+
+pass out on $ext_if inet from ($ext_if) to any keep state</code></pre>
+</div>
+<p>
+  The NAT64 prefix is the well-known prefix <code>%%NAT64_PFX%%</code> (RFC 6052),
+  stored in the variable <code>nat64_pfx</code>. Unbound's DNS64 module
+  synthesises AAAA records under this prefix for IPv4-only destinations. When
+  an IPv6 LAN client sends a packet to an address in that prefix, PF's
+  <code>af-to</code> translates IPv6 to IPv4, extracts the destination from
+  the lower 32 bits of the NAT64 address, and forwards as IPv4. NAT44
+  masquerades the outbound packet. The following constraints must be observed
+  or NAT64 breaks: do not add a protocol list, <code>flags</code>,
+  <code>quick</code>, or a table reference to the af-to rule.
+</p>
+<p>
+  A prerequisite static route is required on $int_if:
+</p>
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/hostname.%%INT_IF%%
+route add -inet6 %%NAT64_PFX%% %%INT_IP6%%</code></pre>
+</div>
+
+<h2>Outbound General</h2>
+<p>
+  These two rules are a safety net. All specific and quick rules above have
+  already fired; these cover anything remaining.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pass out on $int_if from $int_if:network to any keep state
+pass out on $ext_if from any             to any keep state</code></pre>
+</div>
+
+<h2>Application Pass Rules</h2>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># WebUI -- traffic to ($int_if) is not caught by SSLproxy diverts (which use
+# to !$int_if) and reaches httpd directly. IPv4 only by default.
+pass in on $int_if proto tcp from $int_net4 to ($int_if) port { www https }
+
+# Firebase Cloud Messaging -- Android/iOS push notifications
+pass in on $int_if proto tcp from $int_net4 to port $fb_ports
+
+# Instant Messaging -- outbound after imspector, return path on WAN
+pass out on $ext_if proto tcp from ($ext_if) to port $im_ports
+pass in  on $ext_if proto tcp from port $im_ports to ($ext_if)
+
+# SOCKS -- Dante circuit-level gateway
+# IPv4: clients address %%INT_IP4%%:1080 directly
+# IPv6: clients address %%INT_IP6%%:1080 directly
+pass in on $int_if proto { tcp udp } from $int_net4 to port socks
+pass in on $int_if inet6 proto { tcp udp } from $int_net6 to ($int_if) port 1080 keep state</code></pre>
+</div>
+
+<p>
+  The WebUI pass rule works because the SSLproxy divert rules at section [R]
+  match <code>to !$int_if</code>, which excludes all $int_if addresses. Traffic
+  addressed to the router itself on port 80 or 443 does not match the divert
+  rules and falls through to this pass rule, reaching httpd directly.
+</p>
+
+<h2>Divert Chain Summary</h2>
+<dl>
+  <dt>$int_if port 21 (FTP) -- ftp-proxy lo:8021</dt>
+  <dd>Active-mode FTP NAT helper. IPv4 and IPv6.</dd>
+
+  <dt>$int_if port 80 (HTTP) -- SSLproxy lo:8081</dt>
+  <dd>Transparent HTTP proxy. Decrypted content passed to e2guardian.
+  IPv4 and IPv6.</dd>
+
+  <dt>$int_if port 443 (HTTPS) -- SSLproxy lo:8443</dt>
+  <dd>Transparent TLS interception. Decrypted content passed to e2guardian.
+  IPv4 and IPv6.</dd>
+
+  <dt>$int_if port 110 (POP3) -- SSLproxy to p3scan lo:8994</dt>
+  <dd>POP3 mail scanning via ClamAV. IPv4 and IPv6.</dd>
+
+  <dt>$int_if port 995 (POP3S) -- SSLproxy to p3scan lo:8995</dt>
+  <dd>Encrypted POP3 mail scanning. TLS decrypted by SSLproxy. IPv4 and IPv6.</dd>
+
+  <dt>$int_if port 993 (IMAPS) -- SSLproxy to p3scan lo:8993</dt>
+  <dd>Encrypted IMAP mail scanning. TLS decrypted by SSLproxy. IPv4 and IPv6.</dd>
+
+  <dt>$int_if port 25 (SMTP) -- SSLproxy to smtp-gated lo:8464</dt>
+  <dd>Outbound SMTP content scanning. IPv4 and IPv6.</dd>
+
+  <dt>$int_if port 465 (SMTPS) -- SSLproxy to smtp-gated lo:8465</dt>
+  <dd>Encrypted SMTP scanning. TLS decrypted by SSLproxy. IPv4 and IPv6.</dd>
+
+  <dt>$int_if port 587 (submission) -- SSLproxy to smtp-gated lo:8466</dt>
+  <dd>Submission port content scanning. IPv4 and IPv6.</dd>
+
+  <dt>$int_if IM ports -- imspector lo:16667</dt>
+  <dd>Instant messaging logging and filtering. IPv4 only (imspector has no
+  IPv6 socket). IPv6 IM traffic has an explicit quick pass rule.</dd>
+
+  <dt>lo ports 8080, 8110, 9199 -- Snort IPS divert-packet port 700</dt>
+  <dd>Post-decryption deep packet inspection. Fires on loopback after
+  SSLproxy re-originates traffic as IPv4.</dd>
+</dl>
+
+<h2>Proxy Inspection Coverage</h2>
+<dl>
+  <dt>HTTP</dt>
+  <dd>SSLproxy. Full inspection on both IPv4 and IPv6.</dd>
+  <dt>HTTPS</dt>
+  <dd>SSLproxy. TLS decryption on both IPv4 and IPv6.</dd>
+  <dt>POP3 / POP3S / IMAPS</dt>
+  <dd>SSLproxy to p3scan chain. Both families for all three protocols.</dd>
+  <dt>SMTP / SMTPS / Submission</dt>
+  <dd>SSLproxy to smtp-gated chain. Both families.</dd>
+  <dt>FTP</dt>
+  <dd>ftp-proxy. IPv4 and IPv6 via divert-to lo.</dd>
+  <dt>Instant Messaging (IM/IRC)</dt>
+  <dd>imspector. IPv4 only; imspector has no IPv6 socket. IPv6 IM traffic
+  bypasses imspector via explicit quick pass.</dd>
+  <dt>SOCKS</dt>
+  <dd>Dante. IPv4 via %%INT_IP4%%:1080; IPv6 via %%INT_IP6%%:1080.</dd>
+  <dt>DNS</dt>
+  <dd>Unbound. Dual-stack. DNS64 for NAT64.</dd>
+  <dt>SSH</dt>
+  <dd>Direct. Both interfaces, rate-limited.</dd>
+</dl>
+<p>
+  Snort IPS sees all proxy-inspected traffic on loopback after SSLproxy
+  re-origination as IPv4. IPv6 flows are flattened to IPv4 by SSLproxy before
+  the Snort divert-packet rule fires.
+</p>
+
+<h2>The WebUI Addons Management Pipeline</h2>
+<p>
+  The WebUI does not write to <code>pf.conf</code> or call <code>pfctl</code>
+  directly. All firewall changes flow through a privilege-separated pipeline
+  that bridges the web server's unprivileged <code>www</code> user and the
+  root-side daemons that operate PF.
+</p>
+
+<h3>Privilege Separation</h3>
+<p>
+  The <code>www</code> user (slowcgi, all CGI scripts) runs inside the
+  <code>/var/www</code> chroot. It cannot execute <code>pfctl</code>, read
+  <code>/etc/pf/</code>, or write to <code>/etc/pf/pf-addons.conf</code>
+  directly. Root-side daemons (<code>pf_monitor.sh</code>,
+  <code>pf_anchor_sync.sh</code>, <code>pf_delete_block.sh</code>) run
+  outside the chroot. They watch a queue directory for trigger files, execute
+  <code>pfctl</code>, edit <code>/etc/pf/pf-addons.conf</code>, and write
+  result JSON back into the queue for the CGI layer to serve to the browser.
+</p>
+
+<h3>The Queue Pattern</h3>
+<p>
+  All firewall operations follow the same pattern. The browser posts to a CGI
+  script running as <code>www</code>. The CGI validates input and drops a
+  request or trigger file in the queue directory under
+  <code>/var/www/htdocs/tn/data/services/queue/pf-rules/</code>. A root
+  daemon picks up the trigger, executes the corresponding action (validate,
+  apply, delete, or sync), and writes a JSON outcome file. The browser polls
+  a CGI action that serves the file; direct fetches of the queue path are
+  blocked by httpd.
+</p>
+
+<h3>Queue Directory Structure</h3>
+<p>
+  Base path: <code>/var/www/htdocs/tn/data/services/queue/pf-rules/</code>
+</p>
+<dl>
+  <dt><code>user-input/</code></dt>
+  <dd>Queue files written by CGI: <code>ip-block.txt</code>,
+  <code>ip-pass.txt</code>, <code>asn-block.txt</code>,
+  <code>feed-urls.txt</code>, <code>custom-rules.txt</code>,
+  <code>geoip-policy.json</code>. Written by <code>www</code>, read by
+  <code>pf_validator.pl</code> (root).</dd>
+
+  <dt><code>triggers/</code></dt>
+  <dd>Sentinel files that signal root daemons. Written by both <code>www</code>
+  (CGI) and root daemons to sequence operations. Permissions: root:www 775.</dd>
+
+  <dt><code>staging/</code></dt>
+  <dd>Assembled conf files pending apply. Written by both
+  <code>pf_validator.pl</code> (root) and <code>pf_write_rules.pl</code>
+  (www CGI). Permissions: root:www 775. If set to 750, the CGI cannot write
+  the deletion preview conf and will return a 500 error when the operator
+  clicks Preview Removal.</dd>
+
+  <dt><code>validation-output/</code></dt>
+  <dd><code>verdict.json</code> and <code>full-context.txt</code> written by
+  <code>pf_monitor.sh</code> after running <code>pfctl -nf</code> on the
+  staged conf.</dd>
+
+  <dt><code>delete-requests/</code></dt>
+  <dd>Per-deletion request files written by <code>pf_active_rules.pl</code>.
+  Each file is a JSON object with the deletion type, target table, and entries
+  to remove.</dd>
+
+  <dt><code>delete-outcome/</code></dt>
+  <dd>Result files written by <code>pf_delete_block.sh</code> after each
+  deletion.</dd>
+
+  <dt><code>mirror/</code></dt>
+  <dd>Read-only copies of <code>pf.conf</code> and
+  <code>pf-addons.conf</code> seeded at boot by
+  <code>pf_mirror_sync.sh</code>.</dd>
+
+  <dt><code>parsed-rules.json</code></dt>
+  <dd>DAG of all custom rules in the addons anchor. Written by
+  <code>pf_rule_parser.pl</code> on every anchor sync.</dd>
+
+  <dt><code>active-addons.json</code></dt>
+  <dd>Currently loaded anchor blocks with table entry counts. Written by
+  <code>pf_anchor_sync.sh</code> every 30 seconds and after every change.
+  Read by the active addon rules panel in the WebUI.</dd>
+</dl>
+
+<h3>Root-Side Daemons</h3>
+<dl>
+  <dt><code>pf_monitor.sh</code></dt>
+  <dd>Core root daemon. Polls <code>triggers/</code> every 2 seconds. Handles
+  validate, apply, reset, delete-requests, test-deletion, and
+  apply-deletion triggers. Run via <code>pf_monitor_runner.sh</code>, which
+  restarts it if it exits.</dd>
+
+  <dt><code>pf_anchor_sync.sh</code></dt>
+  <dd>Reads live anchor state via <code>pfctl -a addons -sr</code>. If the
+  anchor is empty and <code>pf-addons.conf</code> is non-empty, tests and
+  loads it. Parses the conf into JSON blocks and writes
+  <code>active-addons.json</code>. Calls <code>pf_rule_parser.pl</code> on
+  every exit via a <code>trap EXIT</code>. Run every 30 seconds by
+  <code>pf_anchor_sync_runner.sh</code>.</dd>
+
+  <dt><code>pf_validator.pl</code></dt>
+  <dd>Assembles the full <code>staging/pf-addons.conf</code> from all
+  user-input queue files. Handles IP blocks, IP pass lists, ASN blocks, GeoIP
+  blocks (reads RIPE country CIDR files), threat feed downloads, and custom
+  rules. Outputs stats and warnings parsed by <code>pf_monitor.sh</code>.</dd>
+
+  <dt><code>pf_delete_block.sh</code></dt>
+  <dd>Processes <code>delete-requests/*.json</code>. Handles whole-block
+  deletion (flush table, remove section from conf, reload anchor) and
+  per-entry deletion (uses awk to remove specific IPs or CIDRs from a table
+  definition, validates with <code>pfctl -nf</code>, removes entries from
+  the live kernel table via <code>pfctl -T delete</code>, then reloads the
+  anchor). Writes outcome JSON on completion.</dd>
+
+  <dt><code>pf_rule_parser.pl</code></dt>
+  <dd>Reads <code>/etc/pf/pf-addons.conf</code>, joins backslash continuation
+  lines, classifies each line by type, extracts dependency tokens, and builds
+  a directed acyclic graph (DAG). Writes <code>parsed-rules.json</code>
+  atomically.</dd>
+</dl>
+
+<h3>CGI Scripts</h3>
+<dl>
+  <dt><code>pf_write_input.pl</code></dt>
+  <dd>Receives user submissions from the browser and appends to the
+  appropriate queue file in <code>user-input/</code>.</dd>
+
+  <dt><code>pf_trigger.pl</code></dt>
+  <dd>Drops a trigger file for <code>pf_monitor.sh</code>. Actions: validate,
+  apply, reset.</dd>
+
+  <dt><code>pf_active_rules.pl</code></dt>
+  <dd>Multi-action CGI for the active anchor management panel. Actions include
+  read, parse, check (BFS cascade analysis), delete, delete_entry,
+  get_delete_outcome, get_test_result, get_outcome, and get_intel.</dd>
+
+  <dt><code>pf_write_rules.pl</code></dt>
+  <dd>Receives an array of rule IDs to delete. Reads
+  <code>parsed-rules.json</code>, rebuilds the conf minus those rules, writes
+  <code>staging/pf-addons-deletion.conf</code>, and drops the
+  test-deletion trigger.</dd>
+
+  <dt><code>pf_apply_deletion.pl</code></dt>
+  <dd>Called after the operator confirms the diff preview. Drops the
+  apply-deletion trigger.</dd>
+</dl>
+
+<h2>DAG-Based Rule Deletion</h2>
+<p>
+  Custom rules in <code>pf-addons.conf</code> form a dependency graph. A
+  filter rule (<code>block drop quick from &lt;user_block_ips&gt;</code>)
+  depends on the table definition that precedes it. Deleting the table without
+  deleting the filter rules that reference it leaves dangling references that
+  cause <code>pfctl -nf</code> to fail.
+</p>
+<p>
+  <code>pf_rule_parser.pl</code> builds a DAG where each node is a rule and
+  each edge represents a dependency. The graph is stored in
+  <code>parsed-rules.json</code> as a reverse index: for each object name
+  (table name, macro name), the graph lists every rule ID that depends on it.
+  When the operator selects rules to delete, a breadth-first search (BFS)
+  traversal of the reverse graph automatically identifies all rules that would
+  become dangling. These are highlighted amber in the UI and included in the
+  deletion set automatically.
+</p>
+<p>
+  The full deletion flow: parser builds the DAG on every anchor sync; WebUI
+  loads parsed rules; the operator checks a rule and cascade detection
+  highlights dependent rules; a preview renders the proposed conf as a diff;
+  <code>pfctl -nf</code> validates the staged conf; on confirmation,
+  <code>pf_monitor.sh</code> loads the conf into the live anchor, copies it to
+  <code>/etc/pf/pf-addons.conf</code>, and refreshes <code>parsed-rules.json</code>.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Verify parsed-rules.json exists and is current
+ls -la /var/www/htdocs/tn/data/services/queue/pf-rules/parsed-rules.json
+
+# Inspect the DAG structure
+cat /var/www/htdocs/tn/data/services/queue/pf-rules/parsed-rules.json \
+    | python3 -m json.tool | head -60
+
+# Check the staged deletion conf
+cat /var/www/htdocs/tn/data/services/queue/pf-rules/staging/pf-addons-deletion.conf
+
+# Test it manually
+pfctl -a addons -nf \
+    /var/www/htdocs/tn/data/services/queue/pf-rules/staging/pf-addons-deletion.conf</code></pre>
+</div>
+
+<h2>Per-Entry IP Deletion</h2>
+<p>
+  Table definitions in <code>pf-addons.conf</code> can contain hundreds of IP
+  addresses. When the operator removes individual entries,
+  <code>pf_active_rules.pl</code> validates each entry as a valid IP or CIDR
+  and writes a <code>delete-requests/&lt;timestamp&gt;.json</code> with
+  <code>"type":"entry_delete"</code>. <code>pf_delete_block.sh</code>
+  processes this by using awk to rewrite the table definition in-place,
+  removing only the specified entries and rebuilding the correct backslash
+  continuation syntax. It validates the result with <code>pfctl -nf</code>,
+  then removes the entries from the live kernel table immediately via
+  <code>pfctl -t &lt;tablename&gt; -T delete</code> before reloading the full
+  anchor.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Remove a specific IP from a table without reloading the anchor
+pfctl -t user_block_ips -T delete 223.5.5.5
+
+# Verify it is gone from the kernel table
+pfctl -a addons -t user_block_ips -T show | grep 223.5.5.5
+
+# Check the delete outcome log
+ls -lt /var/www/htdocs/tn/data/services/queue/pf-rules/delete-outcome/</code></pre>
+</div>
+
+<h2>Blocklist Automation -- pfblock.sh</h2>
+<p>
+  <code>pfblock.sh</code> runs daily at 11:00 via cron. It downloads threat
+  intelligence feeds, extracts and deduplicates IP addresses, and atomically
+  replaces the <code>&lt;blocklist&gt;</code> and <code>&lt;bogons&gt;</code>
+  tables in the running PF instance.
+</p>
+<p>
+  Feed sources are declared in
+  <code>/var/www/htdocs/tn/data/db/pf/intel.txt</code> with three categories:
+  plain IP feed lists (<code>IP:</code> prefix), a bogon range feed
+  (<code>BOGONS:</code>), and a CSV feed (<code>CSV:</code>). The current
+  configured sources:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>IP: http://rules.emergingthreats.net/blockrules/compromised-ips.txt
+IP: https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-domains.txt
+IP: https://lists.blocklist.de/lists/all.txt
+IP: https://pgl.yoyo.org/adservers/iplist.php?ipformat=plain&showintro=0&mimetype=plaintext
+BOGONS: https://www.cidr-report.org/bogons/freespace-prefix.txt
+CSV: https://blocklist.net.ua/blocklist.csv</code></pre>
+</div>
+
+<div class="callout callout-note">
+  <p><strong>intel.txt is served through the CGI layer.</strong>
+  The file lives at <code>/var/www/htdocs/tn/data/db/pf/intel.txt</code>,
+  which is blocked by httpd. The WebUI fetches it via
+  <code>pf_active_rules.pl action:get_intel</code> rather than a direct
+  fetch.</p>
+</div>
+
+<p>
+  The atomic replace operation (<code>pfctl -T replace -f file</code>) swaps
+  the entire table contents as a single kernel operation with no window during
+  which the table is empty.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Run manually (as root)
+/usr/local/sbin/pfblock.sh
+
+# Check last run log
+ls -lt /var/www/htdocs/tn/data/logs/cron/
+tail -50 /var/www/htdocs/tn/data/logs/cron/pf_update-*.log
+
+# Check current table sizes
+pfctl -t blocklist -T show | wc -l
+pfctl -t bogons    -T show | wc -l
+
+# Add a single IP to blocklist immediately
+pfctl -t blocklist -T add 198.51.100.1
+
+# Remove an IP from blocklist
+pfctl -t blocklist -T delete 198.51.100.1</code></pre>
+</div>
+
+<h2>Reading PF State</h2>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Full rule summary
+pfctl -s rules
+
+# Active state table
+pfctl -s state
+
+# State table filtered by interface
+pfctl -s state | grep %%EXT_IF%%
+
+# PF information: status, counters, limits
+pfctl -s info
+
+# Table contents
+pfctl -t blocklist   -T show
+pfctl -t snort_block -T show
+
+# Anchor contents
+pfctl -a addons -s rules
+pfctl -a addons -s Tables
+
+# Reload configuration
+pfctl -f /etc/pf.conf
+
+# Disable / enable PF (emergency use only)
+pfctl -d
+pfctl -e</code></pre>
+</div>
+
+<!-- SUMMARY -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Two pflog interfaces serve distinct roles. pflog0 receives block events
+    via pflogd in binary pcap format. pflog1 receives every packet on
+    $ext_if and $int_if via <code>match log (to pflog1) on { $ext_if $int_if }</code>
+    and feeds the real-time WebUI display and 7-day archive. Loopback is
+    deliberately excluded from logging.</li>
+
+    <li>Loopback is not skipped and has no default deny. PF must process
+    loopback so the Snort IPS <code>divert-packet</code> rule fires on
+    proxy re-originated flows. This is a deliberate departure from the
+    standard OpenBSD <code>set skip on lo</code> pattern.</li>
+
+    <li>Every application proxy divert uses two rules (inet and inet6) with
+    <code>divert-to lo</code> and an explicit inet/inet6 qualifier. Without the
+    qualifier, PF resolves lo to ::1 only and IPv4 clients go unintercepted.</li>
+
+    <li>Three NAT mechanisms run simultaneously: NAT44 for IPv4 LAN clients,
+    NAT66 for IPv6 ULA LAN clients, and NAT64 for IPv6 clients reaching
+    IPv4-only destinations. NAT64 uses the well-known prefix
+    <code>%%NAT64_PFX%%</code> via the <code>nat64_pfx</code> variable and the
+    <code>af-to inet</code> rule. All three use <code>($ext_if)</code> to
+    resolve the current WAN address at translation time.</li>
+
+    <li>SSH is accepted on both interfaces ($int_if and $ext_if) with
+    brute-force rate limiting. Offending sources are added to
+    <code>&lt;blocklist&gt;</code> and flushed globally.</li>
+
+    <li>Inbound WAN echo (ICMPv4 and ICMPv6) is permitted from any source
+    and is consolidated at section [T], not in the ICMPv4/ICMPv6 sections.</li>
+
+    <li>IMAPS (993) is fully inspected on both IPv4 and IPv6 via the
+    SSLproxy to p3scan divert chain. Only plain IMAP (143) is absent from the
+    ruleset -- it is not covered.</li>
+
+    <li>Three runtime-populated tables handle dynamic threat blocking:
+    <code>&lt;blocklist&gt;</code> and <code>&lt;bogons&gt;</code> updated
+    daily by pfblock.sh via atomic replace, and <code>&lt;snort_block&gt;</code>
+    populated by snortsentry in response to Snort alerts.</li>
+
+    <li>The addons anchor is the injection point for all WebUI-managed rules.
+    Its contents can be replaced or flushed without reloading pf.conf. The
+    management pipeline uses a privilege-separated queue pattern: CGI scripts
+    running as www drop request files, root daemons process them and write
+    results back.</li>
+
+    <li>The DAG rule parser builds a dependency graph of all custom rules.
+    Deleting a rule automatically selects all dependent rules that would
+    become dangling. The entire deletion set is validated with
+    <code>pfctl -nf</code> before any live change is made.</li>
+
+    <li>The staging directory must be root:www 775. If set to 750, the
+    pf_write_rules.pl CGI cannot write the deletion preview conf and returns
+    a 500 error.</li>
+
+    <li>All addresses in this documentation are for the VM-based development
+    environment and are for illustration purposes only. Update $ext_if and
+    $int_if in pf.conf for real hardware; all rules reference these variables
+    and require no further changes.</li>
+  </ul>
+</div>

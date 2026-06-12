@@ -1,0 +1,6 @@
+{
+  "success": true,
+  "request_id": "1772789180063_16233",
+  "output": "The following name servers are used for lookup of google.co.in.\nforwarding request:\nDelegation with 0 names, of which 0 can be examined to query further addresses.\nIt provides 4 IP addresses.\n9.9.9.11        \tnot in infra cache.\n149.112.112.11  \tnot in infra cache.\n2620:fe::11     \tnot in infra cache.\n2620:fe::fe:11  \tnot in infra cache.",
+  "timestamp": 1772789181
+}

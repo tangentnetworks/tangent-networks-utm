@@ -1,0 +1,434 @@
+<!--
+SPDX - FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX - License - Identifier: BSD - 3 - Clause
+	-->
+
+	<
+	div class = "doc-foreword" >
+	<
+	h2 > Foreword < /h2> <
+	p > This document covers the CGI layer of the Tangent Networks gateway from the operator perspective: what each script does, how requests reach it, what security level it requires, and how it is sandboxed.For the internal module API see < code > /usr/local / share / doc / TN / dev / < /code>. Read the TNAudit and TNWatch documents first if you have not already, as several scripts in this layer interact directly with their databases and queue systems.</p >
+	<
+	/div>
+
+	<
+	h1 > CGI Scripts: Request Handling and Security Model < /h1>
+
+	<
+	p > The gateway exposes 29 Perl CGI scripts under < code > /var/www / htdocs / tn / cgi - bin / < /code>. No script is reachable directly by path. Every HTTP request entering the system is rewritten by <code>httpd.conf</code > to pass through < code > router.pl < /code>, which hands off to <code>TNWAF::route_request()</code >
+	for security checks and dispatch.The CGI scripts never execute outside this pipeline. < /p>
+
+	<
+	p > All scripts run under Perl taint mode( < code > -T < /code>). All scripts run inside the <code>/var / www < /code> chroot under slowcgi. All scripts apply OpenBSD <code>pledge(2)</code > and < code > unveil(2) < /code> sandboxing after security checks complete and before any business logic runs.</p >
+
+		<
+		h2 > HTTP Entry Point < /h2>
+
+		<
+		p > < code > httpd.conf < /code> binds to <code>%%INT_IP4%%</code > .Port 80 redirects all traffic to HTTPS on port 443. The TLS configuration requires TLSv1 .2 or TLSv1 .3 with < code > HIGH: !aNULL < /code> ciphers.</p >
+
+		<
+		p > All HTTPS requests rewrite to < code > /cgi-bin/router.pl < /code> via the slowcgi socket at <code>/run / slowcgi.sock < /code>, with the following exceptions handled directly at the httpd layer before TNWAF sees them:</p >
+
+		<
+		dl >
+		<
+		dt > Hard - blocked paths(403 returned by httpd) < /dt> <
+		dd > < code > /data/db
+		/*</code> (SQLite files at the db root), <code>/data/keys/*</code>, <code>/data/config/*</code>, <code>/data/lib/*</code>, <code>/data/scripts/*</code>, <code>/data/session/*</code>, <code>/data/run/*</code>, <code>/data/queue/*</code>. These paths hold key material, configuration secrets, Perl module source, and internal queue state. The block is applied by httpd as a defence-in-depth layer independent of TNWAF.</dd>
+
+		  <dt>Permitted db subdirectories (passed to TNWAF)</dt>
+		  <dd><code>/data/db/GeoIP/*</code>, <code>/data/db/pf/*</code>, <code>/data/db/unbound/*</code>, <code>/data/db/e2g/*</code>, and <code>/data/db/TNAuditFilesList.json</code> are explicitly passed through to router.pl. These paths contain UI-readable lookup data, not SQLite databases. OpenBSD httpd uses longest-prefix matching, so these specific rules take priority over the <code>/data/db/*</code> block.</dd>
+
+		  <dt>Maintenance page</dt>
+		  <dd><code>/maintenance.html</code> is served directly from <code>/htdocs/tn</code> without fastcgi. It is available when slowcgi is not running.</dd>
+		</dl>
+
+		<h2>The Router</h2>
+
+		<dl>
+		  <dt><code>/var/www/htdocs/tn/cgi-bin/router.pl</code></dt>
+		  <dd>The entry point for all CGI requests. Runs under taint mode. Sets a clean <code>PATH</code> and removes dangerous environment variables. Constructs the lib path from <code>$RealBin</code> and validates it against a strict character set before adding it to <code>@INC</code>. Contains one gate check: if DEVEL mode is active and the request arrived on a non-loopback address, it returns 503 and exits without routing the request. On a clean gate check it calls <code>TNWAF::route_request()</code> and exits. Router.pl has no pledge or unveil of its own. The sandbox belongs to the CGI process that TNWAF dispatches to.</dd>
+		</dl>
+
+		<h2>Security Levels</h2>
+
+		<p>Every CGI script calls <code>TNSecurityCheck::security_check()</code> as its first action after loading modules. Three levels are in use across the 24 scripts:</p>
+
+		<dl>
+		  <dt>standard</dt>
+		  <dd>Validates the session cookie if present, performs an origin check on state-changing methods. Does not require CSRF token or active session. Used for scripts that serve data to any authenticated browser session.</dd>
+
+		  <dt>protected</dt>
+		  <dd>Requires a valid session cookie and a CSRF token in the request body. Used for scripts that perform state changes on behalf of a logged-in user.</dd>
+
+		  <dt>restricted</dt>
+		  <dd>Requires a valid session cookie, a CSRF token, and admin role. Used for scripts that modify system configuration, queue privileged operations, or access sensitive data stores. Provides a full audit trail.</dd>
+		</dl>
+
+		<h2>Pledge and Unveil Model</h2>
+
+		<p>Every CGI script wraps its sandbox initialisation in <code>eval { require OpenBSD::Pledge; 1 }</code> and <code>eval { require OpenBSD::Unveil; 1 }</code>. Both are optional: if the modules are absent (non-OpenBSD systems), the script degrades gracefully rather than failing. The unveil lock call <code>unveil()</code> with no arguments is always present to seal the filesystem view once all paths have been declared.</p>
+
+		<p>All existence checks on optional paths are performed before the first <code>unveil()</code> call. Once any unveil is issued, the kernel begins restricting filesystem visibility. A <code>-d</code> check on an as-yet-unveiled path returns false even if the directory exists, so probing must happen while the filesystem is still fully visible.</p>
+
+		<p>All canonical paths that will be passed to unveil are resolved with <code>File::Spec->rel2abs()</code> before the sandbox is locked. After unveil, <code>rel2abs()</code> calls <code>getcwd()</code> internally, which requires rpath on directories that may not be unveiled. All path resolution therefore happens in a pre-pledge block.</p>
+
+		<p>Two pledge promise strings are used across all 24 scripts:</p>
+
+		<dl>
+		  <dt><code>stdio rpath</code></dt>
+		  <dd>Read-only scripts that serve data and write nothing. Used by: <code>e2g_feeds.pl</code>, <code>e2g_read_log.pl</code>, <code>services.pl</code>.</dd>
+
+		  <dt><code>stdio rpath wpath cpath flock</code></dt>
+		  <dd>All other 21 scripts. Required when a script writes queue trigger files, appends to log files, or performs atomic temp-to-rename rewrites.</dd>
+		</dl>
+
+		<p><code>firewall.pl</code> is the only script with <code>rx</code> permission on <code>/bin</code> and <code>/usr/bin</code> in its unveil configuration. It requires execute access to read pf log data via external programs.</p>
+
+		<p>The universal unveil paths present on every script are:</p>
+
+		<dl>
+		  <dt><code>data/lib</code> (r)</dt>
+		  <dd>Perl module source files.</dd>
+
+		  <dt><code>data/config</code> (r)</dt>
+		  <dd>Reads <code>security.conf</code>.</dd>
+
+		  <dt><code>data/keys</code> (r)</dt>
+		  <dd>Session and HMAC key files. Present on most scripts; absent only where key operations are not needed.</dd>
+
+		  <dt>Perl runtime paths (r)</dt>
+		  <dd><code>/usr/lib/perl5</code>, <code>/usr/libdata/perl5</code>, <code>/usr/local/lib/perl5</code>, <code>/usr/local/libdata/perl5</code>, <code>/usr/local/lib</code>, <code>/usr/lib</code>. Each is probed for existence before unveiling. The layout varies by OpenBSD version and chroot setup. Only directories that exist are unveiled.</dd>
+		</dl>
+
+		<h2>XS Module Pre-loading</h2>
+
+		<p>Scripts that use <code>DBD::SQLite</code> load it with a top-level <code>use DBD::SQLite</code> statement before the pledge block runs. DBI loads its driver lazily on the first <code>connect()</code> call. If that call happens after pledge is active, <code>dlopen()</code> requires <code>prot_exec</code>, which is not granted. Pre-loading ensures the shared object is mapped before the sandbox is locked down.</p>
+
+		<h2>STDIN Pre-read Pattern</h2>
+
+		<p>Scripts at the protected and restricted security levels that accept JSON POST bodies include a pre-read block in their <code>BEGIN</code>:</p>
+
+		<div class="doc-code-block">
+		  <div class="doc-code-header">
+		    <span class="doc-code-lang">perl</span>
+		    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+		  </div>
+		  <pre><code>if ($ENV{CONTENT_TYPE} && $ENV{CONTENT_TYPE} =~ /application\/json/ && $ENV{CONTENT_LENGTH}) {
+		    read(STDIN, my $json_body, $ENV{CONTENT_LENGTH});
+		    $ENV{POSTDATA} = $json_body;
+		}</code></pre>
+		</div>
+
+		<p><code>TNSecurityCheck::security_check()</code> creates a <code>CGI->new</code> object internally to read the CSRF token, which drains STDIN. If the JSON body is not pre-read into <code>$ENV{POSTDATA}</code> before that call, it is lost and the script receives an empty request body. This pattern is referenced in comments as STDIN-PREREAD-001.</p>
+
+		<h2>Script Reference</h2>
+
+		<h3>control.pl</h3>
+
+		<p>Authentication and session controller. Handles user registration, login, logout, password reset, CSRF token issuance, session validation, DEVEL mode management, and user deletion. This is the only script with a multi-stage password reset flow using HMAC-signed, single-use reset tokens with a 10-minute TTL.</p>
+
+		<p>Security level: routes dynamically by path. Auth and API routes use standard or no session requirement. DEVEL and admin routes enforce session and CSRF. The <code>handle_user_delete</code> handler additionally checks that the session role is explicitly <code>admin</code> after <code>require_session('admin')</code> returns.</p>
+
+		<p>Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil includes <code>data/db</code> (rwc), <code>/tmp</code> (rwc), <code>/dev/urandom</code> (r), and the standard lib and config paths. Optional paths including <code>data/keys</code> and <code>data/logs</code> are probed for existence before unveiling. DBD::SQLite is pre-loaded before the sandbox block.</p>
+
+		<p>Log: <code>/tmp/control-YYYY-MM-DD.log</code> inside the chroot (host path: <code>/var/www/tmp/control-YYYY-MM-DD.log</code>). Date-stamped per day. Multiple slowcgi worker processes share the file; the BEGIN block uses <code>flock(LOCK_EX)</code> before duping to STDERR to prevent interleaved startup writes.</p>
+
+		<p>Routes handled:</p>
+
+		<dl>
+		  <dt>POST auth/register</dt>
+		  <dd>Registers a new user. Requires username, password, security questions, and an optional registration token. Returns recovery codes and registration tokens on success.</dd>
+
+		  <dt>POST auth/login</dt>
+		  <dd>Authenticates a user and creates a session. Sets the session cookie with configurable HttpOnly, Secure, and SameSite attributes from <code>security.conf</code>.</dd>
+
+		  <dt>POST auth/logout</dt>
+		  <dd>Destroys the current session and clears the session cookie.</dd>
+
+		  <dt>POST auth/reset/get_questions</dt>
+		  <dd>Returns the security questions for a given username. Subject to rate limiting via <code>TNAuth::check_reset_attempts()</code>.</dd>
+
+		  <dt>POST auth/reset/verify_answers</dt>
+		  <dd>Verifies security question answers. Issues a signed reset token on success.</dd>
+
+		  <dt>POST auth/reset/verify_code</dt>
+		  <dd>Verifies a recovery code. Issues a signed reset token on success.</dd>
+
+		  <dt>POST auth/reset/update_password</dt>
+		  <dd>Updates the password after verifying the reset token. Clears the reset attempt counter on success.</dd>
+
+		  <dt>GET api/csrf</dt>
+		  <dd>Issues a CSRF token for the current session.</dd>
+
+		  <dt>GET api/session</dt>
+		  <dd>Returns current session state: authenticated flag, username, user ID, role, session age, and DEVEL mode status.</dd>
+
+		  <dt>GET api/questions</dt>
+		  <dd>Returns the list of available security questions.</dd>
+
+		  <dt>GET api/registration/status</dt>
+		  <dd>Returns registration status (open, closed, token-required).</dd>
+
+		  <dt>GET api/registration/tokens</dt>
+		  <dd>Returns unused registration tokens. Requires admin session.</dd>
+
+		  <dt>POST api/user/delete</dt>
+		  <dd>Deletes a user by ID. Requires admin session.</dd>
+
+		  <dt>GET devel/status</dt>
+		  <dd>Returns DEVEL mode state and application version.</dd>
+
+		  <dt>POST devel/enable</dt>
+		  <dd>Enables DEVEL mode after password verification.</dd>
+
+		  <dt>POST devel/disable</dt>
+		  <dd>Disables DEVEL mode unconditionally.</dd>
+
+		</dl>
+
+		<h3>e2g_feeds.pl</h3>
+
+		<p>Returns the list of e2guardian content filter feeds for a given mode. Reads system feed files and the user feed list. No database access. No writes.</p>
+
+		<p>Security level: standard. Pledge: <code>stdio rpath</code>. Unveil: <code>data/db/e2g</code> (r), <code>data/services/queue/e2gfilters/userlist</code> (r), plus the universal lib and config paths. No <code>/tmp</code> or <code>data/db</code> main tree access.</p>
+
+		<p>Query parameter: <code>mode</code> accepts <code>general</code>, <code>childsafe</code>, or <code>custom</code>. Returns a JSON array of feed objects with category, URL, filter type, and source fields.</p>
+
+		<h3>e2g_get_log.pl</h3>
+
+		<p>Fetches the content of the most recent e2guardian log file matching a given pattern. Accepts a JSON POST body with <code>action</code> (must be <code>get_latest_log</code>) and <code>pattern</code>. Pattern must be one of: <code>e2guardian-adult-</code>, <code>e2guardian-childsafe-</code>, or <code>e2g_user_filter-</code>. Routes to the cron log directory for system filter logs and the outcome queue directory for user filter logs.</p>
+
+		<p>Security level: standard. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/logs/cron</code> (r), <code>data/services/queue/e2gfilters/outcome</code> (r), <code>/var/www/tmp</code> (rwc). Log: <code>/var/www/tmp/e2g_get_log-YYYY-MM-DD.log</code>.</p>
+
+		<h3>e2g_get_log_info.pl</h3>
+
+		<p>Returns the modification time and filename of the most recent e2guardian log file matching a pattern, without reading its content. Accepts the same pattern values as <code>e2g_get_log.pl</code>. Action must be <code>get_log_info</code>. Used by the UI to check whether a log has updated before fetching the full content.</p>
+
+		<p>Security level: standard. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil identical to <code>e2g_get_log.pl</code>. Log: <code>/var/www/tmp/e2g_get_log_info-YYYY-MM-DD.log</code>.</p>
+
+		<h3>e2g_mode_switch.pl</h3>
+
+		<p>Queues an e2guardian filter mode change request and polls for the outcome. Accepts <code>action</code> (must be <code>switch_mode</code>) and <code>mode</code> (general or childsafe). Writes a request file to <code>data/services/queue/e2gfilters/request/</code> and polls <code>data/services/queue/e2gfilters/outcome/</code> for up to 25 minutes. Includes an anti-spam check that rejects the request if a job is already pending in the request directory.</p>
+
+		<p>Security level: standard. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/services/queue/e2gfilters/request</code> (rwc), <code>data/services/queue/e2gfilters/outcome</code> (r), <code>/var/www/tmp</code> (rwc). Log: <code>/var/www/tmp/e2g_mode_switch-YYYY-MM-DD.log</code>.</p>
+
+		<h3>e2g_read_log.pl</h3>
+
+		<p>Reads e2guardian log files with support for three actions: <code>get_latest</code>, <code>list</code>, and <code>get_specific</code>. The <code>filter_type</code> parameter selects the log set: <code>user</code> reads from the outcome queue, <code>childsafe</code> and <code>adult</code> read from the cron log directory. This script requires a protected security level, unlike the other e2g log scripts, because it exposes detailed filter output to the session user.</p>
+
+		<p>Security level: protected. Pledge: <code>stdio rpath</code>. Unveil: <code>data/logs/cron</code> (r), <code>data/services/queue/e2gfilters/outcome</code> (r), <code>data/db</code> (r). Uses the STDIN pre-read pattern. No write access.</p>
+
+		<h3>e2g_write_input.pl</h3>
+
+		<p>Adds or removes user-defined feed URLs from the userfeeds file at <code>data/services/queue/e2gfilters/userlist/userfeeds.txt</code>. Accepts <code>action</code> (add or remove) and a feed entry with category and URL fields. Category must be one of: HOSTFILE, DOMAIN, PORN, MIXED, ADVERTISER, CAPITOLE.</p>
+
+		<p>Security level: standard. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/services/queue/e2gfilters/userlist</code> (rwc), <code>/var/www/tmp</code> (rwc). Log: <code>/var/www/tmp/e2g_write-YYYY-MM-DD.log</code>.</p>
+
+		<h3>fetch_lan.pl</h3>
+
+		<p>Reads the LAN interface traffic log at <code>data/pipes/pmacct/int_if_json.log</code> in reverse chronological order. Returns paginated JSON line records with optional filtering by protocol, source IP, destination IP, source port, destination port, and minimum byte count. Adds computed fields: <code>bytes_formatted</code> and <code>display_class</code> (normal, ipv6, multicast, dns). Response includes total record count and IPv4, IPv6, multicast, and unicast breakdowns.</p>
+
+		<p>Security level: standard. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/lib</code> (r), <code>data/config</code> (r), <code>data/db</code> (rwc), <code>data/pipes/pmacct</code> (r), <code>/tmp</code> (rwc), <code>/dev/urandom</code> (r), plus optional key and lib paths. DBD::SQLite and JSON::XS pre-loaded. Log: <code>/var/www/tmp/fetch_lan-YYYY-MM-DD.log</code>.</p>
+
+		<h3>fetch_wan.pl</h3>
+
+		<p>Identical in structure and behaviour to <code>fetch_lan.pl</code> but reads the WAN interface log at <code>data/pipes/pmacct/ext_if_json.log</code>. Same filtering, pagination, and response fields. Same pledge and unveil configuration.</p>
+
+		<p>Security level: standard. Log: <code>/var/www/tmp/fetch_wan-YYYY-MM-DD.log</code>.</p>
+
+		<h3>firewall.pl</h3>
+
+		<p>Reads PF firewall log files and returns paginated, filtered results as JSON with server-rendered HTML for the log list and pagination controls. Accepts parameters: <code>mode</code> (live or archive), <code>date</code> (YYYY-MM-DD), <code>limit</code>, <code>offset</code>, <code>family</code> (IPv4 or IPv6), <code>proto</code> (tcp, udp, icmp, icmp6), <code>port</code>, <code>blocked</code>, and <code>debug</code>. For today's date, falls back to the live log at <code>data/logs/pf/pflog1.log</code> if the archive file does not exist. Archive files are at <code>data/archive/logs/system/pflog_YYYY-MM-DD.log</code>.</p>
+
+		<p>This is the only CGI script with <code>rx</code> permission on <code>/bin</code> and <code>/usr/bin</code> in its unveil configuration, required to execute external programs for log processing.</p>
+
+		<p>Security level: standard. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/logs/pf</code> (r), <code>data/archive/logs/system</code> (r), <code>/bin</code> (rx), <code>/usr/bin</code> (rx), <code>/var/www/tmp</code> (rwc), plus standard db, config, key, and lib paths. Log: <code>/var/www/tmp/firewall-YYYY-MM-DD.log</code>.</p>
+
+		<h3>integrity_files.pl</h3>
+
+		<p>Queries TNAudit.db for files with status outside the clean set (ok, verified, baseline) and writes the results as JSON to <code>data/db/TNAuditFilesList.json</code>. Accepts a <code>check</code> parameter to scope the query to a single check group or all groups. Returns a count of violations and a success flag. The output file is served to the UI via the <code>/data/db/TNAuditFilesList.json</code> httpd passthrough rule.</p>
+
+		<p>Security level: restricted. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/lib</code> (r), <code>data/config</code> (r), <code>data/keys</code> (r), <code>data/db</code> (rwc), <code>/var/www/tmp</code> (rwc). Uses STDIN pre-read pattern. DBD::SQLite and DBI pre-loaded.</p>
+
+		<h3>integrity_request.pl</h3>
+
+		<p>Queues an integrity verification or baseline request by writing a request file to <code>data/queue/integrity/request/</code> and polls <code>data/queue/integrity/outcome/</code> for the result, waiting up to 120 seconds. The request file name encodes the request timestamp; the file content contains the action and check name on a single line. Valid actions are <code>verify</code> and <code>summary</code>. Check names are validated against a whitelist derived from <code>integrity_checks.conf</code> at request time.</p>
+
+		<p>Security level: restricted. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/lib</code> (r), <code>data/config</code> (r), <code>data/keys</code> (r), <code>data/db</code> (rwc), the request and outcome queue directories (rwc), <code>/var/www/tmp</code> (rwc). Uses STDIN pre-read pattern. Log: <code>/var/www/tmp/integrity_request-YYYY-MM-DD.log</code> with per-entry username from the session.</p>
+
+		<h3>integrity_status.pl</h3>
+
+		<p>Polls the integrity outcome queue for a pending result, or returns a summary of all check groups directly from TNAudit.db. For a summary request, queries the <code>files</code> table grouped by check name and joins with configuration data from <code>integrity_checks.conf</code> to include display name, path, and description for each group. For a result poll, reads and removes the outcome file if present, or returns a pending flag if the runner has not yet written it.</p>
+
+		<p>Security level: restricted. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/lib</code> (r), <code>data/config</code> (r), <code>data/keys</code> (r), <code>data/db</code> (rwc), outcome queue (rwc), <code>/var/www/tmp</code> (rwc), status cache directory (r, conditional on existence). Uses STDIN pre-read pattern. DBD::SQLite and DBI pre-loaded.</p>
+
+		<h3>logs.pl</h3>
+
+		<p>Serves log file content and archive availability data for the Logs view. Covers 25 log sources across system, security, proxy, mail, and web service categories. Two actions are available via the <code>action</code> query parameter: <code>fetch</code> returns log lines from a source, and <code>available_dates</code> returns the archive date inventory for a source with gap analysis.</p>
+
+		<p>The 25 configured log sources are: <code>system/messages</code>, <code>system/daemon</code>, <code>bootlog/rc.local.log</code>, <code>doas/doas.log</code>, <code>dhcpd/dhcpd.log</code>, <code>unbound/unbound.log</code>, <code>rad/rad.log</code>, <code>collectd/collectd.log</code>, <code>sslproxy/sslproxy.log</code>, <code>sslproxy/sslproxy_connect.log</code>, <code>sockd/sockd.log</code>, <code>p3scan/p3scan.log</code>, <code>smtp-gated/smtp-gated.log</code>, <code>spamd/spamd.log</code>, <code>snort/alert.log</code>, <code>snort/snort.log</code>, <code>snort/snortinline.log</code>, <code>snortsentry/snortsentry.log</code>, <code>e2guardian/access.log</code>, <code>e2guardian/e2guardian.log</code>, <code>httpd/httpd_access.log</code>, <code>httpd/httpd_error.log</code>, <code>imspector/imspector.log</code>, and <code>ftp-proxy/ftp-proxy.log</code>. Each source defines a live path, an archive pattern using a <code>{date}</code> placeholder, a type (live or boot), a line limit, and an optional flowbits filter flag.</p>
+
+		<p>For <code>fetch</code> requests, the <code>date</code> parameter accepts <code>live</code> for the current log file or a signed integer day offset (for example <code>-1</code> for yesterday). Live logs use <code>tail</code> to return the last N lines; archive logs use <code>head</code> because archives are written in reverse chronological order during rotation. Boot logs have no line limit and read the entire file. Line counts for metadata are obtained via <code>wc -l</code>. The path is canonicalised before any file operation and checked against the log base directory to reject path traversal attempts.</p>
+
+		<p>Server-side line filtering is applied before the response is built, reducing bandwidth to mobile clients. The <code>filter</code> parameter accepts: <code>all</code>, <code>error</code>, <code>warning</code>, <code>auth</code>, <code>blocked</code>, or <code>connection</code>. Three log timestamp formats are recognised and extracted: bracketed ISO format (<code>[YYYY-MM-DD HH:MM:SS]</code>), standard syslog (<code>Mon DD HH:MM:SS</code>), and ISO 8601 with timezone offset. Each line is assigned a level of info, warning, or error based on keyword matching.</p>
+
+		<p>Sources with <code>filter_flowbits</code> enabled (system/messages, system/daemon, snort/snort.log, snort/snortinline.log) strip Snort flowbit noise lines before processing. This removes both <code>flowbits key</code> lines and syslog entries from Snort processes that leak into the system message log.</p>
+
+		<p>The <code>available_dates</code> action scans the last seven days for archive files and returns both available dates with file sizes and gaps with classified reasons. Gap reasons are: <code>future_date</code>, <code>system_offline</code> (rotation did not occur, system was likely powered off), <code>empty_not_rotated</code> (service was running but produced no output), or <code>missing_archive</code> (file should exist but does not). Consecutive gaps sharing the same reason are consolidated into date ranges in the response. Rotation state is read from a metadata file at <code>data/logs/.rotation_meta</code> with a fallback to the rotation stamp at <code>data/logs/bootlog/.rotation_stamp</code>.</p>
+
+		<p>When a requested file does not exist, a structured error response is returned with a typed <code>error_type</code> field and diagnostic details rather than a generic failure, giving the UI enough context to display a meaningful message.</p>
+
+		<p>Security level: standard. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil covers the log base directory tree and standard lib, config, and key paths. Log source names are validated against the configuration inventory before any file path is constructed; unknown source names are rejected immediately.</p>
+
+		<h3>mail.pl</h3>
+
+		<p>Lists, deletes, and purges mail from the root mailbox at <code>data/mail/root/new/</code>. Copies messages to a local inbox cache at <code>data/inbox/mail/</code> to avoid re-reading unchanged files on subsequent list requests. Parses Subject, From, and Date headers from the first 4096 bytes of each message without loading the full body. Detects message priority by scanning the subject for error, fail, critical, urgent, or alert keywords.</p>
+
+		<p>The security level is determined dynamically from the request action before <code>security_check()</code> is called. List requests use the standard level. Delete and purge requests use the protected level, requiring a session and CSRF token. Purge removes messages older than 7 days from both the mail directory and the inbox cache.</p>
+
+		<p>Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/mail/root/new</code> (r), <code>data/inbox/mail</code> (rwc), <code>data/db</code> (r), plus standard lib, config, and key paths. Uses STDIN pre-read pattern.</p>
+
+		<h3>manage_services.pl</h3>
+
+		<p>Queues service management commands (start, stop, restart, status, list) by writing request files to <code>data/services/queue/request/</code> and polls <code>data/services/queue/outcome/</code> for results. Service-specific timeouts are defined in the script: ClamAV has a 120-second timeout, Snort 45 seconds, most others 15 to 30 seconds. The valid service whitelist covers 29 services. Job IDs are constructed as <code>service_action_timestamp</code>; outcome files are matched by this prefix.</p>
+
+		<p>Security level: protected. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/services/queue</code> (rwc), <code>data/logs/bootlog</code> (rwc), <code>/var/www/tmp</code> (rwc), plus standard lib, config, key, and db paths. Uses STDIN pre-read pattern. Logs to both <code>data/logs/bootlog/manager_YYYY-MM-DD.log</code> and <code>/var/www/tmp/manage_services-YYYY-MM-DD.log</code>.</p>
+
+		<h3>pf_delete_input.pl</h3>
+
+		<p>Removes a single entry from a PF user-input queue file. Accepts a JSON body with <code>type</code> (ip, asn, or feed), <code>action</code> (block or pass), and <code>value</code>. Reads the target file, filters out the exact matching line, and rewrites atomically: writes to a <code>.tmp</code> file then renames over the original. Feed lines are stored as <code>action:url</code> and the target line is reconstructed in that format before matching.</p>
+
+		<p>Security level: restricted. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/services/queue/pf-rules/user-input</code> (rwc), plus standard lib, config, db, and key paths. Log: <code>/tmp/pf_delete_input-YYYY-MM-DD.log</code> inside the chroot.</p>
+
+		<h3>pf_read_input.pl</h3>
+
+		<p>Returns the current contents of all PF user-input queue files as a structured JSON response. Reads <code>ip-block.txt</code>, <code>ip-pass.txt</code>, <code>asn-block.txt</code>, <code>asn-pass.txt</code>, and <code>feed-urls.txt</code> from <code>data/services/queue/pf-rules/user-input/</code>. Feed lines are parsed from <code>action:url</code> format into structured objects. Called by the UI on PF tab activation to restore persisted entries from previous sessions. Read-only: no file writes.</p>
+
+		<p>Security level: restricted. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/services/queue/pf-rules/user-input</code> (r), plus standard lib, config, db, and key paths. Log: <code>/tmp/pf_read_input-YYYY-MM-DD.log</code> inside the chroot.</p>
+
+		<h3>pf_trigger.pl</h3>
+
+		<p>Creates trigger files in <code>data/services/queue/pf-rules/triggers/</code> to signal the PF validation daemon. Accepts <code>action</code> values of <code>validate</code>, <code>apply</code>, or <code>reset</code>. Writes a file named <code>action-requested</code> containing the current Unix timestamp. The queue directory is created before the pledge block if it does not exist.</p>
+
+		<p>Security level: restricted. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/services/queue/pf-rules/triggers</code> (rwc), plus standard lib, config, db, and key paths. Log: <code>/tmp/pf_trigger-YYYY-MM-DD.log</code> inside the chroot.</p>
+
+		<h3>pf_validate_rule.pl</h3>
+
+		<p>Performs basic client-side syntax validation of a custom PF rule string before it is submitted to the validation daemon. Checks that the rule contains only permitted characters (alphanumeric, spaces, and common PF syntax characters with no shell metacharacters), starts with a valid action keyword (pass, block, or match), contains both <code>from</code> and <code>to</code> keywords, and has no extra whitespace. Returns a validation result with a note that full <code>pfctl</code> validation occurs when the operator clicks the validate button in the UI. No file writes and no script-specific paths beyond the standard base.</p>
+
+		<p>Security level: restricted. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: standard lib, config, db, and key paths only. Log: <code>/tmp/pf_validate_rule-YYYY-MM-DD.log</code> inside the chroot.</p>
+
+		<h3>pf_write_input.pl</h3>
+
+		<p>Appends user-submitted PF entries to the appropriate queue file. Accepts <code>type</code> values of <code>ip</code>, <code>asn</code>, <code>geoip</code>, <code>feed</code>, or <code>custom_rule</code>. Each type has its own untaint validator: IPv4 and IPv6 addresses and CIDRs, ASNs in AS12345 format, two-letter country codes, HTTP/HTTPS URLs, and PF rule strings. GeoIP policy is written as a JSON file (<code>geoip-policy.json</code>); all other types append to plain text files. Feed URLs are stored as <code>action:url</code> to allow action-aware deletion by <code>pf_delete_input.pl</code>.</p>
+
+		<p>Security level: restricted. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/services/queue/pf-rules/user-input</code> (rwc), plus standard lib, config, db, and key paths. The user-input directory is created before the pledge block if it does not exist. Log: <code>/tmp/pf_write_input-YYYY-MM-DD.log</code> inside the chroot.</p>
+
+		<h3>power_mgmt.pl</h3>
+
+		<p>Queues system power commands (restart or shutdown) by writing a shell command string to <code>data/queue/powerstate/request/</code> and polls the outcome directory for up to 30 seconds. The command strings are mapped from the validated action names: <code>restart</code> maps to <code>shutdown -r now</code>, <code>shutdown</code> maps to <code>shutdown -hp now</code>. If no outcome is received within the timeout, the script treats it as likely success because the system may have executed the command before the outcome file was written.</p>
+
+		<p>Security level: restricted. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/queue/powerstate</code> (rwc), <code>/var/www/tmp</code> (rwc), plus standard lib, config, key, and db paths. Uses STDIN pre-read pattern. Log: <code>/var/www/tmp/pwmgmt.log</code>.</p>
+
+		<h3>search_wan.pl</h3>
+
+		<p>Searches historical WAN traffic records stored as daily JSON files or hourly chunk files under <code>data/network/pmacct/ext/</code>. Accepts date (YYYY-MM-DD or YYYYMMDD), optional hour and minute to target a specific chunk file, and filter parameters for source IP, destination IP, protocol, and port. Returns paginated results sorted by <code>stamp_updated</code> descending. If both hour and minute are supplied and the matching chunk file exists, only that file is scanned. Otherwise all daily or chunk files for the requested date are scanned.</p>
+
+		<p>Security level: standard. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/network/pmacct</code> (r), <code>data/db</code> (rwc), <code>/tmp</code> (rwc), <code>/dev/urandom</code> (r), plus standard lib, config, key, and optional Perl path entries. DBD::SQLite pre-loaded. Log: <code>/var/www/tmp/search_wan-YYYY-MM-DD.log</code>.</p>
+
+		<h3>services.pl</h3>
+
+		<p>Returns the current service status JSON from <code>data/logs/bootlog/services.json</code>, which is updated every 15 seconds by the process monitor. The response wraps the services object with a timestamp derived from the file mtime (in milliseconds for JavaScript consumption) and a system identifier string. Read-only.</p>
+
+		<p>Security level: standard. Pledge: <code>stdio rpath</code>. Unveil: <code>data/logs/bootlog</code> (r), plus standard lib and config paths. No database access, no writes, no <code>/tmp</code>.</p>
+
+		<h3>unbound_control.pl</h3>
+
+		<p>Queues Unbound DNS management commands and waits up to 10 seconds for a result. Accepts <code>action</code> values of <code>flush_all</code>, <code>flush_domain</code>, <code>dump_cache</code>, <code>reload</code>, or <code>lookup</code>. The <code>flush_domain</code> and <code>lookup</code> actions additionally require a <code>domain</code> parameter validated against a hostname character set. Writes a JSON request file to <code>data/services/queue/unbound/request/</code> and polls <code>data/services/queue/unbound/outcome/</code> at 0.2-second intervals.</p>
+
+		<p>Security level: standard. Pledge: <code>stdio rpath wpath cpath flock</code>. Unveil: <code>data/services/queue/unbound</code> (rwc), <code>/var/www/tmp</code> (rwc), plus standard lib, config, key, and db paths. Log: <code>/var/www/tmp/unbound-YYYY-MM-DD.log</code>.</p>
+
+		<h2>Queue Architecture</h2>
+
+		<p>Several scripts use a synchronous queue pattern to execute privileged operations without running as root inside the chroot. The CGI script writes a request file, then polls an outcome directory until the root daemon writes a result or the timeout expires. This keeps the CGI layer unprivileged while allowing it to trigger operations that require root.</p>
+
+		<p>The queue directories and their associated scripts are:</p>
+
+		<dl>
+		  <dt><code>data/queue/integrity/</code></dt>
+		  <dd>Used by <code>integrity_request.pl</code> and <code>integrity_status.pl</code>. Request files contain action and check name. Outcome files contain the raw JSON output from TNAudit.pl. The integrity runner processes requests within one second. Maximum CGI poll wait: 120 seconds.</dd>
+
+		  <dt><code>data/queue/powerstate/</code></dt>
+		  <dd>Used by <code>power_mgmt.pl</code>. Request files contain a shell command string. Maximum CGI poll wait: 30 seconds. Timeout is treated as likely success for shutdown and restart.</dd>
+
+		  <dt><code>data/services/queue/</code></dt>
+		  <dd>Used by <code>manage_services.pl</code>. Request files contain action and service name. Outcome files are matched by job ID prefix. Maximum poll wait varies by service (15 to 120 seconds).</dd>
+
+		  <dt><code>data/services/queue/unbound/</code></dt>
+		  <dd>Used by <code>unbound_control.pl</code>. Request files are JSON. Maximum poll wait: 10 seconds at 0.2-second intervals.</dd>
+
+		  <dt><code>data/services/queue/e2gfilters/</code></dt>
+		  <dd>Used by <code>e2g_mode_switch.pl</code> (request and outcome subdirectories) and <code>e2g_write_input.pl</code> (userlist subdirectory). Mode switch polls for up to 25 minutes to accommodate full filter rebuild time.</dd>
+
+		  <dt><code>data/services/queue/pf-rules/</code></dt>
+		  <dd>Used by <code>pf_write_input.pl</code>, <code>pf_delete_input.pl</code>, <code>pf_read_input.pl</code>, and <code>pf_trigger.pl</code>. The user-input subdirectory holds the persisted queue files. The triggers subdirectory holds signal files for the validation daemon.</dd>
+		</dl>
+
+		<div class="callout callout-note">
+		  <p>Queue directories that must exist before the pledge block is applied are created at script startup if absent. After pledge and unveil are active the script cannot create directories outside the unveiled paths, so this initialisation must happen in the pre-pledge section.</p>
+		</div>
+
+		<div class="callout callout-warning">
+		  <p>All queue outcome files are consumed (read and deleted) by the CGI script that polls for them. If a CGI request times out before the daemon writes the outcome, the outcome file will remain in the directory. The integrity runner cleans outcome files older than five minutes. Other queue processors have their own cleanup intervals. Do not manually delete active request files while a CGI is polling for their outcome.</p>
+		</div>
+
+		<h2>Log Files</h2>
+
+		<p>CGI scripts log inside the <code>/var/www</code> chroot. Host paths are shown below.</p>
+
+		<dl>
+		  <dt><code>/var/www/tmp/control-YYYY-MM-DD.log</code></dt>
+		  <dd>Authentication events, session operations, DEVEL mode changes, and STDERR from control.pl workers.</dd>
+
+		  <dt><code>/var/www/tmp/firewall-YYYY-MM-DD.log</code></dt>
+		  <dd>PF log parse errors and sandbox failures.</dd>
+
+		  <dt><code>/var/www/tmp/fetch_lan-YYYY-MM-DD.log</code>, <code>fetch_wan-YYYY-MM-DD.log</code></dt>
+		  <dd>Traffic fetch errors.</dd>
+
+		  <dt><code>/var/www/tmp/search_wan-YYYY-MM-DD.log</code></dt>
+		  <dd>Historical search errors.</dd>
+
+		  <dt><code>/var/www/tmp/e2g_get_log-YYYY-MM-DD.log</code>, <code>e2g_get_log_info-YYYY-MM-DD.log</code>, <code>e2g_mode_switch-YYYY-MM-DD.log</code>, <code>e2g_write-YYYY-MM-DD.log</code></dt>
+		  <dd>e2guardian CGI operation logs.</dd>
+
+		  <dt><code>/var/www/tmp/integrity_request-YYYY-MM-DD.log</code></dt>
+		  <dd>Integrity queue requests with username, action, check name, and duration.</dd>
+
+		  <dt><code>/var/www/tmp/manage_services-YYYY-MM-DD.log</code></dt>
+		  <dd>Service manager debug log. The authoritative service manager audit log is at <code>/var/www/htdocs/tn/data/logs/bootlog/manager_YYYY-MM-DD.log</code>.</dd>
+
+		  <dt><code>/var/www/tmp/pwmgmt.log</code></dt>
+		  <dd>Power management events. Not date-stamped; accumulates across days.</dd>
+
+		  <dt><code>/var/www/tmp/unbound-YYYY-MM-DD.log</code></dt>
+		  <dd>Unbound control queue errors and timeouts.</dd>
+
+		  <dt><code>/var/www/tmp/pf_delete_input-YYYY-MM-DD.log</code>, <code>pf_read_input-YYYY-MM-DD.log</code>, <code>pf_trigger-YYYY-MM-DD.log</code>, <code>pf_validate_rule-YYYY-MM-DD.log</code>, <code>pf_write_input-YYYY-MM-DD.log</code></dt>
+		  <dd>PF CGI audit logs with username per entry.</dd>
+		</dl>
+
+		<div class="doc-summary">
+		  <h2>Summary</h2>
+		  <ul>
+		    <li>All 24 CGI scripts are reachable only through <code>router.pl</code> via TNWAF. Direct path access is not possible. httpd hard-blocks secrets directories at the server level before any CGI runs.</li>
+		    <li>Three security levels are in use: standard (origin check), protected (session and CSRF), restricted (admin session and CSRF with audit trail). Every script calls <code>security_check()</code> before any business logic.</li>
+		    <li>All scripts run under Perl taint mode and apply OpenBSD pledge and unveil sandboxing. Both are optional and degrade gracefully on non-OpenBSD systems. Two pledge strings are used: <code>stdio rpath</code> for read-only scripts, <code>stdio rpath wpath cpath flock</code> for all others. <code>firewall.pl</code> is the only script with <code>rx</code> permission on system binary directories.</li>
+		    <li>Scripts that use DBD::SQLite load it before the pledge block to prevent dlopen failure after the sandbox is active. Scripts that accept JSON POST bodies at protected or restricted levels pre-read STDIN into <code>$ENV{POSTDATA}</code> in the BEGIN block before TNSecurityCheck drains it.</li>
+		    <li>All canonical paths passed to unveil are resolved with <code>File::Spec->rel2abs()</code> before the first unveil call. All filesystem existence checks on optional paths are performed before the first unveil call.</li>
+		    <li>Several scripts use a synchronous queue pattern: the CGI writes a request file, a privileged root daemon processes it, and the CGI polls an outcome directory. This keeps all CGI processes unprivileged while allowing them to trigger root-level operations.</li>
+		  </ul>
+		</div>

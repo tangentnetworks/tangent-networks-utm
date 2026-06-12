@@ -1,0 +1,4 @@
+inet autoconf
+inet6 autoconf -temporary
+mtu 1472
+up

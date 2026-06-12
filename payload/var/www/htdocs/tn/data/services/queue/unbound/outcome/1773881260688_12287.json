@@ -1,0 +1,6 @@
+{
+  "success": true,
+  "request_id": "1773881260688_12287",
+  "output": "dump_cache/load_cache is not supported in multi-process operation",
+  "timestamp": 1773881261
+}

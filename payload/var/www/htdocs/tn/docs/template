@@ -1,0 +1,149 @@
+<!--
+  ============================================================================
+  Tangent Networks Documentation -- Fragment Template
+  ============================================================================
+  Copy this file and rename to docs/<document-id>.html
+  Add the matching entry to DOCS config in doc.js:
+    'document-id': { title: 'Document Title', path: 'docs/document-id.html' }
+
+  Rules:
+    - No <html>, <head>, or <body> tags -- this is a partial only
+    - No inline styles -- all styling via docs.css classes
+    - No inline event handlers -- doc.js wires everything after load
+    - No images -- diagrams are ASCII art in <pre> blocks
+    - No tables -- use <dl>, <ol>, <ul>, or <pre> instead
+    - lynx -dump must produce clean readable plain text
+    - Foreword and Summary are mandatory on every fragment
+  ============================================================================
+-->
+<!-- ============================================================
+     FOREWORD
+     Who this document is for. What it covers. What to read first.
+     ============================================================ -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    <!-- Audience: who should read this -->
+    <!-- Scope: what this document covers and what it does not -->
+    <!-- Prerequisites: what to read first -->
+  </p>
+</div>
+<!-- ============================================================
+     PAGE TITLE
+     ============================================================ -->
+<h1>Document Title</h1>
+<!-- ============================================================
+     MAIN CONTENT
+     Write in sections. Use prose paragraphs for explanations.
+     Lists are for genuinely enumerable items only.
+     ============================================================ -->
+<h2>Section Heading</h2>
+<p> Explanatory prose here. Write in paragraphs, not bullet points. Use plain language. Every technical claim references an exact path, command, or file that has been verified on the live system. </p>
+<!-- Code block -- shell command -->
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre>
+		<code>command here</code>
+	</pre>
+</div>
+<!-- Code block -- config file -->
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">conf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre>
+		<code>config content here</code>
+	</pre>
+</div>
+<!-- Code block -- Perl -->
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre>
+		<code>perl code here</code>
+	</pre>
+</div>
+<!-- Definition list -- for path/value pairs, options, flags -->
+<dl>
+  <dt>
+    <code>/path/to/file</code>
+  </dt>
+  <dd>What this file is and what it contains.</dd>
+  <dt>
+    <code>/path/to/another</code>
+  </dt>
+  <dd>What this file is and what it contains.</dd>
+</dl>
+<!-- Directory tree -- use <pre> -->
+<pre>
+data/logs/
+    service/
+        service.log         current log
+        service_YYYY-MM-DD.log  rotated archive (7 day retention)
+</pre>
+<!-- Callouts -- pick the appropriate level -->
+<div class="callout callout-note">
+  <p>
+    <strong>Note:</strong> Informational. Something worth knowing.
+  </p>
+</div>
+<div class="callout callout-tip">
+  <p>
+    <strong>Tip:</strong> A helpful shortcut or recommendation.
+  </p>
+</div>
+<div class="callout callout-warning">
+  <p>
+    <strong>Warning:</strong> Something that will cause problems if ignored.
+  </p>
+</div>
+<div class="callout callout-danger">
+  <p>
+    <strong>Critical:</strong> Data loss, system lockout, or security risk.
+  </p>
+</div>
+<!-- Badges -- use inline for status indicators -->
+<!-- <span class="badge badge-green">Running</span> -->
+<!-- <span class="badge badge-red">Stopped</span> -->
+<!-- <span class="badge badge-yellow">Pending</span> -->
+<!-- <span class="badge badge-blue">Info</span> -->
+<!-- <span class="badge badge-gray">Disabled</span> -->
+<h2>Another Section</h2>
+<p> Continue with prose. Each section covers one coherent topic. Forward-reference other documents rather than duplicating content: "See the Firewall document for the full pf.conf walkthrough." </p>
+<!-- Ordered list -- for procedures with a required sequence -->
+<ol>
+  <li>First step with exact command or file path.</li>
+  <li>Second step.</li>
+  <li>Third step -- verify with: <code>command</code>
+  </li>
+</ol>
+<!-- Unordered list -- for items without required order -->
+<ul>
+  <li>Item one.</li>
+  <li>Item two.</li>
+</ul>
+<!-- ============================================================
+     SUMMARY
+     Plain language. Quotable. Promo-ready.
+     These collectively form the crowdfunding narrative.
+     ============================================================ -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Key point one -- what this component does in one sentence.</li>
+    <li>Key point two -- why it matters or what makes it notable.</li>
+    <li>Key point three -- operational fact a user needs to remember.</li>
+  </ul>
+</div>

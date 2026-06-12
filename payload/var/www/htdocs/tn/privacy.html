@@ -1,0 +1,243 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!DOCTYPE html>
+<html lang="en" class="">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Take control of your network security with Tangent Networkss Firewall and Router. Easily manage access, configure settings, and protect your devices.">
+    <title>Tangent Networkss | Web interface for managing your firewall and router</title>
+    <link rel="stylesheet" href="./assets/css/tangent.css">
+  </head>
+  <!-- BEGIN: Page -->
+  <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
+    <!-- BEGIN: NAVIGATION -->
+    <header id="layout-navigation-block">
+      <!-- BEGIN: NAVBAR -->
+      <nav class="bg-white dark:bg-gray-900 fixed w-full z-20 top-0 start-0 border-b border-gray-200 dark:border-gray-700 shadow-lg">
+        <div class="max-w-screen-xl flex items-center justify-between mx-auto p-4">
+          <button class="inline-flex items-center justify-center p-2 rounded-lg text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90 shadow-md">
+            <div class="flex items-center">
+              <!-- NOTE: Mobile Icon Logo -->
+              <img src="./assets/images/logo/icon.svg" alt="TN logo icon" class="h-5 w-auto object-contain md:hidden">
+              <!-- NOTE: Desktop Full Logo -->
+              <img src="./assets/images/logo/tnw.svg" alt="TN logo full" class="h-5 w-auto object-contain hidden md:block">
+            </div>
+          </button>
+          <!-- END: Logo/Brand -->
+          <!-- BEGIN: Action Buttons -->
+          <div class="flex items-center space-x-2">
+            <!-- BEGIN: Theme Toggle Button -->
+            <button id="theme-toggle" type="button" class="inline-flex items-center justify-center p-2 rounded-lg text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90 shadow-md">
+              <!-- NOTE: Dark Mode Icon (Moon) -->
+              <svg id="theme-toggle-dark-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+              </svg>
+              <!-- NOTE: Light Mode Icon (Sun) -->
+              <svg id="theme-toggle-light-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"></path>
+              </svg>
+            </button>
+            <!-- END: Theme Toggle Button -->
+            <!-- BEGIN: User Dropdown Container -->
+            <div class="relative">
+              <button id="user-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90" aria-expanded="false">
+                <span class="sr-only">Open user menu</span>
+                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <path stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M5 7h14M5 12h14M5 17h14"></path>
+                </svg>
+              </button>
+              <!-- NOTE: Dropdown Menu -->
+              <div id="dropdown-user" class="z-50 absolute right-0 mt-2 bg-gray-50 dark:bg-gray-900 border border-default rounded-lg shadow-lg w-44 hidden">
+                <ul class="p-2 text-sm font-medium" role="none">
+                  <li>
+                    <a href="index.html" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Sign In</a>
+                  </li>
+                  <li>
+                    <a href="pwreset.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Password Reset</a>
+                  </li>
+		  <li>
+                    <a href="documentation.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Documentation</a>
+                  </li>
+                  <li>
+                    <a href="legal.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Legal</a>
+                  </li>
+                  <li>
+                    <a href="license.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">License</a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <!-- END: User Dropdown Container -->
+          </div>
+          <!-- END: Action Buttons -->
+        </div>
+      </nav>
+      <!-- END: NAVIGATION -->
+    </header>
+    <!-- END: Header -->
+    <!-- BEGIN: Main Content - PRIVACY POLICY -->
+    <main class="relative flex-grow">
+      <div class="max-w-screen-xl mx-auto p-4 pt-20">
+        <article class="prose prose-neutral lg:prose-lg dark:prose-invert max-w-screen-xl bg-white p-8 shadow-2xl dark:bg-gray-900">
+          <div>
+            <div class="mb-6 rounded-lg bg-gray-100 p-5 text-center shadow-md dark:bg-gray-800">
+              <h1 class="mb-2 text-3xl font-semibold text-gray-900 dark:text-white">Privacy Policy</h1>
+              <p class="p-3 text-base font-normal text-gray-700 dark:text-white">Last Updated On: <time datetime="2025-12-06T11:14:50+05:30">Sat Dec 6 11:14:50 AM IST 2025</time>
+              </p>
+            </div>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">This Privacy Policy ("Policy") outlines the principles, commitments, and operational practices of Tangent Networks ("Company", "we", "us", or "our") with respect to the handling of information through the Tangent Networks WebUI Application ("Application"), built for managing Firewall, Routing, Intrusion Detection and Prevention Systems (IDPS), and associated network security mechanisms. This Policy is drafted to ensure transparency, safeguard user interests, and comply with the applicable legal framework within the jurisdiction of Kerala, India.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">1. Scope of the Policy</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">This Policy governs the access, usage, and interaction with the Application by administrators, operators, or any authorized users ("Users"). It applies exclusively to the data handled within the Application and does not extend to any third-party systems, external integrations, or independent network components unless expressly incorporated by reference.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">2. Foundational Declaration: No Unsolicited Data Collection</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">We hereby expressly affirm and warrant that:</p>
+            <div class="mb-6 ml-4 mr-4 space-y-4">
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(a)</span> The Application does <strong>not</strong> collect, transmit, store, or process personal, behavioral, or operational data from Users unless the User voluntarily and explicitly submits such information.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(b)</span> The Application does <strong>not</strong> embed analytics trackers, telemetry systems, profiling mechanisms, or passive surveillance technologies.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(c)</span> Any data provided to us for troubleshooting, diagnostics, or technical assistance is furnished solely at the User's discretion and shall be handled strictly in accordance with this Policy.
+              </p>
+            </div>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">3. Information We May Receive (Only If You Provide It)</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">The only categories of information we may possess are those voluntarily offered by Users for troubleshooting purposes, which may include:</p>
+            <div class="mb-6 ml-4 mr-4 space-y-4">
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(a)</span> System configuration files (e.g., firewall rulesets, routing tables, IDPS signatures).
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(b)</span> Error logs, crash reports, or performance metrics as exported by the User.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(c)</span> Screenshots or step-by-step descriptions supplied for issue reproduction.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(d)</span> Contact details voluntarily submitted for support correspondence.
+              </p>
+            </div>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">No other data is collected, inferred, mined, or aggregated.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">4. Data Minimization Principle</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">Any information furnished voluntarily by the User shall be limited to the minimum required for addressing the specific concern raised. We do not request, encourage, or require broader access to system data beyond the narrow technical necessity communicated to the User beforehand.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">5. Use of Information</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">Any voluntarily provided information shall be used solely for:</p>
+            <div class="mb-6 ml-4 mr-4 space-y-4">
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(a)</span> Diagnosing, validating, and resolving technical issues.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(b)</span> Enhancing compatibility or patching specific operational bugs encountered.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(c)</span> Providing feedback or clarifications requested by the User.
+              </p>
+            </div>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">We do not use User-provided information for marketing, research, analytics, profiling, or any other secondary purpose.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">6. Storage, Retention, and Erasure</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">By engaging with support services, you agree to the following binding terms regarding the handling of information you voluntarily provide:</p>
+            <div class="mb-6 ml-4 mr-4 space-y-4">
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(a)</span> Information shared voluntarily may be stored only for the duration necessary to resolve the issue.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(b)</span> Upon completion of the support task, such data shall be securely deleted unless the User expressly authorizes continued retention for future reference.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(c)</span> No backups or secondary copies shall be maintained without explicit written consent from the User.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(d)</span> Users may request immediate deletion at any point during the support process.
+              </p>
+            </div>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">7. Security of Voluntarily Shared Data</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">We adopt commercially reasonable technical and organizational measures to protect any voluntarily provided data, including:</p>
+            <div class="mb-6 ml-4 mr-4 space-y-4">
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(a)</span> Controlled access restrictions.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(b)</span> Encrypted communication channels when exchanging support files.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(c)</span> Secure wiping procedures upon deletion.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(d)</span> Internal confidentiality obligations binding upon our personnel and contractors.
+              </p>
+            </div>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">8. No Integration With Third-Party Data Processors</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">We do not outsource, transmit, or transfer User-provided information to any third-party service provider, cloud platform, or analytics tool unless explicitly requested by the User for specialized debugging support.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">9. Cookies, Telemetry, and Automated Tracking</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">The Application does not use cookies, browser-based tracking, device fingerprinting, or embedded telemetry frameworks. The WebUI operates entirely on-device, within the User's infrastructure, without remote monitoring or automated reporting.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">10. Network Traffic and System Logs</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">All operational logs (firewall events, routing logs, IDPS alerts, system-level diagnostics) are generated and stored locally within the User's infrastructure. We have no access to such logs unless the User exports and shares them manually.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">11. User Rights</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">By voluntarily submitting information, you retain the following express rights regarding its use and management:</p>
+            <div class="mb-6 ml-4 mr-4 space-y-4">
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(a)</span> Right to know precisely how the information will be used.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(b)</span> Right to withhold or refuse submission of any data.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(c)</span> Right to request deletion at any time.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(d)</span> Right to request clarification, correction, or redaction of shared materials.
+              </p>
+              <p class="text-gray-700 dark:text-white">
+                <span class="mr-2 font-semibold">(e)</span> Right to obtain confirmation that no other data about them exists in our systems.
+              </p>
+            </div>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">12. Children's Privacy</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">The Application is a professional network administration tool and is not designed, marketed, or intended for use by children or minors. We do not knowingly collect any information from individuals below 18 years of age.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">13. Policy Updates</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">We reserve the right to update or revise this Policy to reflect legal, technological, or operational changes. All modifications shall apply prospectively and shall be made accessible to Users through official channels. Continued use of the Application after such updates constitutes acceptance of the revised Policy.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">14. Legal Compliance and Jurisdiction</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">This Policy is governed by, and shall be construed in accordance with, the laws applicable in the State of Kerala, Republic of India. Any disputes arising out of or related to this Policy shall be subject exclusively to the jurisdiction of the competent courts situated in Kerala, India.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">15. Contact Information</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">For requests, clarifications, deletions, or legal notices regarding this Policy, Users may contact Tangent Networks through the designated communication channels as provided in the Application or associated documentation.</p>
+            <h2 class="my-6 rounded-md bg-gray-100 p-3 text-xl font-bold text-gray-700 dark:bg-gray-800 dark:text-white">16. Final Declaration</h2>
+            <p class="mb-4 p-2 text-gray-700 dark:text-white">By using the Tangent Networks WebUI Application, Users acknowledge that the Application itself performs no data collection and that any information received by us is voluntarily supplied by the User for troubleshooting or support purposes only.</p>
+          </div>
+        </article>
+      </div>
+    </main>
+    <!-- END: Main Content -->
+    <!-- BEGIN: Back To Top -->
+    <button id="backToTop" type="button" class="back-to-top text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-full text-lg p-3 text-center opacity-0 invisible transition-opacity duration-300 shadow-xl">
+      <svg class="w-6 h-6 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v13m0-13 4 4m-4-4-4 4"></path>
+      </svg>
+    </button>
+    <!-- END: Back To Top -->
+    <!-- BEGIN: Footer -->
+    <footer class="bg-white dark:bg-gray-900 rounded-t-xl shadow-inner border-t border-gray-200 dark:border-gray-700 mt-auto">
+      <div class="w-full mx-auto max-w-screen-xl p-4 md:flex md:items-center md:justify-between">
+        <span class="text-xs text-gray-600 dark:text-white sm:text-center">© 2023 <a href="https://tangentnet.top/" class="hover:underline text-blue-500 hover:text-blue-400">Tangent Networks™</a>. All Rights Reserved. </span>
+        <ul class="flex flex-wrap items-center mt-3 text-sm font-medium text-body sm:mt-0">
+          <li class="ml-3 p-1">
+            <a href="legal.html" target="_blank" rel="noopener noreferrer" class="hover:underline text-blue-500 hover:text-blue-400 me-4 md:me-6">Legal</a>
+          </li>
+          <li class="ml-3 p-1">
+            <a href="license.html" target="_blank" rel="noopener noreferrer" class="hover:underline text-blue-500 hover:text-blue-400 me-4 md:me-6">License</a>
+          </li>
+        </ul>
+      </div>
+    </footer>
+    <!-- END: Footer -->
+    <!-- BEGIN: JavaScript -->
+    <script src="./assets/js/ts.js" 
+integrity="sha384-TH4RWg6PiUgp3X5p0KFpJPI48AYQL3BjUGLmYsswiOPb3uRy6AfJ0OawHKaN2lmo" defer crossorigin="anonymous"></script>
+    <script src="./assets/js/ts.js" 
+integrity="sha384-TH4RWg6PiUgp3X5p0KFpJPI48AYQL3BjUGLmYsswiOPb3uRy6AfJ0OawHKaN2lmo" defer crossorigin="anonymous"></script>
+  </body>
+</html>

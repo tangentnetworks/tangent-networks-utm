@@ -1,0 +1,6 @@
+sbin/snortsentry
+@man man/man8/snortsentry.8
+share/examples/snortsentry/
+share/examples/snortsentry/snortsentry.conf
+share/doc/snortsentry/
+share/doc/snortsentry/README

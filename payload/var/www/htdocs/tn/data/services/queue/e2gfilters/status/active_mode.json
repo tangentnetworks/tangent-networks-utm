@@ -1,0 +1,10 @@
+{
+    "mode": "general",
+    "mode_name": "General (Adult Mode)",
+    "description": "Blocks malware and ads, no porn filtering",
+    "script": "e2g_adult_filter.sh",
+    "cron_hour": 10,
+    "cron_minute": 0,
+    "updated": 1776835453,
+    "updated_human": "2026-04-22 10:54:13"
+}

@@ -1,0 +1,16 @@
+Index: imspector.h
+--- imspector.h.orig
++++ imspector.h
+@@ -63,10 +63,10 @@
+ #define STRING_SIZE 1024
+ #define BUFFER_SIZE 65536
+ 
+-#define TRACE_DIR "/tmp/trace"
++#define TRACE_DIR "/tmp/imspector/trace"
+ 
+ #ifndef UNIX_PATH_MAX
+-#define UNIX_PATH_MAX 108
++#define UNIX_PATH_MAX 104
+ #endif
+ 
+ #define TYPE_NULL 0

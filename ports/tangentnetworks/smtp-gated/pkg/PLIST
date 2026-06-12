@@ -1,0 +1,5 @@
+@newgroup _smtp-gated:951
+@newuser _smtp-gated:951:951:daemon:SMTP proxy:/nonexistent:/sbin/nologin
+@man man/man5/smtp-gated.conf.5
+@man man/man8/smtp-gated.8
+@bin sbin/smtp-gated

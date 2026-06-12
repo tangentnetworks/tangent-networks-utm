@@ -1,0 +1,34 @@
+$ComixWall: patch-scanner_avpd_c,v 1.2 2009/07/25 09:55:30 soner Exp $
+Index: scanner_avpd.c
+--- scanner_avpd.c.orig
++++ scanner_avpd.c
+@@ -43,18 +43,18 @@
+ #include <time.h>
+ #include <sys/time.h>
+ #include <errno.h>
+-#include <malloc.h>
+ #include <sys/un.h>
+ #include <sys/socket.h>
+ #include <stdarg.h>
+ #include <dirent.h>
+ #include <ctype.h>
++#include <netinet/in.h>
+ 
+ #include "p3scan.h"
+ 
+ #define DEFAULT_SOCKET_PATH "/var/run"
+ 
+-struct configuration_t * config;
++extern struct configuration_t * config;
+ 
+ extern void * w_malloc(size_t bytes);
+ extern void w_free(void *f_address);
+@@ -79,7 +79,7 @@ static int avp_socket_connect(struct proxycontext *p){
+    if (avp_fd == -1){
+       bzero((char *)&avp_socket, sizeof(avp_socket));
+       avp_socket.sun_family=AF_UNIX;
+-      strcpy(avp_socket.sun_path, NodeCtl);
++      strlcpy(avp_socket.sun_path, NodeCtl, sizeof(avp_socket.sun_path));
+       if ((avp_fd=socket(AF_UNIX,SOCK_STREAM,0)) < 0 ){
+          do_log(LOG_CRIT, "create socket error: socket() not created %s", NodeCtl);
+          return -1;

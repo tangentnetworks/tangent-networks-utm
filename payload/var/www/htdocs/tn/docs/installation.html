@@ -1,0 +1,920 @@
+<!-- INSTALLATION VIEW -- Tangent Networks UTM -->
+
+<!-- ===========================================
+     INSTALLATION
+     =========================================== -->
+
+<h1>Installation</h1>
+
+<!--  Versions─-->
+<h2>Versions</h2>
+
+<div class="doc-table-wrap">
+  <table class="doc-table">
+    <thead>
+      <tr>
+        <th>Script</th>
+        <th>Version</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>TN_UTM_INSTALLER.sh</code></td><td>1.1.0</td></tr>
+      <tr><td><code>TN_NET_SET.sh</code></td><td>5.0.2-dual-lan</td></tr>
+      <tr><td><code>TN_SUBSTITUTE.sh</code></td><td>5.1.0</td></tr>
+      <tr><td><code>TN_PKG_INSTALL.sh</code></td><td>6.4.0</td></tr>
+      <tr><td><code>TN_CHROOT_SETUP.sh</code></td><td>4.2.0</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!--  Requirements── -->
+<h2>Requirements</h2>
+
+<dl>
+  <dt>Platform</dt>
+  <dd>OpenBSD only. Scripts will refuse to run on any other OS.</dd>
+
+  <dt>Shell</dt>
+  <dd><code>/bin/ksh</code> (pdksh). All scripts use <code>#!/bin/ksh</code>.
+  Do not run with bash, dash, or sh on any other platform.</dd>
+
+  <dt>Privileges</dt>
+  <dd>All scripts must run as root. Use <code>ksh &lt;script&gt;</code> -- do
+  not use <code>sudo</code> or <code>doas</code>.</dd>
+
+  <dt>Network topology</dt>
+  <dd>This installer targets a two-interface topology only -- one WAN interface
+  and one LAN interface. Each may be wired (ethernet or PPPoE) or wireless.
+  Wired ethernet on both interfaces is the recommended and tested path.
+  Multi-WAN, additional LAN interfaces, VLAN multi-tenancy, LAGG, and CARP/HA
+  are present in the scripts but dormant -- they are not production-ready and
+  will be enabled in release 8.0.</dd>
+
+  <dt>Internet access</dt>
+  <dd>Required during Stage 3 for <code>syspatch</code> and
+  <code>pkg_add</code>. The package mirror defaults to
+  <code>cloudflare.cdn.openbsd.org</code>. Custom local packages must be
+  present under <code>packages/amd64/</code> or <code>packages/aarch64/</code>
+  relative to the installer directory before Stage 3 runs.</dd>
+
+  <dt>Directory layout</dt>
+  <dd>All five scripts must be present in the same directory. The installer
+  creates and expects the following layout relative to that directory (see
+  below).</dd>
+</dl>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+  </div>
+  <pre><code>./
+├── TN_CHROOT_SETUP.sh
+├── TN_DISCOVERY.sh
+├── TN_NET_SET.sh
+├── TN_PKG_INSTALL.sh
+├── TN_RECON.sh
+├── TN_SUBSTITUTE.sh
+├── TN_TOKENIZE.sh
+├── TN_UTM_INSTALLER.sh
+├── TN_UTM_UNINSTALLER.sh
+├── TN_WEBUI_ASSETS_INVENTORY.pl
+├── oinkcode                     &lt;-- create this before running (see below)
+├── payload/
+│   ├── etc/
+│   └── usr/local/etc/
+├── packages/
+├── 7.8
+│   ├── aarch64
+│   └── amd64
+├── 7.9
+│   ├── aarch64
+│   └── amd64
+├── schema.sql
+└── logs/                        &lt;-- created automatically</code></pre>
+</div>
+
+<!--  Snort Oinkcode─ -->
+<h2 id="snort-oinkcode">Snort Oinkcode</h2>
+<p>
+  Stage 1 (<code>TN_NET_SET.sh</code>) requires a Snort registered-user
+  oinkcode to configure the IDS/IPS rule update pipeline. The oinkcode is a
+  40-character hex token issued by snort.org to registered accounts and is
+  used by oinkmaster to authenticate rule downloads.
+</p>
+<p>
+  Place the oinkcode in a file in the project root before running the
+  installer:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">ksh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>cd tangent-networks-utm
+echo 'oinkcode="YOUR_OINKCODE"' &gt; oinkcode</code></pre>
+</div>
+
+<p>
+  Replace <code>YOUR_OINKCODE</code> with your actual 40-character hex token.
+  To obtain one, register free at
+  <a href="https://snort.org/users/register" target="_blank" rel="noopener">snort.org/users/register</a>
+  and copy the oinkcode from your account profile page.
+</p>
+
+<dl>
+  <dt>Why a file rather than console entry</dt>
+  <dd>The oinkcode is 40 hex characters. Typing or pasting it on the console
+  during an interactive install session -- where echo is suppressed for
+  credential safety -- creates unnecessary risk of transcription error with no
+  visual feedback. Reading it from a file before the session begins is
+  reliable, repeatable, and avoids the problem entirely.</dd>
+
+  <dt>What the installer does with it</dt>
+  <dd>Stage 1 sources the file, validates that the value is exactly 40
+  lowercase hex characters, and patches it into
+  <code>payload/etc/oinkmaster.conf</code>. It is never written to
+  <code>/etc/tn-interfaces</code>, any log file, or any inventory file. The
+  file can be deleted after the installer completes.</dd>
+
+  <dt>If the file is absent or invalid</dt>
+  <dd>Stage 1 falls back to an interactive prompt. A correctly formatted value
+  is still required -- the install will not proceed without one.</dd>
+
+  <dt>File format</dt>
+  <dd>The file is sourced by ksh. Either of the following forms is accepted.
+  Case is normalised automatically. Whitespace around the value is stripped.</dd>
+</dl>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">ksh</span>
+  </div>
+  <pre><code>oinkcode="fead876bb1e***********************56c02e"
+
+# or equivalently:
+OINKCODE="fead876bb1e***********************56c02e"</code></pre>
+</div>
+
+<!--  Quick Start-->
+<h2>Quick Start</h2>
+<p>
+  For a normal first-time installation, place the oinkcode file as described
+  above, then run the master orchestrator as root from the installer directory:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>ksh TN_UTM_INSTALLER.sh</code></pre>
+</div>
+
+<p>
+  This runs all four stages in sequence. Two confirmation pauses (guards) are
+  inserted at points where it is worth reviewing what the previous stage
+  produced before continuing. Ctrl-C at any guard aborts cleanly.
+</p>
+<p>The master log is written to:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+  </div>
+  <pre><code>logs/utm_installer_&lt;YYYYMMDD_HHMMSS&gt;.log</code></pre>
+</div>
+
+<!--  Manual Sequence─ -->
+<h2>Manual Sequence</h2>
+<p>
+  If you need to run stages individually -- to resume after a failure, to
+  re-run a specific stage, or to debug a specific phase -- run each script
+  directly in order from the installer directory:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>ksh TN_NET_SET.sh
+ksh TN_SUBSTITUTE.sh
+ksh TN_PKG_INSTALL.sh
+ksh TN_CHROOT_SETUP.sh</code></pre>
+</div>
+
+<p>
+  Each script is independently idempotent or checkpoint-aware. Running an
+  already-completed script again will prompt before overwriting any prior work.
+</p>
+
+<!--  What Each Stage Does-->
+<h2>What Each Stage Does</h2>
+
+<!-- Stage 1 -->
+<h3>Stage 1 -- TN_NET_SET.sh</h3>
+<p>
+  Probes hardware, optionally updates firmware for wireless interfaces, and
+  walks the operator through 24 interactive stages covering:
+</p>
+<ul>
+  <li>WAN interface selection and type (ethernet, PPPoE, wireless)</li>
+  <li>PPPoE credentials and wireless WAN SSID/passphrase (if applicable)</li>
+  <li>Optional multi-WAN configuration (failover / load-balance / policy)</li>
+  <li>Optional VLAN and LAGG/trunk bonding</li>
+  <li>Primary and additional LAN interface selection</li>
+  <li>Subnet assignment with automatic MTU/MSS derivation</li>
+  <li>Wireless AP configuration (if applicable)</li>
+  <li>Optional CARP/HA configuration (requires second physical node)</li>
+  <li>Hostname assignment</li>
+  <li>Connectivity tests and deployment classification
+    (cgnat / dedicated / public / ipv6-only)</li>
+  <li>SSL CA and server certificate generation</li>
+  <li>Oinkcode configuration for Snort rule updates (file-first, keyboard
+    fallback -- see <a href="#snort-oinkcode">Snort Oinkcode</a> above)</li>
+</ul>
+<p>
+  Writes <code>/etc/tn-interfaces</code> -- the single source of truth consumed
+  by all subsequent stages. Also writes <code>/etc/hostname.*</code> interface
+  files and <code>/etc/mygate</code>.
+</p>
+
+<dl>
+  <dt>Interactive</dt><dd>Yes. Expect to spend 10–20 minutes depending on topology complexity.</dd>
+  <dt>Logs</dt><dd><code>logs/network-setup.log</code></dd>
+  <dt>Completion sentinel</dt><dd><code>/etc/tn-network-setup.status</code></dd>
+</dl>
+
+<div class="callout callout-note">
+  <p><strong>Credential handling.</strong> All SSIDs, passphrases, PSKs, and
+  PPPoE credentials are read with echo disabled and written only to
+  <code>/etc/hostname.*</code> files (mode 640, root:wheel). They are never
+  written to <code>/etc/tn-interfaces</code>, the log, or any inventory file.
+  The in-memory variable is zeroed immediately after each write. The oinkcode
+  follows the same policy: it is patched into
+  <code>payload/etc/oinkmaster.conf</code> and never appears in any log or
+  inventory file.</p>
+</div>
+
+<!-- Stage 2 -->
+<h3>Stage 2 -- TN_SUBSTITUTE.sh</h3>
+<div class="callout callout-note">
+  <p>For documentation purposes, the per mille symbol (‰) is used instead 
+  of the ASCII percent character (%) to avoid triggering automated substitution 
+  routines. When implementing the examples, replace every occurrence of ‰ 
+  with the standard ASCII % character.</p>
+</div>
+<p>
+  Non-interactive. Reads <code>/etc/tn-interfaces</code> and expands all
+  <code>‰‰TOKEN‰‰</code> placeholders across every text file in
+  <code>payload/</code>. Also:
+</p>
+<ul>
+  <li>Sets the live hostname via <code>/etc/myname</code></li>
+  <li>Renames any <code>.template</code> files by stripping the suffix</li>
+  <li>Recomputes SHA-384 SRI hashes for all JS assets referenced in HTML files</li>
+  <li>Runs a second defensive pass over system-critical files to catch any
+    tokens missed by the primary pass</li>
+  <li>Fails hard if any <code>‰‰TOKEN‰‰</code> pattern remains in any payload
+    file after expansion</li>
+</ul>
+<p>A dry run (no files modified) is available for rehearsal:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>ksh TN_SUBSTITUTE.sh --dry-run</code></pre>
+</div>
+
+<dl>
+  <dt>Interactive</dt><dd>No.</dd>
+  <dt>Logs</dt><dd><code>logs/substitute.log</code></dd>
+</dl>
+
+<!-- Stage 3 -->
+<h3>Stage 3 -- TN_PKG_INSTALL.sh</h3>
+<p>
+  The longest stage. Runs 13 phases, each checkpointed so a restart resumes
+  from the first incomplete phase rather than from the beginning:
+</p>
+
+<div class="doc-table-wrap">
+  <table class="doc-table">
+    <thead>
+      <tr><th>Phase</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>00</td><td><code>syspatch</code> (system patches) and <code>pkg_add -u</code> (package upgrades)</td></tr>
+      <tr><td>01</td><td>SHA256 hash verification of custom local packages</td></tr>
+      <tr><td>02</td><td>Mirror package installation</td></tr>
+      <tr><td>03</td><td>Version-resolved package installation</td></tr>
+      <tr><td>04</td><td>Unflavored package installation</td></tr>
+      <tr><td>05</td><td>Custom local package installation</td></tr>
+      <tr><td>06</td><td>Installation verification (all expected packages present)</td></tr>
+      <tr><td>07</td><td>Bootstrap infrastructure (dirs, MFS, pmacct profiles)</td></tr>
+      <tr><td>08</td><td>Payload deploy -- <code>/usr/local/sbin/</code>, <code>/etc/</code>, webroot</td></tr>
+      <tr><td>09</td><td>System config merges (sysctl, syslog, httpd, crontab)</td></tr>
+      <tr><td>10</td><td>AuthDB initialisation (schema, admin account)</td></tr>
+      <tr><td>11</td><td>Service smoke tests for all UTM daemons</td></tr>
+      <tr><td>12</td><td><code>pf.conf</code> syntax validation and deploy, <code>pfctl</code> reload</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>On any phase failure the operator is prompted:</p>
+<ul>
+  <li><strong>y</strong> -- problem fixed, retry the failed step immediately</li>
+  <li><strong>n</strong> -- write a phase checkpoint and exit; re-run the script to resume</li>
+</ul>
+<p>
+  No automatic rollback is performed. A pre-install package snapshot and
+  backed-up configs are preserved in <code>rollback/&lt;timestamp&gt;/</code>
+  for manual recovery if needed.
+</p>
+<p>
+  If a public domain is configured, a DNS propagation confirmation prompt is
+  shown before package installation begins. Answering <code>n</code> continues
+  the install with a self-signed certificate instead.
+</p>
+
+<dl>
+  <dt>Interactive</dt><dd>Yes (retry prompts, DNS confirmation, rollback prompt on failure).</dd>
+  <dt>Logs</dt><dd><code>logs/pkg-install.log</code></dd>
+  <dt>Phase state file</dt><dd><code>.install_phases</code> (in installer directory)</dd>
+  <dt>Completion sentinel</dt><dd><code>/root/packages-setup</code></dd>
+</dl>
+
+<!-- Stage 4 -->
+<h3>Stage 4 -- TN_CHROOT_SETUP.sh</h3>
+<p>
+  Populates the <code>/var/www</code> chroot for the web stack. Copies:
+</p>
+<ul>
+  <li>Perl binary and all required <code>perl5</code> and <code>site_perl</code>
+    libraries (collectd XS modules excluded -- they run outside the chroot)</li>
+  <li>All shared libraries resolved via <code>ldd</code></li>
+  <li><code>ld.so.hints</code> (via <code>ldconfig</code> inside the chroot,
+    with host-hints fallback)</li>
+  <li>Timezone data</li>
+  <li>Device nodes (<code>/var/www/dev/</code>)</li>
+  <li>Runtime directories with correct ownership and permissions</li>
+  <li>Session key files (root:wheel 600, frozen after write)</li>
+</ul>
+<p>
+  After copying, runs a live Perl module load test inside the chroot to verify
+  the environment is functional. Writes a manifest of every file copied
+  (<code>chroot-manifest.txt</code>) and its SHA256
+  (<code>chroot-manifest.sha256</code>).
+</p>
+<p>
+  Re-runs are safe -- the script verifies the manifest SHA256 on entry and
+  prompts before overwriting a prior successful setup. A verify-only mode (no
+  writes) is available:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>ksh TN_CHROOT_SETUP.sh --verify</code></pre>
+</div>
+
+<dl>
+  <dt>Interactive</dt><dd>Yes (idempotency re-run confirmation).</dd>
+  <dt>Logs</dt><dd><code>logs/chroot-setup.log</code></dd>
+  <dt>Completion sentinel</dt><dd><code>~/chroot-setup</code></dd>
+</dl>
+
+<!--  Logs── -->
+<h2>Logs</h2>
+<p>All logs are written to the <code>logs/</code> directory relative to the installer:</p>
+
+<div class="doc-table-wrap">
+  <table class="doc-table">
+    <thead>
+      <tr><th>Log file</th><th>Written by</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>logs/network-setup.log</code></td><td>TN_NET_SET.sh</td></tr>
+      <tr><td><code>logs/substitute.log</code></td><td>TN_SUBSTITUTE.sh</td></tr>
+      <tr><td><code>logs/pkg-install.log</code></td><td>TN_PKG_INSTALL.sh</td></tr>
+      <tr><td><code>logs/chroot-setup.log</code></td><td>TN_CHROOT_SETUP.sh</td></tr>
+      <tr><td><code>logs/utm_installer_&lt;timestamp&gt;.log</code></td><td>TN_UTM_INSTALLER.sh</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>
+  The master log contains orchestration events only (stage transitions, guard
+  confirmations, abort reasons). Operational detail is in the individual script
+  logs.
+</p>
+
+<!--  Resuming a Failed Installation ── -->
+<h2>Resuming a Failed Installation</h2>
+<p>
+  The master orchestrator has no checkpoint system of its own. On failure,
+  identify which stage failed from the master log, then re-run that script
+  directly:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>ksh TN_NET_SET.sh       # re-prompts all 24 stages; prior status file
+                        # is overwritten on completion
+ksh TN_SUBSTITUTE.sh    # safe to re-run; re-expands all tokens
+ksh TN_PKG_INSTALL.sh   # resumes from first incomplete phase via
+                        # .install_phases checkpoint file
+ksh TN_CHROOT_SETUP.sh  # idempotent; prompts before overwriting
+                        # a prior successful run</code></pre>
+</div>
+
+<p>
+  To force <code>TN_PKG_INSTALL.sh</code> to restart from phase 0 rather than
+  resuming, delete the phase state file before re-running:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>rm .install_phases
+ksh TN_PKG_INSTALL.sh</code></pre>
+</div>
+
+<!--  Topology Constraint-->
+<h2>Topology Constraint</h2>
+<p>This installer supports the following topology only:</p>
+<ul>
+  <li>One WAN interface (ethernet, PPPoE, or wireless)</li>
+  <li>One or more LAN interfaces (physical, VLAN, or LAGG)</li>
+  <li>Single machine (no clustering)</li>
+</ul>
+<p>
+  The following features are implemented in the scripts but not
+  production-ready and must not be enabled:
+</p>
+
+<div class="doc-table-wrap">
+  <table class="doc-table">
+    <thead>
+      <tr><th>Feature</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Multi-WAN (failover / load-balance / policy)</td><td>Dormant -- gated for 8.0</td></tr>
+      <tr><td>VLAN multi-tenancy</td><td>Dormant -- gated for 8.0</td></tr>
+      <tr><td>N+1 LAN scaling</td><td>Dormant -- gated for 8.0</td></tr>
+      <tr><td>CARP / HA (requires second physical node)</td><td>Dormant -- gated for 8.0</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!--  Credential Handling-->
+<h2>Credential Handling</h2>
+<p>
+  Credentials entered during Stage 1 (PPPoE username/password, wireless
+  passphrases, CARP shared secret, oinkcode) are handled as follows:
+</p>
+<ul>
+  <li>Read with terminal echo disabled via <code>_read_secret</code>, or
+    sourced from the <code>oinkcode</code> file in the project root (oinkcode
+    only)</li>
+  <li>Written only to <code>/etc/hostname.&lt;ifname&gt;</code> (mode 640,
+    root:wheel) for network credentials; patched into
+    <code>payload/etc/oinkmaster.conf</code> for the oinkcode</li>
+  <li>Never written to <code>/etc/tn-interfaces</code>, any log file, or any
+    inventory file -- the inventory stores the marker string
+    <code>(stored in hostname file)</code> in place of actual network
+    credential values</li>
+  <li>Zeroed in memory immediately after each write via
+    <code>_clear_secret</code></li>
+</ul>
+<p>
+  The SSL CA private key and server private key generated in Stage 1 are
+  written to their standard paths under <code>/etc/ssl/</code> with mode 600.
+</p>
+
+
+<!-- ===========================================
+     UNINSTALLATION
+     =========================================== -->
+
+<h1>Uninstallation</h1>
+
+<!--  Overview-->
+<h2>Overview</h2>
+<p>
+  <code>TN_UTM_UNINSTALLER.sh</code> removes the Tangent Networks UTM
+  installation from an OpenBSD machine in a controlled, step-by-step sequence.
+  Every destructive action pauses for explicit operator confirmation so you can
+  inspect, backup, or skip anything before it is removed or restored.
+</p>
+<p>
+  Each uninstall step is <strong>sentinel-gated</strong> -- it only runs if the
+  installer script that owns it completed successfully. This makes the
+  uninstaller safe for partial installs and for installs where individual
+  scripts were run independently rather than via
+  <code>TN_UTM_INSTALLER.sh</code>.
+</p>
+
+<div class="callout callout-warning">
+  <p><strong>Run as root.</strong> Must be run from the same directory that
+  contains the installer scripts, <code>net-backup/</code>,
+  <code>chroot-manifest.txt</code>, and <code>rollback/</code>.</p>
+</div>
+
+<!--  Usage -->
+<h2>Usage</h2>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>ksh TN_UTM_UNINSTALLER.sh</code></pre>
+</div>
+
+<!--  Confirmation Model─-->
+<h2>Confirmation Model</h2>
+<p>Each step presents:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+  </div>
+  <pre><code>  Proceed? [y/N/q]:</code></pre>
+</div>
+
+<ul>
+  <li><strong>y</strong> -- proceed with this step</li>
+  <li><strong>n</strong> (or Enter) -- skip this step, continue to the next</li>
+  <li><strong>q</strong> -- quit immediately, no further steps executed</li>
+</ul>
+<p>
+  Before any step runs, type <code>CONFIRM</code> at the master prompt.
+  Anything other than the exact word <code>CONFIRM</code> aborts cleanly.
+  Skipped steps are logged. Re-run the uninstaller and answer <code>n</code>
+  to already-completed steps.
+</p>
+
+<!--  Sentinel Gates -->
+<h2>Sentinel Gates</h2>
+<p>
+  Each install script writes a sentinel file on successful completion. The
+  uninstaller reads these before each step and skips any step whose sentinel
+  is absent:
+</p>
+
+<div class="doc-table-wrap">
+  <table class="doc-table">
+    <thead>
+      <tr><th>Sentinel</th><th>Written by</th><th>Gates</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>/etc/tn-network-setup.status</code></td>
+        <td><code>TN_NET_SET.sh</code></td>
+        <td>Step 7 (restore system files), Step 8 (SSL certs)</td>
+      </tr>
+      <tr>
+        <td><code>/root/packages-setup</code></td>
+        <td><code>TN_PKG_INSTALL.sh</code></td>
+        <td>Steps 1–5 (services, packages, sbin, webroot, authdb)</td>
+      </tr>
+      <tr>
+        <td><code>~/chroot-setup</code></td>
+        <td><code>TN_CHROOT_SETUP.sh</code></td>
+        <td>Step 6 (chroot removal)</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<p>Steps 9 and 10 are not gated -- always safe regardless of install state.</p>
+
+<!--  Installation Status Summary -->
+<h2>Installation Status Summary</h2>
+<p>
+  Before asking for <code>CONFIRM</code>, the uninstaller prints what
+  completed and what will be skipped, for example:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+  </div>
+  <pre><code>[OK]    TN_NET_SET.sh:      complete  (/etc/tn-network-setup.status)
+[OK]    TN_PKG_INSTALL.sh:  complete  (/root/packages-setup)
+[WARN]  TN_CHROOT_SETUP.sh: sentinel not found -- Step 6 will be skipped
+        If mfs was used, unmount manually first.
+[OK]    net-backup/:          present
+[WARN]  chroot-manifest.txt:  not found -- Step 6 removal skipped
+[OK]    sbin-manifest.txt:    present</code></pre>
+</div>
+
+<!--  Before You Begin -->
+<h2>Before You Begin</h2>
+
+<div class="callout callout-note">
+  <p><strong>MFS volumes.</strong> The UTM mounts two MFS volumes under the
+  webroot at runtime: <code>/var/www/htdocs/tn/data/logs/pf</code> (pf log
+  buffer) and <code>/var/www/htdocs/tn/data/pipes/pmacct</code> (pmacct pipe).
+  Step 7 unmounts these after restoring fstab. Step 10 catches any that
+  survive. Active log mounts that cannot be force-unmounted are released
+  automatically on reboot -- after rebooting run:</p>
+  <div class="doc-code-block">
+    <div class="doc-code-header">
+      <span class="doc-code-lang">sh</span>
+      <button class="doc-code-copy" type="button">
+        <span class="doc-code-copy-label">Copy</span>
+      </button>
+    </div>
+    <pre><code>rm -rf /var/www/htdocs/tn</code></pre>
+  </div>
+</div>
+
+<dl>
+  <dt>You need net-backup/</dt>
+  <dd><code>TN_NET_SET.sh</code> creates <code>net-backup/</code> in the
+  installer directory on first run. If it is missing, Step 7 is skipped and
+  you must restore system config files manually from your own backups or
+  OpenBSD defaults.</dd>
+
+  <dt>Remove the TN CA certificate from your devices</dt>
+  <dd>The installer generates a local CA (<code>tn-ca.crt</code>) installed
+  in <code>/etc/ssl/</code>. If you distributed this to browsers or devices
+  on your network for SSL inspection trust, remove it from those devices before
+  or immediately after running the uninstaller. After the CA private key is
+  deleted, any certificate signed by it will produce trust errors.</dd>
+
+  <dt>Plan for a reboot</dt>
+  <dd>A reboot is required after uninstalling. The <code>hostname.*</code>
+  and <code>mygate</code> files restored in Step 7 do not take effect until
+  the system restarts.</dd>
+</dl>
+
+<!--  net-backup/ Coverage -->
+<h2>net-backup/ Coverage</h2>
+<p>
+  <code>net-backup/</code> is written by two scripts and covers all system
+  files the installer pipeline modifies.
+</p>
+
+<p><strong>TN_NET_SET.sh backs up:</strong></p>
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+  </div>
+  <pre><code>/etc/myname          /etc/mygate          /etc/resolv.conf
+/etc/rc              /etc/rc.conf.local   /etc/sysctl.conf
+/etc/syslog.conf     /etc/newsyslog.conf  /etc/crontab
+/etc/pf.conf         /etc/hostname.*      /etc/fstab
+/etc/mail/smtpd.conf</code></pre>
+</div>
+
+<p><strong>TN_PKG_INSTALL.sh backs up (if present before install):</strong></p>
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+  </div>
+  <pre><code>/etc/rc.local</code></pre>
+</div>
+
+<p>
+  Files absent from <code>net-backup/</code> were not present before the
+  install. The uninstaller truncates rather than restores those files —
+  specifically <code>/etc/rc.local</code> and <code>/etc/crontab</code> which
+  are not present on all OpenBSD systems by default.
+</p>
+
+<!--  What Each Step Does-->
+<h2>What Each Step Does</h2>
+
+<h3>Step 1 -- Stop and Disable Services</h3>
+<p><em>Gated by: <code>/root/packages-setup</code></em></p>
+<p>
+  Stops and disables all UTM services via <code>rcctl</code>. Local services
+  stopped before base services. <code>cron</code> and <code>syslogd</code>
+  stopped last.
+</p>
+
+<h3>Step 2 -- Remove Packages</h3>
+<p><em>Gated by: <code>/root/packages-setup</code></em></p>
+<p>
+  Removes all packages installed by <code>TN_PKG_INSTALL.sh</code> via
+  <code>pkg_delete -f</code>. Custom packages removed first. Only
+  actually-installed packages are acted on.
+</p>
+
+<h3>Step 3 -- Remove /usr/local/sbin Files</h3>
+<p><em>Gated by: <code>/root/packages-setup</code> and <code>rollback/sbin-manifest.txt</code></em></p>
+<p>
+  Removes UTM binaries from <code>/usr/local/sbin/</code> per the sbin
+  manifest. Only listed files removed.
+</p>
+
+<h3>Step 4 -- Remove Webroot</h3>
+<p><em>Gated by: <code>/root/packages-setup</code></em></p>
+<p>
+  Removes <code>/var/www/htdocs/tn/</code> entirely. Wholly our creation.
+</p>
+
+<h3>Step 5 -- Remove AuthDB and Session Keys</h3>
+<p><em>Gated by: <code>/root/packages-setup</code></em></p>
+<p>
+  Removes <code>auth.db</code>, <code>session.key</code>, and
+  <code>hmac.key</code>. Wholly our creation.
+</p>
+
+<h3>Step 6 -- Remove Chroot Additions</h3>
+<p><em>Gated by: <code>~/chroot-setup</code> and <code>chroot-manifest.txt</code></em></p>
+<p>
+  Removes all files and directories added to the <code>/var/www</code> chroot
+  per <code>chroot-manifest.txt</code>.
+</p>
+
+<h3>Step 7 -- Restore System Config Files</h3>
+<p><em>Gated by: <code>/etc/tn-network-setup.status</code> or <code>/root/packages-setup</code></em></p>
+<p>
+  Restores original system files from <code>net-backup/</code>:
+</p>
+<ul>
+  <li>Files present in <code>net-backup/</code> are restored to
+    <code>/etc/</code> verbatim</li>
+  <li><code>/etc/rc.local</code> absent from <code>net-backup/</code> →
+    truncated (did not exist before install)</li>
+  <li><code>/etc/crontab</code> absent from <code>net-backup/</code> →
+    truncated (did not exist before install)</li>
+</ul>
+
+<div class="callout callout-warning">
+  <p><strong>A reboot is required after this step.</strong></p>
+</div>
+
+<h3>Step 8 -- Remove SSL Certificates and CA</h3>
+<p><em>Gated by: <code>/etc/tn-network-setup.status</code></em></p>
+<p>
+  Removes <code>tn-ca.crt</code>, <code>tn-ca.serial</code>, and the server
+  cert/key. <code>CERT_CN</code> is read from <code>/etc/tn-interfaces</code>
+  while it still exists -- this step runs before Step 9.
+</p>
+
+<h3>Step 9 -- Remove Sentinels and Inventory Files</h3>
+<p><em>Not gated.</em></p>
+<p>
+  Removes all installer state files including <code>/etc/tn-interfaces</code>,
+  <code>/etc/tn-install-date</code>, <code>/root/packages-setup</code>,
+  <code>~/chroot-setup</code>, <code>/etc/tn-network-setup.status</code>, and
+  <code>.install_phases</code>.
+</p>
+
+<h3>Step 10 -- Remove Installer Logs and Rollback Directory</h3>
+<p><em>Not gated -- optional.</em></p>
+<p>
+  Removes <code>logs/</code> and <code>rollback/</code> including the uninstall
+  log itself. Copy the log elsewhere before confirming if you need a permanent
+  record.
+</p>
+
+<!--  What the Uninstaller Does Not Do -->
+<h2>What the Uninstaller Does Not Do</h2>
+<ul>
+  <li><strong>Does not reboot.</strong> Reboot manually after completion.</li>
+  <li><strong>Does not remove the installer directory</strong> itself.</li>
+  <li><strong>Does not remove OpenBSD base packages</strong> or system users
+    from <code>pkg_add</code>.</li>
+  <li><strong>Does not touch <code>/var/www/</code> base chroot</strong>
+    outside <code>chroot-manifest.txt</code>.</li>
+</ul>
+
+<!--  After Uninstall -->
+<h2>After Uninstall</h2>
+<ol>
+  <li><strong>Reboot</strong> the machine.</li>
+  <li>Verify network connectivity from the pre-install config.</li>
+  <li>Remove <code>tn-ca.crt</code> from browsers and devices on your network.</li>
+  <li>Remove the installer directory when satisfied:</li>
+</ol>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>rm -rf /path/to/installer/</code></pre>
+</div>
+
+<h3>Post-Reboot Cleanup</h3>
+<p>
+  If the uninstaller reported that <code>/var/www/htdocs/tn</code> could not
+  be fully removed due to an active MFS log mount
+  (<code>data/logs/pf</code>), this is expected. The MFS mount is released
+  automatically when the system shuts down.
+</p>
+<p>After the mandatory reboot, verify the mount is gone:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>mount | grep mfs</code></pre>
+</div>
+
+<p>If nothing is returned, remove the remaining webroot:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>rm -rf /var/www/htdocs/tn</code></pre>
+</div>
+
+<p>
+  If an MFS mount is still listed after reboot, it means an entry in
+  <code>/etc/rc.local</code> or <code>/etc/fstab</code> is remounting it at
+  boot. Check both:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>grep -i mfs /etc/fstab
+grep -i mfs /etc/rc.local</code></pre>
+</div>
+
+<p>
+  Remove any TN-related MFS entries found there, then reboot once more and
+  retry the removal.
+</p>
+
+<!--  Resuming a Partial Uninstall -->
+<h2>Resuming a Partial Uninstall</h2>
+<p>
+  Re-run the script. Steps whose targets are already absent skip cleanly.
+  Answer <code>n</code> to steps you know are already done.
+</p>
+
+<!--  Install Date Resolution -->
+<h2>Install Date Resolution</h2>
+<p>Resolved in order:</p>
+<ol>
+  <li><code>TN_INSTALL_DATE</code> stamped into script by
+    <code>TN_UTM_INSTALLER.sh</code></li>
+  <li><code>/etc/tn-install-date</code> written by
+    <code>TN_CHROOT_SETUP.sh</code></li>
+  <li>Date extracted from first line of
+    <code>/etc/tn-network-setup.status</code></li>
+  <li>Falls back to <code>unknown</code></li>
+</ol>
+<p>Used for informational purposes only. All steps are sentinel-gated.</p>
+
+<!--  Uninstall Logs -->
+<h2>Uninstall Logs</h2>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+  </div>
+  <pre><code>&lt;installer_dir&gt;/logs/uninstall_&lt;YYYYMMDD_HHMMSS&gt;.log</code></pre>
+</div>
+
+<p>
+  Every action, confirmation, skip, and warning is recorded. Copy before
+  confirming Step 10 if you need a permanent record.
+</p>

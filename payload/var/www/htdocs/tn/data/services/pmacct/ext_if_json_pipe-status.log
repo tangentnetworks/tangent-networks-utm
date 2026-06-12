@@ -1,0 +1,1 @@
+60480 /usr/local/sbin/pmacctd -f /etc/pmacct/ext_if_json_pipe.conf

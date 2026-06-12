@@ -1,0 +1,226 @@
+<!-- BEGIN: Elements -->
+<div class="mx-auto max-w-full">
+  <!-- BEGIN: Page Header -->
+  <div class="mb-4 p-2">
+    <h1 class="mb-2 text-2xl font-bold text-gray-700 md:text-3xl dark:text-white">Dashboard Overview</h1>
+    <p class="text-gray-600 dark:text-gray-400">Monitor your system performance and alerts</p>
+  </div>
+  <!-- BEGIN: Summary Cards Row (4 cards) -->
+  <div class="mb-6 grid grid-cols-1 gap-4 p-2 sm:grid-cols-2 lg:grid-cols-4">
+    <!-- BEGIN: CPU Load -->
+    <div id="card-cpu" class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <div class="mb-4 flex items-center justify-between">
+        <p class="text-sm font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">CPU Load</p>
+        <div class="rounded-lg bg-blue-50 p-2 dark:bg-blue-900/20">
+          <svg class="h-5 w-5 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+          </svg>
+        </div>
+      </div>
+      <p class="metric-value mb-2 text-3xl font-bold text-gray-900 dark:text-white">--%</p>
+      <div class="flex items-center text-sm">
+        <span class="flex items-center font-medium text-green-600 dark:text-green-400">
+          <svg class="mr-1 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15v4m6-6v6m6-4v4m6-6v6M3 11l6-5 6 5 5.5-5.5"/>
+          </svg>
+          CPU Time
+        </span>
+        <span class="ml-2 text-gray-500 dark:text-gray-400">System Avg</span>
+      </div>
+    </div>
+    <!-- END: CPU Load -->
+    <!-- BEGIN: Memory Usage -->
+    <div id="card-mem" class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <div class="mb-4 flex items-center justify-between">
+        <p class="text-sm font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">Memory Usage</p>
+        <div class="rounded-lg bg-blue-50 p-2 dark:bg-blue-900/20">
+          <svg class="h-5 w-5 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+	      <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.35709 16V5.78571c0-.43393.34822-.78571.77777-.78571H18.5793c.4296 0 .7778.35178.7778.78571V16M5.35709 16h-1c-.55229 0-1 .4477-1 1v1c0 .5523.44771 1 1 1H20.3571c.5523 0 1-.4477 1-1v-1c0-.5523-.4477-1-1-1h-1M5.35709 16H19.3571M9.35709 8l2.62501 2.5L9.35709 13m4.00001 0h2" />
+          </svg>
+        </div>
+      </div>
+      <p class="metric-value mb-2 text-3xl font-bold text-gray-900 dark:text-white">-- GB</p>
+      <div class="flex items-center text-sm">
+       <span class="metric-footer-pct flex items-center font-medium text-green-600 dark:text-green-400">
+	<svg class="mr-1 h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M3 14a1 1 0 011-1h1a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z"/>
+          <path d="M8 10a1 1 0 011-1h1a1 1 0 011 1v6a1 1 0 01-1 1H9a1 1 0 01-1-1v-6z"/>
+          <path d="M13 6a1 1 0 011-1h1a1 1 0 011 1v10a1 1 0 01-1 1h-1a1 1 0 01-1-1V6z"/>
+        </svg>
+       </span>
+       <span class="metric-footer-label ml-2 text-green-600 dark:text-green-400">Initializing...</span>
+      </div>
+    </div>
+    <!-- END: Memory Usage -->
+    <!-- BEGIN: Disk Utilization -->
+    <div id="card-disk" class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <div class="mb-4 flex items-center justify-between">
+        <p class="text-sm font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">Disk Space</p>
+	<div class="rounded-lg bg-blue-50 p-2 dark:bg-blue-900/20">
+          <svg class="h-5 w-5 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+	    <path fill-rule="evenodd" d="M5 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7.414A2 2 0 0 0 20.414 6L18 3.586A2 2 0 0 0 16.586 3H5Zm3 11a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v6H8v-6Zm1-7V5h6v2a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
+            <path fill-rule="evenodd" d="M14 17h-4v-2h4v2Z" clip-rule="evenodd"/>
+          </svg>          
+        </div>
+      </div>
+      <p class="metric-value mb-2 text-3xl font-bold text-gray-900 dark:text-white">-- GB</p>
+      <div class="flex items-center text-sm">
+        <span class="metric-footer-pct flex items-center font-medium text-green-600 dark:text-green-400">
+          <svg class="mr-1 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 6.5h2M11 18h2m-7-5v-2m12 2v-2M5 8h2a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1Zm0 12h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1Zm12 0h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1Zm0-12h2a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1Z"/>
+          </svg>
+          --% Used
+        </span>
+        <span class="ml-2 text-gray-500 dark:text-gray-400">Root Partition</span>
+      </div>
+    </div>
+    <!-- END: Disk Utilization -->
+    <!-- BEGIN: Network I/O -->
+    <div id="card-net" class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <div class="mb-4 flex items-center justify-between">
+        <p class="text-sm font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">Network I/O</p>
+        <div class="rounded-lg bg-blue-50 p-2 dark:bg-blue-900/20">
+          <svg class="h-5 w-5 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+        </div>
+      </div>
+      <!-- NOTE: Shows WAN by default -->
+      <p class="metric-value mb-2 text-3xl font-bold text-gray-900 dark:text-white">-- Mbps</p>
+      <div class="flex flex-col text-sm">
+        <div class="mb-1 flex items-center">
+          <span class="interface-label flex items-center font-medium text-green-600 dark:text-green-400">
+            <svg class="mr-1 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            %%EXT_IF%% (WAN)
+          </span>
+          <span class="metric-footer-wan ml-2 text-gray-500 dark:text-gray-400">-- ↑ / -- ↓</span>
+        </div>
+        <div class="mt-1 flex items-center border-t border-gray-100 pt-1 dark:border-gray-700">
+          <span class="mr-2 text-xs font-semibold text-gray-400">%%INT_IF%% (LAN):</span>
+          <span class="metric-footer-lan text-xs text-gray-500 dark:text-gray-400">-- ↑ / -- ↓</span>
+        </div>
+      </div>
+    </div>
+    <!-- END: Network I/O -->
+  </div>
+  <!-- END: System Dashboard -->
+</div>
+<!-- BEGIN: Firewall State -->
+<div class="flex w-full flex-col gap-6 p-2">
+  <!-- BEGIN: Vitals -->
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <!-- BEGIN: ACTIVE STATES -->
+    <div class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <h2 class="font-800 mb-1 text-[10px] tracking-tighter text-gray-400 uppercase">Active States</h2>
+      <div id="stat-states" class="font-900 text-4xl tracking-tighter text-blue-500 tabular-nums">0</div>
+      <div class="mt-1 flex items-center justify-between">
+        <p class="font-400 text-[10px] tracking-widest uppercase text-blue-500 dark:text-blue-400 italic opacity-40">Table Occupancy</p>
+        <p id="last-update" class="font-400 text-[9px] text-blue-500 dark:text-blue-400 tracking-tighter uppercase tabular-nums opacity-30">Syncing...</p>
+      </div>
+    </div>
+    <!-- END: ACTIVE STATES -->
+    <!-- BEGIN: SEARCHES STATS -->
+    <div class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <h2 class="font-800 mb-1 text-[10px] tracking-tighter text-gray-400 uppercase">Total Searches</h2>
+      <div id="stat-search" class="font-900 text-4xl tracking-tighter text-blue-500 tabular-nums">0</div>
+      <p class="font-400 mt-1 text-[10px] tracking-widest uppercase text-blue-500 dark:text-blue-400 italic opacity-40">Global Lookups</p>
+    </div>
+    <!-- END: SEARCHES STATS -->
+    <!-- BEGIN: STATUS STATS -->
+    <div class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <h2 class="font-800 mb-1 text-[10px] tracking-tighter text-gray-400 uppercase">PF Firewall Status</h2>
+      <div id="stat-health" class="font-900 text-4xl tracking-tighter tabular-nums">...</div>
+      <p id="stat-uptime" class="font-400 mt-1 text-[10px] tracking-widest text-blue-500 dark:text-blue-400 uppercase italic opacity-40">Since: --:--:--</p>
+    </div>
+    <!-- END: STATUS -->
+    <!-- BEGIN: STATE CHURN -->
+    <div class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <h2 class="font-800 mb-1 text-[10px] tracking-tighter text-gray-400 uppercase">State Churn</h2>
+      <div id="stat-churn" class="font-900 text-4xl text-blue-500  tracking-tighter tabular-nums">0</div>
+      <p class="font-400 mt-1 text-[10px] tracking-widest text-blue-500 dark:text-blue-400 uppercase italic opacity-40">Inserts - Removals</p>
+    </div>
+    <!-- END: STATE CHURN -->
+  </div>
+  <!-- END: Vitals -->
+  <!-- BEGIN: PF Main Dual-Pane Section -->
+  <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+    <!-- BEGIN: PF Audit Table -->
+    <!-- BEGIN: PF Audit Table -->
+    <section class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm lg:col-span-8 dark:border-gray-700 dark:bg-gray-800">
+      <div class="mb-6 flex items-baseline justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
+        <h3 class="font-900 text-xs tracking-widest uppercase">Rule Efficiency Audit</h3>
+        <span class="text-[10px] font-bold tracking-tighter uppercase opacity-40">Evaluation Ratios</span>
+      </div>
+      <!-- Desktop Table (hidden on mobile) -->
+      <div class="hidden overflow-x-auto md:block">
+        <table class="w-full border-collapse text-left">
+          <thead>
+            <tr class="font-800 text-[10px] tracking-tighter text-gray-400 uppercase">
+              <th class="pb-4">Rule ID</th>
+              <th class="pb-4 text-right">Packets</th>
+              <th class="pb-4 text-right">Evals</th>
+              <th class="pb-4 text-right">Ratio</th>
+              <th class="pb-4 text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody id="rule-audit-body" class="text-xs tabular-nums">
+            <!-- NOTE: Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+      <!-- NOTE: Mobile List (hidden on desktop) -->
+      <div class="md:hidden">
+        <ol id="rule-audit-list" class="divide-y divide-gray-100 dark:divide-gray-700">
+          <!-- NOTE: Populated by JS (mirror the table data) -->
+        </ol>
+      </div>
+    </section>
+    <!-- END: PF Audit Table -->
+    <!-- BEGIN: Traffic Distribution -->
+    <section class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm lg:col-span-4 dark:border-gray-700 dark:bg-gray-800">
+      <div class="mb-6 flex items-baseline justify-between border-b border-gray-100 pb-2 dark:border-gray-700">
+        <h3 class="font-900 text-xs tracking-widest uppercase">Throughput</h3>
+        <span class="text-[10px] font-bold tracking-tighter uppercase opacity-40">Top 10 Volume</span>
+      </div>
+      <div id="traffic-volume-list" class="space-y-6">
+        <!-- NOTE: Populated by JS -->
+      </div>
+    </section>
+    <!-- END: Traffic Distribution -->
+  </div>
+  <!-- END: PF Main Dual-Pane Section -->
+</div>
+<!-- END: Firewall Performance Section -->
+<!-- BEGIN: Process/Services Table Section -->
+<div class="mb-8 bg-gray-50 p-2 text-gray-700 dark:bg-gray-900 dark:text-white">
+  <div class="mb-4 flex items-center justify-between">
+    <h3 class="text-lg font-semibold text-gray-700 dark:text-white">Security Infrastructure Services</h3>
+    <span class="font-mono text-xs text-gray-500" id="service-last-sync">--:--:--</span>
+  </div>
+  <!-- BEGIN: Mobile View -->
+  <div id="mobile-service-view" class="block divide-y divide-gray-200 rounded-none border border-gray-200 bg-white shadow-lg md:hidden dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800">
+    <!-- END: Mobile view -->
+  </div>
+  <!-- BEGIN: Desktop View -->
+  <div class="hidden overflow-hidden rounded-none border border-gray-200 shadow-lg md:block dark:border-gray-700">
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+      <thead class="bg-gray-50 dark:bg-gray-900">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-700 uppercase dark:text-white">Service Name</th>
+          <th class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-700 uppercase dark:text-white">Status</th>
+          <th class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-700 uppercase dark:text-white">Process Info</th>
+          <th class="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-700 uppercase dark:text-white">Resource (CPU/Mem)</th>
+        </tr>
+      </thead>
+      <tbody id="security-service-table" class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800"></tbody>
+    </table>
+  </div>
+  <!-- END: Desktop View -->
+</div>
+<link rel="stylesheet" href="./assets/css/dynamic.css">
+<script src="./assets/js/metrics.js" integrity="sha384-j/+ZjmShCtdfJ3YU+60MV/NK/LIsvhpi4FDNWj8Axml/pbQWZIihhNR7F0uHQ8km" defer crossorigin="anonymous"></script>
+<script src="./assets/js/pfstats.js" integrity="sha384-W0WdOQn8IaqflzZH0bZSns/PxwwZqgWv4sbWxKtSHQIUiafHexi8xr/+6B6cWp67" defer crossorigin="anonymous"></script>
+<script src="./assets/js/servicemonitor.js" integrity="sha384-M2J/VRxDSAJcIM++4uXQy+Q+czVjRdJKgPLE68xNFT9abARixDchVKYDgOsCNycV" defer crossorigin="anonymous"></script>
+<!-- END: Javascript -->

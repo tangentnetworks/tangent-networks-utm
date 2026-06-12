@@ -1,0 +1,1 @@
+29867 /usr/local/sbin/pmacctd -f /etc/pmacct/ext_if_text_pipe.conf

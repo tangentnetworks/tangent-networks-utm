@@ -1,0 +1,311 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    TNAuth is the user and session management layer. It handles registration,
+    authentication, session creation and validation, security questions,
+    recovery codes, registration tokens, and password reset rate limiting. All
+    database access for these operations goes through TNAuth. This document
+    covers each subsystem, the account lifecycle, and the rate limiting and
+    lockout mechanics.
+  </p>
+</div>
+
+<h1>TNAuth</h1>
+
+<p>
+  <strong>Location:</strong>
+  <code>/var/www/htdocs/tn/data/lib/TNAuth.pm</code><br>
+  <strong>Version:</strong> 2.2.0<br>
+  <strong>Database:</strong> <code>data/db/auth.db</code>
+</p>
+
+<h2>Database Connection</h2>
+
+<p>
+  <code>get_db_handle()</code> opens a new connection to auth.db on every call.
+  In the slowcgi CGI model each request is a short-lived process, so connection
+  pooling is not used. Every connection sets:
+</p>
+
+<ul>
+  <li><code>PRAGMA foreign_keys = ON</code> -- required for cascade deletes.</li>
+  <li><code>PRAGMA journal_mode = WAL</code> -- required for concurrent reads during writes.</li>
+  <li><code>RaiseError =&gt; 1</code> -- all failures are fatal exceptions.</li>
+  <li><code>sqlite_use_immediate_transaction =&gt; 1</code> -- acquires write lock at transaction start, preventing "database is locked" errors under concurrent slowcgi worker load.</li>
+</ul>
+
+<h2>User Registration</h2>
+
+<p>
+  <code>register_user($username, $password, $email, $security_questions, $token)</code>
+</p>
+
+<p>
+  The first user registered becomes the admin. All subsequent registrations
+  require a valid unused registration token. <code>check_registration_status()</code>
+  determines which path applies by counting rows in the users table.
+</p>
+
+<p>Registration steps:</p>
+
+<ol>
+  <li>Check registration status (first user or token required).</li>
+  <li>If a token is required, validate it via <code>validate_registration_token()</code>.</li>
+  <li>Check for duplicate username and email (email check is skipped when email is blank).</li>
+  <li>Hash the password with <code>TNSecurity::hash_password()</code>.</li>
+  <li>Generate a 64-character hex user ID with <code>TNSecurity::generate_token(16)</code>.</li>
+  <li>Assign role: <code>'admin'</code> for first user, <code>'user'</code> for all others.</li>
+  <li>Insert the users row with <code>created_at = time()</code>.</li>
+  <li>Insert security question rows, each with its own PBKDF2-hashed answer and salt.</li>
+  <li>Mark the registration token as used (sets <code>used = 1</code>, <code>used_at</code>, <code>used_by</code>).</li>
+</ol>
+
+<div class="callout callout-note">
+  <p>
+    Email uniqueness is only checked when an email address is supplied.
+    Passing an empty string is treated the same as NULL -- the unique constraint
+    is not checked against other null-email rows.
+  </p>
+</div>
+
+<h2>Authentication</h2>
+
+<p>
+  <code>authenticate_user($username, $password)</code>
+</p>
+
+<p>Authentication steps:</p>
+
+<ol>
+  <li>DEVEL mode check: if DEVEL is active and the password is the literal string <code>'DEVEL_BYPASS'</code>, return a synthetic admin session without any database lookup. The bypass is logged as a warning.</li>
+  <li>Fetch user record from the database by username.</li>
+  <li>Check lockout state. If <code>locked = 1</code> and <code>locked_until</code> is a future epoch, return failure. If <code>locked_until</code> has passed, clear the lock automatically (sets <code>locked = 0</code>, <code>locked_until = 0</code>, <code>failed_attempts = 0</code>).</li>
+  <li>Verify password with <code>TNSecurity::verify_password()</code>. On failure, increment <code>failed_attempts</code>. If the new count reaches the configured threshold, set <code>locked = 1</code> and <code>locked_until = time() + LOCKOUT_DURATION</code>.</li>
+  <li>On success: check <code>needs_rehash()</code>. If the stored hash uses the legacy algorithm, re-hash with PBKDF2 immediately and update the database.</li>
+  <li>Reset <code>failed_attempts = 0</code>, update <code>last_login</code>, increment <code>login_count</code>.</li>
+  <li>Return success with user_id, username, and role.</li>
+</ol>
+
+<p>
+  The lockout threshold is read from
+  <code>security.conf [rate_limit] MAX_LOGIN_ATTEMPTS</code>. TNAuth enforces
+  a floor of 3 and a ceiling of 10 regardless of the configured value. The
+  lockout duration has a floor of 300 seconds.
+</p>
+
+<h2>Session Management</h2>
+
+<h3>create_session</h3>
+
+<p>
+  <code>create_session($user_id, $ip, $user_agent)</code>
+</p>
+
+<p>
+  Generates a 64-character hex session ID, calculates expiry from the
+  <code>SESSION_LIFETIME</code> config value (floored at 900s, capped at
+  86400s), and inserts a row into the sessions table. Returns the raw session
+  ID. The caller (control.pl) then passes it to
+  <code>TNSecurity::sign_session_id()</code> to produce the cookie value.
+</p>
+
+<h3>validate_session</h3>
+
+<p>
+  <code>validate_session($session_id)</code>
+</p>
+
+<p>
+  Queries sessions joined with users where <code>session_id = ?</code> and
+  <code>expires_at &gt; time()</code>. Updates <code>last_activity</code> on
+  every valid hit. Returns a hashref with session_id, user_id, username, role,
+  and session_age (seconds since creation). Returns undef if the session is
+  absent or expired.
+</p>
+
+<p>
+  Note that the session ID passed here is the raw ID after signature
+  verification by TNSecurity. TNAuth never sees the signed cookie value.
+</p>
+
+<h3>destroy_session</h3>
+
+<p>
+  <code>destroy_session($session_id)</code>
+</p>
+
+<p>
+  Deletes the session row. Called by the logout handler. Does not affect other
+  sessions for the same user.
+</p>
+
+<h3>cleanup_expired_sessions</h3>
+
+<p>
+  <code>cleanup_expired_sessions()</code>
+</p>
+
+<p>
+  Deletes all sessions where <code>expires_at &lt; time()</code>. Called by
+  the session cleanup cron job (every Monday at 15:01 via
+  <code>TNAuth::cleanup_expired_sessions()</code> invoked from a scheduled
+  script). Returns a count of deleted rows.
+</p>
+
+<h2>Security Questions</h2>
+
+<p>
+  <code>get_security_questions($username)</code> returns an arrayref of
+  question strings for the given user. Used by the password reset flow to
+  present questions to the user without revealing the answers.
+</p>
+
+<p>
+  <code>verify_security_answers($username, $answers)</code> accepts a hashref
+  mapping question strings to answer strings. Each answer is verified against
+  its stored PBKDF2 hash with <code>TNSecurity::verify_password()</code>. All
+  stored questions must have a correct answer supplied -- a single incorrect or
+  missing answer returns failure.
+</p>
+
+<p>
+  The available question list returned by
+  <code>get_available_questions()</code> is hardcoded in the module:
+</p>
+
+<ul>
+  <li>What was your first pet's name?</li>
+  <li>What city were you born in?</li>
+  <li>What is your mother's maiden name?</li>
+  <li>What was the name of your first school?</li>
+  <li>What is your favourite book?</li>
+</ul>
+
+<h2>Recovery Codes</h2>
+
+<p>
+  <code>verify_recovery_code($username, $code)</code> fetches all unused codes
+  for the user and iterates through them, calling
+  <code>TNSecurity::verify_recovery_hash()</code> for each. On a match, the
+  code is marked used (<code>used = 1</code>, <code>used_at = time()</code>).
+  The search always iterates all codes rather than stopping early, to avoid
+  timing attacks that could distinguish between "no codes exist" and "codes
+  exist but none match".
+</p>
+
+<h2>Registration Tokens</h2>
+
+<p>
+  <code>generate_registration_token()</code> creates a new 64-character hex
+  token and inserts it into the <code>registration_tokens</code> table.
+  Returns the token value to the caller (admin API handler) for distribution.
+</p>
+
+<p>
+  <code>get_unused_tokens()</code> returns all tokens where <code>used = 0</code>,
+  ordered newest first. Used by the admin token management UI.
+</p>
+
+<p>
+  <code>validate_registration_token($token)</code> checks that the token exists
+  and has <code>used = 0</code>. Token consumption (marking used) happens
+  inside <code>register_user()</code> after successful account creation.
+</p>
+
+<h2>User Deletion</h2>
+
+<p>
+  <code>delete_user($user_id)</code> runs in an explicit transaction. It
+  manually deletes child rows in order (security_questions, recovery_codes,
+  sessions) before deleting the users row. The explicit deletes are belt-and-
+  suspenders alongside the <code>ON DELETE CASCADE</code> foreign keys -- the
+  comment in the source notes that <code>PRAGMA foreign_keys = ON</code> must
+  be set on every connection for the cascades to fire. On any error the
+  transaction is rolled back and a failure result is returned.
+</p>
+
+<h2>Password Reset Rate Limiting</h2>
+
+<p>
+  <code>check_reset_attempts($username)</code> uses the rate_limits table to
+  track password reset attempts per username. The logic:
+</p>
+
+<ol>
+  <li>Read the current row for <code>(username, 'password_reset')</code>.</li>
+  <li>If <code>blocked_until</code> is a future epoch, return <code>{ allowed =&gt; 0 }</code>.</li>
+  <li>If the count is at or above the max but the block has expired, reset the counter and allow the request.</li>
+  <li>Otherwise increment the counter via upsert. If the new count exceeds the max, set <code>blocked_until = time() + LOCKOUT_DURATION</code>.</li>
+</ol>
+
+<p>
+  <code>clear_reset_attempts($username)</code> deletes the rate_limits row for
+  the username. Called by <code>control.pl</code> after a successful password
+  reset to reset the counter so the user is not rate-limited on their next
+  legitimate reset request.
+</p>
+
+<h2>Password Update</h2>
+
+<p>
+  <code>update_password($user_id, $new_password)</code> calls
+  <code>TNSecurity::hash_password()</code> and updates the users row. Used by
+  both the password reset flow in control.pl and the emergency repair tool.
+</p>
+
+<h2>Pledge and Unveil Requirements</h2>
+
+<p>
+  TNAuth performs SQLite reads and writes, reads key files, and writes to the
+  security log. Any CGI script that calls TNAuth functions must have the
+  following pledge and unveil in place before the first TNAuth call:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Minimum pledge for any script using TNAuth
+OpenBSD::Pledge::pledge("stdio rpath wpath cpath flock")
+    or die "pledge: $!";
+
+# Minimum unveil paths
+OpenBSD::Unveil::unveil("$app_root/data/db",   "rwc") or die $!;
+OpenBSD::Unveil::unveil("$app_root/data/keys", "r")   or die $!;
+OpenBSD::Unveil::unveil("$app_root/data/logs", "rwc") or die $!;
+OpenBSD::Unveil::unveil("/dev/urandom",         "r")   or die $!;
+# Plus Perl library paths as required</code></pre>
+</div>
+
+<div class="callout callout-note">
+  <p>
+    control.pl implements a full pledge and unveil block. All other CGI scripts
+    that call TNSecurityCheck (which calls TNAuth internally) must implement
+    their own equivalent pledge block. The pledge contract is always the
+    caller's responsibility -- TNAuth and TNSecurityCheck do not issue pledge
+    calls themselves. See each backend CGI document for the specific pledge
+    block used in that script.
+  </p>
+</div>
+
+<!-- SUMMARY -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Every <code>get_db_handle()</code> call opens a fresh connection with foreign keys on, WAL mode on, RaiseError on, and immediate transaction mode on.</li>
+    <li>The first registered user becomes admin. All subsequent registrations require a valid single-use token.</li>
+    <li>Login lockout uses a configurable threshold (floor 3, ceiling 10) and duration (floor 300s). Timed lockouts clear automatically on the next login attempt -- no cron cleanup needed.</li>
+    <li>Transparent PBKDF2 rehash: legacy SHA-256 hashes are upgraded on every successful login without any user interaction.</li>
+    <li>Session IDs stored in the database are raw hex. The signed cookie value (session_id.hmac) is produced by TNSecurity, never by TNAuth.</li>
+    <li>delete_user() explicitly deletes child rows in a transaction as belt-and-suspenders alongside the ON DELETE CASCADE foreign keys.</li>
+    <li>Pledge and unveil are always the calling CGI's responsibility. TNAuth does not issue pledge calls.</li>
+  </ul>
+</div>

@@ -1,0 +1,554 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    This document covers the boot orchestration layer of Tangent Networks:
+    specifically <code>/etc/rc.local</code>, the hook injected into
+    <code>/etc/rc</code> that runs <code>tangent_logrotate.sh</code> before
+    any daemon starts, and the log rotation framework itself. These three
+    components together define how the system comes up, in what order services
+    start, what happens when something fails, and how logs are managed across
+    reboots and sysupgrades. Read this document when the dashboard is dark
+    after a reboot, when a service is missing from the Services panel, or when
+    you need to understand why a particular service starts when it does.
+  </p>
+  <p>
+    The log rotation framework is covered in passing references here. A
+    dedicated document will cover <code>tangent_logrotate.sh</code> and the
+    associated scripts in full detail.
+  </p>
+</div>
+
+<h1>System Orchestration</h1>
+
+<h2>The Two Boot Files</h2>
+<p>
+  OpenBSD's standard boot sequence ends with <code>/etc/rc</code>, which
+  starts the base system daemons via <code>start_daemon</code>. After
+  <code>start_daemon</code> completes, <code>/etc/rc</code> calls
+  <code>/etc/rc.local</code> if it exists. Everything Tangent starts —
+  Snort, ClamAV, pmacct, SSLproxy, e2guardian, all 17 WebUI runners — starts
+  from <code>/etc/rc.local</code>.
+</p>
+<p>
+  One additional hook is injected into <code>/etc/rc</code> itself, placed
+  after <code>reorder_libs</code> and before the first <code>start_daemon</code>
+  call. This hook runs <code>tangent_logrotate.sh</code> before any daemon
+  starts, including before the base system daemons, so that log files are
+  rotated into a clean state before anything begins writing to them. The
+  position is deliberate: <code>reorder_libs</code> must complete first
+  because it makes system binaries functional, and the hook must run before
+  <code>start_daemon</code> because daemons begin writing logs immediately.
+</p>
+<p>
+  This hook is self-healing. <code>tangent_logrotate.sh</code> checks for
+  its own presence in <code>/etc/rc</code> on every invocation. If a sysupgrade
+  has replaced <code>/etc/rc</code> and removed the hook, the script detects
+  this, backs up the new <code>/etc/rc</code>, and reinjects the hook
+  automatically. The backup is written to
+  <code>/usr/local/share/tangent/rc.backup.&lt;timestamp&gt;</code>.
+</p>
+
+<h2>rc.local Structure</h2>
+<p>
+  <code>/etc/rc.local</code> opens with <code>set -euo pipefail</code>. This
+  means any unhandled command failure causes the script to exit immediately,
+  any reference to an unset variable is a fatal error, and any failure in a
+  pipeline propagates correctly. The consequence is that a bug or missing file
+  early in the script will cause rc.local to exit before reaching the WebUI
+  runners at the end. The dashboard will be dark. The first diagnostic step
+  is always:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>tail -50 /var/www/htdocs/tn/data/logs/bootlog/rc.local.log</code></pre>
+</div>
+
+<p>
+  The very first thing rc.local does after setting up the log directory is
+  redirect all stdout and stderr to <code>rc.local.log</code> with
+  <code>exec &gt; "$RCLOGFILE" 2&gt;&1</code>. Every subsequent log message,
+  every service output, and every error goes to that file. It is a complete
+  record of the boot session.
+</p>
+<p>
+  The second thing rc.local does is truncate all PID files under
+  <code>data/</code> to zero bytes. This clears stale PID state from the
+  previous boot session. A non-empty PID file after boot always means the
+  service started successfully in the current session.
+</p>
+<p>
+  The third thing is housekeeping in <code>/var/www/tmp</code>: dated
+  control log files (<code>control-YYYY-MM-DD.log</code>) are deleted and
+  all other log files in that directory are truncated to zero bytes.
+</p>
+
+<h2>The log() Function</h2>
+<p>
+  rc.local defines a <code>log()</code> function used throughout the file.
+  It takes four arguments: service name, log level, message, and an optional
+  target log file (defaults to <code>rc.local.log</code>). Most service
+  sections pass their own dedicated log file as the fourth argument, so
+  service-specific messages appear in both <code>rc.local.log</code> (via
+  the exec redirect) and in the service's own log file simultaneously.
+</p>
+
+<h2>Boot Sequence</h2>
+<p>
+  The following is the exact order in which rc.local starts services. Order
+  matters: ClamAV must be running before e2guardian can scan, pmacct MFS
+  paths must exist before pmacctd writes to them, and the WebUI runners must
+  start last because they depend on everything else being up.
+</p>
+
+<dl>
+  <dt>1. PID file truncation and /var/www/tmp housekeeping</dt>
+  <dd>All <code>data/**/*.pid</code> files truncated to zero bytes.
+      Dated control log files deleted. Other tmp logs truncated.</dd>
+
+  <dt>2. Snort IDS</dt>
+  <dd>Started on <code>%%INT_IF%%</code> with config
+      <code>/etc/snort/snort.conf</code>. Runs as <code>_snort:_snort</code>.
+      Logs via <code>logger -t snort_ids</code>. rc.local waits up to 15
+      seconds for <code>snort_%%INT_IF%%.pid</code> to appear before declaring
+      success or failure. PID file permissions are fixed to 0644 after write.</dd>
+
+  <dt>3. Snort IPS</dt>
+  <dd>Started in divert-packet mode (<code>-Q</code>) with config
+      <code>/etc/snort/snortinline.conf</code>. Logs via
+      <code>logger -t snort_ips</code>. rc.local waits up to 10 seconds
+      for <code>snort_.pid</code>.</dd>
+
+  <dt>4. snortsentry</dt>
+  <dd>Started with <code>-f /etc/snort/snortsentry.conf</code>. rc.local
+      waits up to 5 seconds for its PID file. snortsentry reads
+      <code>data/logs/snort/alert.log</code>, the alert file shared by
+      both Snort instances, and manages the <code>&lt;snort_block&gt;</code>
+      PF table.</dd>
+
+  <dt>5. e2guardian</dt>
+  <dd>Web content filter. Creates <code>data/tmp/e2guardian/</code> if
+      missing, sets ownership to <code>_e2guardian:_clamav</code>, then
+      starts. e2guardian requires ClamAV's socket, but ClamAV starts after
+      it. e2guardian's own startup handles the socket wait internally.</dd>
+
+  <dt>6. collectd</dt>
+  <dd>Removes any stale <code>collectd.sock</code> from the previous session
+      before starting, so collectd creates a fresh socket. rc.local sleeps
+      2 seconds after starting collectd to ensure the socket exists before
+      the dashboard stats runner first queries it.</dd>
+
+  <dt>7. p3scan</dt>
+  <dd>Transparent POP3/POP3S scanning proxy. Creates
+      <code>data/run/p3scan/</code>, sets ownership to
+      <code>_p3scan:wheel</code>, removes any stale PID file, then starts.</dd>
+
+  <dt>8. ClamAV (clamd)</dt>
+  <dd>The most time-consuming boot step. rc.local starts clamd and then
+      waits in a polling loop for up to 90 seconds for
+      <code>clamd.socket</code> to appear. Progress dots are logged every
+      10 seconds. This wait is intentional: freshclam only starts after
+      the socket is confirmed, and e2guardian's scan path depends on the
+      socket. On cold hardware with large signature databases this wait is
+      normal and expected. It is not a hang.</dd>
+
+  <dt>9. pmacct — MFS instances</dt>
+  <dd>Two pmacctd instances start immediately: <code>ext_if_json_mfs</code>
+      and <code>int_if_json_mfs</code>. Both write to the MFS paths
+      (<code>data/pipes/pmacct/</code>). The MFS files are pre-created with
+      correct permissions before pmacctd starts. A background permission fixer
+      loop runs every 8 seconds to ensure newly-written files remain 0644.</dd>
+
+  <dt>10. pmacct — disk archive instance (delayed)</dt>
+  <dd>The third pmacctd instance (<code>ext_if_json_log</code>) starts in a
+      background subshell that calculates the time to the next
+      quarter-hour boundary and sleeps until then. This delay is up to 15
+      minutes. The instance writes quarter-hour JSON files to
+      <code>data/network/pmacct/ext/</code>. Its PID file will be empty
+      until it starts. At the same boot run, rc.local also merges yesterday's
+      quarter-hour files into a single <code>YYYY-MM-DD.json</code> and
+      purges files older than 7 days.</dd>
+
+  <dt>11. sockd (Dante SOCKS proxy)</dt>
+  <dd>Started with PID file at <code>data/run/sockd/sockd.pid</code>.</dd>
+
+  <dt>12. spamd</dt>
+  <dd>Spam deferral daemon. Flags: <code>-L -d -x -u _spamdaemon</code>.
+      PID file at <code>data/run/spamd/spamd.pid</code>.</dd>
+
+  <dt>13. smtp-gated</dt>
+  <dd>Transparent SMTP/SMTPS/submission scanning proxy.</dd>
+
+  <dt>14. SSLproxy</dt>
+  <dd>Transparent SSL/TLS interception proxy. Listens on lo:8081 (HTTP)
+      and lo:8443 (HTTPS).</dd>
+
+  <dt>15. imspector</dt>
+  <dd>Instant messaging transparent proxy. Creates <code>/tmp/imspector/</code>
+      with <code>_imspector:_imspector</code> ownership before starting.</dd>
+
+  <dt>16. pf_mirror_sync.sh</dt>
+  <dd>Synchronises PF assets for the WebUI. Runs synchronously (no
+      background <code>&amp;</code>) before the WebUI runners start.</dd>
+
+  <dt>17. tcpdump on pflog1</dt>
+  <dd>Starts tcpdump reading from pflog1 and writing to
+      <code>data/logs/pf/pflog1.log</code> (MFS). The MFS directory and
+      file are created if missing and permissions set to www:wheel 0644.
+      Any stale tcpdump process is killed before starting a new one.
+      If pflog1 does not exist, this step logs an error and continues;
+      the PF log panel in the dashboard will be dark.</dd>
+
+  <dt>18. process_monitor.pl (delayed)</dt>
+  <dd>Scheduled in a background subshell to run at 1 minute past the next
+      15-minute boundary, up to 16 minutes after boot. It writes a plain-text
+      service status report to <code>data/logs/bootlog/services.log</code>.
+      The delay avoids running while services are still initialising.</dd>
+
+  <dt>19. start_service() — 16 WebUI runners</dt>
+  <dd>The <code>start_service()</code> function is defined here and then
+      called 16 times in sequence. See the WebUI Runners section below.</dd>
+</dl>
+
+<h2>start_service()</h2>
+<p>
+  The <code>start_service()</code> function defined in rc.local is the
+  standard launcher for all WebUI runners. It takes three arguments: the
+  script path, a display name used in log messages, and an optional PID file
+  basename (defaults to the display name). All PID files are written to
+  <code>data/run/webui/</code>.
+</p>
+<p>
+  The function validates that the script exists and is executable before doing
+  anything. It then ensures the PID directory exists with the correct ownership
+  (<code>www:www 0750</code>) using <code>install -d</code>, which is
+  idempotent and safe on every boot. It checks for a live existing process via
+  the PID file; if the process is already running it logs and returns without
+  starting a duplicate. If the PID file is stale it removes it and proceeds.
+  It launches the script with stdin, stdout, and stderr all redirected to
+  <code>/dev/null</code>, backgrounds it, waits 200ms, and then verifies the
+  process is still alive before writing its PID to the file. If the process
+  has already exited by then, it logs a failure.
+</p>
+<p>
+  The 200ms verification window is intentional. Runner scripts that fail
+  immediately due to a missing dependency would otherwise produce a PID file
+  for a process that no longer exists. The verification catches this class of
+  failure at boot time rather than silently producing a stale PID.
+</p>
+
+<h2>WebUI Runners Started by rc.local</h2>
+<p>
+  These 16 runners are started in order at the end of rc.local. Each is a
+  persistent shell loop invoking a Perl or shell script every few seconds.
+  For details on what each runner does and what breaks if it stops, see the
+  Runners &amp; Daemons document.
+</p>
+<dl>
+  <dt><code>queue_processor_runner.sh</code></dt>
+  <dd>PF rules and e2guardian filter change queues.</dd>
+  <dt><code>unbound_stats_runner.sh</code></dt>
+  <dd>DNS statistics collection.</dd>
+  <dt><code>dashboard_stats_runner.sh</code></dt>
+  <dd>collectd metrics export (cpu, memory, df, interfaces).</dd>
+  <dt><code>service_monitor_runner.sh</code></dt>
+  <dd>Service status monitoring via monitor.pl.</dd>
+  <dt><code>pf_stats_runner.sh</code></dt>
+  <dd>PF firewall health collection via pfhealth.pl.</dd>
+  <dt><code>pf_tcpdump_runner.sh</code> — PID: <code>pflog_maint.pid</code></dt>
+  <dd>pflog1 MFS feed management and archiving.</dd>
+  <dt><code>pmacct_mfs_manage_runner.sh</code></dt>
+  <dd>MFS trim to prevent pmacct pipe files from filling the 64MB MFS.</dd>
+  <dt><code>pf_change_detector_runner.sh</code></dt>
+  <dd>Detects external PF rule changes.</dd>
+  <dt><code>e2g_user_filter_runner.sh</code> — PID: <code>e2g_user_filter_detector.pid</code></dt>
+  <dd>e2guardian per-user filter change detection.</dd>
+  <dt><code>unbound_queue_runner.sh</code></dt>
+  <dd>unbound configuration queue processing.</dd>
+  <dt><code>e2g_status_writer_runner.sh</code> — PID: <code>e2g_status_writer.pid</code></dt>
+  <dd>e2guardian status JSON writer.</dd>
+  <dt><code>e2g_queue_processor_runner.sh</code> — PID: <code>e2g_queue_processor.pid</code></dt>
+  <dd>e2guardian filter mode switch processor.</dd>
+  <dt><code>pf_monitor_runner.sh</code></dt>
+  <dd>PF rule validation pipeline monitor.</dd>
+  <dt><code>integrity_check_runner.sh</code></dt>
+  <dd>TNAudit integrity checks against baseline.</dd>
+  <dt><code>powermgmt_runner.sh</code></dt>
+  <dd>WebUI reboot and shutdown request handler.</dd>
+  <dt><code>pf_asn_runner.sh</code> — PID: <code>pf_asn_lookip.pid</code></dt>
+  <dd>ASN lookup for the firewall panel.</dd>
+</dl>
+
+<h2>tangent_logrotate.sh</h2>
+<p>
+  <code>tangent_logrotate.sh</code> is a deterministic, self-healing log
+  rotation framework. It runs in two contexts: injected into
+  <code>/etc/rc</code> before any daemon starts at boot, and every 10 minutes
+  via cron (with a full daily run at 01:00). It is written in ksh with
+  <code>set -eu</code>.
+</p>
+
+<h3>Self-healing rc integration</h3>
+<p>
+  The first thing the script does on every invocation is check for its own
+  hook in <code>/etc/rc</code>. It looks for both the marker comment and the
+  script path. If either is missing, it backs up the current
+  <code>/etc/rc</code> to
+  <code>/usr/local/share/tangent/rc.backup.&lt;timestamp&gt;</code>, strips
+  any incomplete Tangent block using awk, injects a clean hook block
+  immediately before the first <code>start_daemon</code> line, and replaces
+  <code>/etc/rc</code> atomically using <code>mv -f</code>. The patch target
+  is the first <code>start_daemon</code> invocation, which on a standard
+  OpenBSD system is the networking daemon block. This positions the log
+  rotation hook after <code>reorder_libs</code> (which makes binaries
+  functional) and before any daemon that might write logs.
+</p>
+
+<h3>Concurrency protection</h3>
+<p>
+  After the rc check the script acquires a PID lock at
+  <code>data/run/tangent_logrotate.pid</code>. If a previous instance is
+  still running it exits silently. Stale PID files (where the process is gone)
+  are removed and the lock is taken. The PID file is cleaned up via
+  <code>trap</code> on any exit.
+</p>
+
+<h3>Triple verification</h3>
+<p>
+  The script uses three independent checks to determine whether rotation has
+  already happened today, preventing duplicate rotation if the script is called
+  multiple times in the same calendar day.
+</p>
+<p>
+  First it checks the stamp file at
+  <code>data/logs/bootlog/.rotation_stamp</code>. If the stamp contains
+  today's date, the script exits immediately. Second, if the stamp is absent
+  or stale, it looks for at least two of three sample archived files that
+  would only exist if rotation had already run today (yesterday's doas log,
+  yesterday's messages log, and <code>/var/log/authlog.0</code>). If two or
+  more are found, the stamp file is updated and the script exits. Third, if
+  neither check passes, rotation proceeds.
+</p>
+
+<h3>Rotation procedure</h3>
+<p>
+  Rotation covers three categories of log files. System logs are
+  <code>/var/log/authlog</code>, <code>/var/log/maillog</code>,
+  <code>/var/log/secure</code>, and <code>/var/cron/log</code>. Custom system
+  logs are <code>data/logs/system/messages</code> and
+  <code>data/logs/system/daemon</code>. Application logs cover all service
+  logs under <code>data/logs/</code>, 26 files in total including all WAF
+  logs, all proxy logs, and all security logs.
+</p>
+<p>
+  For each file the script skips it if it does not exist or is zero bytes.
+  For non-empty files it copies the current log to a <code>.0</code> temporary
+  file, truncates the original to zero bytes (so the running daemon continues
+  writing to the same inode without interruption), and then calls
+  <code>logrotate_rename.sh</code> to rename the <code>.0</code> file to the
+  date-stamped archive format (<code>name_YYYY-MM-DD.log</code>).
+</p>
+<p>
+  After rotating httpd logs, the script sends <code>USR1</code> to httpd via
+  <code>pkill -USR1</code>. This causes httpd to reopen its log file
+  descriptors. Because TNWAF.pm writes httpd logs directly rather than through
+  syslog, this signal is required for the rotation to take effect cleanly.
+</p>
+
+<h3>Purge cycle</h3>
+<p>
+  On every run, before the rotation check, the script scans all date-stamped
+  archive files under <code>data/logs/</code> and deletes any whose embedded
+  date is older than the retention window (default 7 days). The comparison is
+  a string comparison on the <code>YYYY-MM-DD</code> portion of the filename,
+  which is lexicographically equivalent to a date comparison.
+</p>
+
+<h3>Metadata file</h3>
+<p>
+  After a successful rotation the script writes a machine-readable metadata
+  file to <code>data/logs/.rotation_meta</code> containing the last rotation
+  date, total archive count, total archive size in KB, lists of skipped
+  empty and missing files, and the configured retention period. This file is
+  read by the dashboard log management panel.
+</p>
+
+<h3>Atomic success marking</h3>
+<p>
+  The stamp file is only written if the rotation completed with zero errors.
+  If any file failed to copy or truncate, the stamp file is not updated and
+  the script exits with status 1. The next cron invocation will retry the
+  full rotation. This ensures a partial rotation does not silently mark the
+  day as complete.
+</p>
+
+<h2>Boot Warnings</h2>
+
+<div class="callout callout-danger">
+  <p><strong>Critical — softraid crypto and unattended reboots.</strong>
+  If the root filesystem is on a softraid crypto volume, the passphrase is
+  entered at the boot loader before the kernel starts. A WebUI-initiated
+  reboot will halt at the boot loader passphrase prompt with no network, no
+  dashboard, and no remote recovery. Encrypted swap (OpenBSD default) is not
+  the same as softraid crypto and reinitialises automatically. Do not confuse
+  the two.</p>
+</div>
+
+<div class="callout callout-danger">
+  <p><strong>Critical — set -euo pipefail in rc.local.</strong>
+  Any unhandled command failure before the <code>start_service</code> block
+  causes rc.local to exit early. All WebUI runners fail to start. The system
+  is up but the dashboard is dark. First diagnostic step:
+  <code>tail -50 /var/www/htdocs/tn/data/logs/bootlog/rc.local.log</code></p>
+</div>
+
+<div class="callout callout-warning">
+  <p><strong>MFS paths are empty after every reboot.</strong>
+  <code>data/logs/pf/</code> (128MB) and <code>data/pipes/pmacct/</code>
+  (64MB) are swap-backed memory filesystems. Their contents are lost on
+  every reboot including WebUI-initiated reboots. rc.local pre-creates the
+  required files before starting tcpdump and pmacctd. If the MFS mount
+  entries are missing from <code>/etc/fstab</code>, these paths become
+  regular disk directories with no size limit; tcpdump and pmacctd will
+  still write to them but the disk will eventually fill.</p>
+</div>
+
+<div class="callout callout-warning">
+  <p><strong>ClamAV startup delay — up to 90 seconds.</strong>
+  rc.local waits for <code>clamd.socket</code> before proceeding to the
+  pmacct section. On cold hardware with a large signature database this wait
+  is normal. The boot log will show periodic dot entries every 10 seconds
+  during the wait. This is not a hang.</p>
+</div>
+
+<div class="callout callout-warning">
+  <p><strong>pmacct ext_if_json_log starts up to 15 minutes after boot.</strong>
+  The disk archive pmacctd instance waits for the next quarter-hour boundary.
+  An empty PID file at <code>data/run/pmacct/pmacct-ext_if_json_log.pid</code>
+  immediately after boot is correct and expected.</p>
+</div>
+
+<div class="callout callout-warning">
+  <p><strong>process_monitor.pl starts up to 16 minutes after boot.</strong>
+  It is delayed to 1 minute past the next 15-minute boundary. The Services
+  panel may show stale or empty data for up to 16 minutes after boot.</p>
+</div>
+
+<div class="callout callout-warning">
+  <p><strong>pflog1 requires /etc/hostname.pflog1.</strong>
+  If this file is missing or does not contain <code>up</code>, pflig1 never
+  comes up. tcpdump will fail to start on it. The PF log panel in the
+  dashboard will be dark. This is not logged as a fatal error; rc.local
+  continues past it.</p>
+</div>
+
+<div class="callout callout-note">
+  <p><strong>tangent_logrotate.sh self-heals /etc/rc after sysupgrade.</strong>
+  The rc integration check runs on every invocation. After a sysupgrade that
+  overwrites <code>/etc/rc</code>, the next run of tangent_logrotate.sh
+  (either from cron or the next boot) will detect the missing hook and
+  reinject it automatically. The pre-upgrade <code>/etc/rc</code> is backed
+  up before any modification.</p>
+</div>
+
+<div class="callout callout-note">
+  <p><strong>WebUI runners do not receive a clean shutdown signal.</strong>
+  Tangent daemons are started directly by rc.local, not via
+  <code>pkg_scripts</code>. They are not stopped by the rc shutdown path and
+  receive no SIGTERM on halt or reboot; init kills them. For file-writing
+  loop daemons this is safe in practice. The PID files are truncated at the
+  start of the next boot regardless.</p>
+</div>
+
+<div class="callout callout-note">
+  <p><strong>BPF buffer is a critical silent dependency.</strong>
+  <code>sysctl.conf</code> sets <code>net.bpf.bufsize=2097152</code> (2MB).
+  The default of 32KB causes silent packet drops under load in both pflog1
+  and pmacct. If <code>sysctl.conf</code> is overwritten by a sysupgrade,
+  tcpdump and pmacctd will appear to work normally but will drop packets
+  silently. Verify with <code>sysctl net.bpf.bufsize</code>.</p>
+</div>
+
+<h2>Diagnostics</h2>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Full boot log — start here when anything is wrong after reboot
+tail -100 /var/www/htdocs/tn/data/logs/bootlog/rc.local.log
+
+# Check rc integration hook is present
+grep -c "tangent_logrotate" /etc/rc
+
+# Check rotation stamp
+cat /var/www/htdocs/tn/data/logs/bootlog/.rotation_stamp
+
+# Check rotation metadata
+cat /var/www/htdocs/tn/data/logs/.rotation_meta
+
+# Check rotation activity log
+tail -30 /var/www/htdocs/tn/data/logs/rotation/monitor.log
+
+# Verify MFS mounts are present
+mount | grep mfs
+
+# Verify BPF buffer
+sysctl net.bpf.bufsize net.bpf.maxbufsize
+
+# Verify login.conf daemon class (silent hard dependency)
+grep -A6 '^daemon:' /etc/login.conf
+
+# Check pflog1 interface exists
+ifconfig pflog1
+
+# Check hostname.pflog1 contents
+cat /etc/hostname.pflog1
+
+# Force log rotation now
+/usr/local/sbin/tangent_logrotate.sh
+
+# Re-run all WebUI runners after rc.local failure
+# (safe to call start_service inline — idempotent if already running)
+sh /etc/rc.local</code></pre>
+</div>
+
+<!-- SUMMARY -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>rc.local is the single orchestration point for everything Tangent
+        starts. It runs with <code>set -euo pipefail</code>: any early
+        failure stops all subsequent services. The boot log at
+        <code>data/logs/bootlog/rc.local.log</code> is always the first
+        diagnostic step.</li>
+    <li>The log rotation hook in <code>/etc/rc</code> runs before any daemon
+        starts, positioned after <code>reorder_libs</code> and before the
+        first <code>start_daemon</code> call. It is self-healing and will
+        reinject itself after a sysupgrade.</li>
+    <li>ClamAV startup takes up to 90 seconds. pmacct's disk archive instance
+        starts up to 15 minutes after boot. process_monitor.pl starts up to
+        16 minutes after boot. All three delays are by design.</li>
+    <li><code>start_service()</code> guards against duplicate starts, stale
+        PID files, and immediate-exit failures. It is idempotent:
+        calling rc.local again on a running system is safe.</li>
+    <li>Two MFS filesystems are empty after every reboot. Three sysctl and
+        login.conf values are silent hard dependencies. All five are checked
+        and set by <code>install.sh</code> but can be lost after a sysupgrade.</li>
+  </ul>
+</div>

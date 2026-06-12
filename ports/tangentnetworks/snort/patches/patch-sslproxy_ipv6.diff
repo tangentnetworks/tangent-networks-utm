@@ -1,0 +1,76 @@
+--- src/dynamic-preprocessors/sslproxy/spp_sslproxy.c-orig	Fri Mar 27 15:40:25 2026
++++ src/dynamic-preprocessors/sslproxy/spp_sslproxy.c	Fri Mar 27 15:40:41 2026
+@@ -615,27 +615,54 @@
+ 
+ 			DEBUG_WRAP(DebugMessage(DEBUG_SSLPROXY, "ORIG src = %s:%u\n", inet_ntoa(&p->ip4h->ip_addrs->ip_src), p->src_port););
+ 
+-			struct in_addr src_addr;
+-			if (inet_pton(AF_INET, sslproxy_src_addr, &src_addr) != 1) {
+-				_dpd.errMsg("SSLproxyPreproc: Cannot inet_pton sslproxy_src_addr: %s\n", line);
+-				goto out;
++			/* Detect address family by presence of ':' (IPv6) or '.' (IPv4).
++			 * sfaddr_set_ip6_addr() is not exported in the dynamic preprocessor
++			 * API so we manipulate the sfaddr_t struct directly. */
++			if (strchr(sslproxy_src_addr, ':')) {
++				/* IPv6 client — copy all 16 bytes into ia32[0..3] and set family */
++				struct in6_addr src_addr6;
++				if (inet_pton(AF_INET6, sslproxy_src_addr, &src_addr6) != 1) {
++					_dpd.errMsg("SSLproxyPreproc: Cannot inet_pton AF_INET6 sslproxy_src_addr: %s\n", line);
++					goto out;
++				}
++				scb->client_ip.family = AF_INET6;
++				memcpy(scb->client_ip.ia32, src_addr6.s6_addr, 16);
++			} else {
++				/* IPv4 client — original behaviour */
++				struct in_addr src_addr;
++				if (inet_pton(AF_INET, sslproxy_src_addr, &src_addr) != 1) {
++					_dpd.errMsg("SSLproxyPreproc: Cannot inet_pton AF_INET sslproxy_src_addr: %s\n", line);
++					goto out;
++				}
++				scb->client_ip.family = AF_INET;
++				scb->client_ip.ia32[3] = *((uint32_t *)&src_addr);
+ 			}
+-
+-			scb->client_ip.ia32[3] = *((uint32_t *)&src_addr);
+ 			scb->client_port = htons(sslproxy_src_port);
+-			DEBUG_WRAP(DebugMessage(DEBUG_SSLPROXY, "NEW src = %s:%u\n", inet_ntoa(&scb->client_ip), sslproxy_src_port););
++			DEBUG_WRAP(DebugMessage(DEBUG_SSLPROXY, "NEW src = %s:%u\n", sfip_to_str(&scb->client_ip), sslproxy_src_port););
+ 
+ 			DEBUG_WRAP(DebugMessage(DEBUG_SSLPROXY, "ORIG dst = %s:%u\n", inet_ntoa(&p->ip4h->ip_addrs->ip_dst), p->dst_port););
+ 
+-			struct in_addr dst_addr;
+-			if (inet_pton(AF_INET, sslproxy_dst_addr, &dst_addr) != 1) {
+-				_dpd.errMsg("SSLproxyPreproc: Cannot inet_pton sslproxy_dst_addr: %s\n", line);
+-				goto out;
++			if (strchr(sslproxy_dst_addr, ':')) {
++				/* IPv6 destination — copy all 16 bytes into ia32[0..3] and set family */
++				struct in6_addr dst_addr6;
++				if (inet_pton(AF_INET6, sslproxy_dst_addr, &dst_addr6) != 1) {
++					_dpd.errMsg("SSLproxyPreproc: Cannot inet_pton AF_INET6 sslproxy_dst_addr: %s\n", line);
++					goto out;
++				}
++				scb->server_ip.family = AF_INET6;
++				memcpy(scb->server_ip.ia32, dst_addr6.s6_addr, 16);
++			} else {
++				/* IPv4 destination — original behaviour */
++				struct in_addr dst_addr;
++				if (inet_pton(AF_INET, sslproxy_dst_addr, &dst_addr) != 1) {
++					_dpd.errMsg("SSLproxyPreproc: Cannot inet_pton AF_INET sslproxy_dst_addr: %s\n", line);
++					goto out;
++				}
++				scb->server_ip.family = AF_INET;
++				scb->server_ip.ia32[3] = *((uint32_t *)&dst_addr);
+ 			}
+-
+-			scb->server_ip.ia32[3] = *((uint32_t *)&dst_addr);
+ 			scb->server_port = htons(sslproxy_dst_port);
+-			DEBUG_WRAP(DebugMessage(DEBUG_SSLPROXY, "NEW dst = %s:%u\n", inet_ntoa(&scb->server_ip), sslproxy_dst_port););
++			DEBUG_WRAP(DebugMessage(DEBUG_SSLPROXY, "NEW dst = %s:%u\n", sfip_to_str(&scb->server_ip), sslproxy_dst_port););
+ 
+ 			// Set conn established, otherwise rules with flow established option do not work
+ 			// @attention Note that we cannot set packet established flag directly: p->flags |= PKT_STREAM_EST, MarkupPacketFlags() does that for us
+@@ -750,4 +777,3 @@
+ 	sfPolicyConfigDelete(config);
+ }
+ #endif
+-

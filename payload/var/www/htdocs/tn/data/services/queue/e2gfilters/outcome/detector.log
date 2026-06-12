@@ -1,0 +1,315 @@
+[Thu Feb  5 12:11:47 IST 2026] userfeeds.txt changed (checksum: 2742666288), triggering processor...
+[Thu Feb  5 12:11:47 IST 2026] Processor launched in background (PID: 49378)
+/var/www/htdocs/tn/data/logs/cron/e2g_user_filter-2026-02-05_12-11-47.log
+[2026-02-05 12:11:49] -----------------------------------------------------------
+[2026-02-05 12:11:49] e2guardian User Filter Processor - STARTED
+[2026-02-05 12:11:49] -----------------------------------------------------------
+[2026-02-05 12:11:49] Current ulimit -n: 8192
+[2026-02-05 12:11:49] ulimit is sufficient
+[2026-02-05 12:11:49] Cleaning up old files...
+[2026-02-05 12:11:49] Reading feeds from /var/www/htdocs/tn/data/services/queue/e2gfilters/userlist/userfeeds.txt...
+[Thu Feb  5 12:53:01 IST 2026] userfeeds.txt changed (checksum: 4294967295), triggering processor...
+[Thu Feb  5 12:53:01 IST 2026] Processor launched in background (PID: 19422)
+/var/www/htdocs/tn/data/logs/cron/e2g_user_filter-2026-02-05_12-53-01.log
+[2026-02-05 12:53:03] -----------------------------------------------------------
+[2026-02-05 12:53:03] e2guardian User Filter Processor - STARTED
+[2026-02-05 12:53:03] -----------------------------------------------------------
+[2026-02-05 12:53:03] Current ulimit -n: 8192
+[2026-02-05 12:53:03] ulimit is sufficient
+[2026-02-05 12:53:03] No user feeds to process
+[Thu Feb  5 12:55:55 IST 2026] userfeeds.txt changed (checksum: 2037200341), triggering processor...
+[Thu Feb  5 12:55:55 IST 2026] Processor launched in background (PID: 67616)
+/var/www/htdocs/tn/data/logs/cron/e2g_user_filter-2026-02-05_12-55-55.log
+[2026-02-05 12:55:57] -----------------------------------------------------------
+[2026-02-05 12:55:57] e2guardian User Filter Processor - STARTED
+[2026-02-05 12:55:57] -----------------------------------------------------------
+[2026-02-05 12:55:57] Current ulimit -n: 8192
+[2026-02-05 12:55:57] ulimit is sufficient
+[2026-02-05 12:55:57] Cleaning up old files...
+[2026-02-05 12:55:57] Reading feeds from /var/www/htdocs/tn/data/services/queue/e2gfilters/userlist/userfeeds.txt...
+[Thu Feb  5 13:00:13 IST 2026] userfeeds.txt changed (checksum: 4294967295), triggering processor...
+[Thu Feb  5 13:00:13 IST 2026] Processor launched in background (PID: 80594)
+/var/www/htdocs/tn/data/logs/cron/e2g_user_filter-2026-02-05_13-00-13.log
+[2026-02-05 13:00:15] -----------------------------------------------------------
+[2026-02-05 13:00:15] e2guardian User Filter Processor - STARTED
+[2026-02-05 13:00:15] -----------------------------------------------------------
+[2026-02-05 13:00:15] Current ulimit -n: 8192
+[2026-02-05 13:00:16] ulimit is sufficient
+[2026-02-05 13:00:16] No user feeds to process
+[Thu Feb  5 13:09:49 IST 2026] userfeeds.txt changed (checksum: 3275196227), triggering processor...
+[Thu Feb  5 13:09:49 IST 2026] Processor launched in background (PID: 10611)
+/var/www/htdocs/tn/data/logs/cron/e2g_user_filter-2026-02-05_13-09-49.log
+[2026-02-05 13:09:51] -----------------------------------------------------------
+[2026-02-05 13:09:51] e2guardian User Filter Processor - STARTED
+[2026-02-05 13:09:51] -----------------------------------------------------------
+[2026-02-05 13:09:51] Current ulimit -n: 8192
+[2026-02-05 13:09:51] ulimit is sufficient
+[2026-02-05 13:09:51] Cleaning up old files...
+[2026-02-05 13:09:51] Reading feeds from /var/www/htdocs/tn/data/services/queue/e2gfilters/userlist/userfeeds.txt...
+[Sat Mar 14 23:02:03 IST 2026] userfeeds.txt changed (checksum: 1796448155), triggering processor...
+[Sat Mar 14 23:02:03 IST 2026] Processor launched in background (PID: 20698)
+2026-03-14 23:02:04 [INFO] Current ulimit -n: 8192
+2026-03-14 23:02:04 [INFO] ulimit is sufficient (>= 2048)
+2026-03-14 23:02:04 [INFO] ========================================
+2026-03-14 23:02:04 [INFO] E2Guardian USER Filter
+2026-03-14 23:02:04 [INFO] Work directory: /etc/feeds/user
+2026-03-14 23:02:04 [INFO] Output directory: /etc/e2guardian/lists/blacklists/webuser
+2026-03-14 23:02:04 [INFO] ========================================
+2026-03-14 23:02:04 [INFO] Cleaning up old files in work directory...
+2026-03-14 23:02:04 [INFO] Cleaning up new_feeds directory...
+2026-03-14 23:02:04 [INFO] Reading feeds from /var/www/htdocs/tn/data/services/queue/e2gfilters/userlist/userfeeds.txt...
+2026-03-14 23:02:04 [INFO] Found HOSTFILE entries
+2026-03-14 23:02:04 [INFO] Found DOMAIN entries
+2026-03-14 23:02:04 [INFO] Found MIXED entries
+2026-03-14 23:02:04 [INFO] Found ADVERTISER entries
+2026-03-14 23:02:04 [INFO] Found CAPITOLE entry
+2026-03-14 23:02:04 [INFO] Downloading hostfiles...
+2026-03-14 23:02:04 [INFO] Checking hosts...
+2026-03-14 23:02:04 [OK] Updated or verified: hosts (HTTP 200)
+2026-03-14 23:02:04 [INFO] Checking hostfile...
+2026-03-14 23:02:05 [OK] Updated or verified: hostfile (HTTP 200)
+2026-03-14 23:02:05 [INFO] Checking phishing-domains-ACTIVE.txt...
+2026-03-14 23:02:06 [OK] Updated or verified: phishing-domains-ACTIVE.txt (HTTP 200)
+2026-03-14 23:02:06 [INFO] Checking feed.txt...
+2026-03-14 23:02:06 [OK] Updated or verified: feed.txt (HTTP 200)
+2026-03-14 23:02:06 [INFO] Checking firstparty-trackers-hosts.txt...
+2026-03-14 23:02:08 [OK] Updated or verified: firstparty-trackers-hosts.txt (HTTP 200)
+2026-03-14 23:02:08 [INFO] Downloading domains...
+2026-03-14 23:02:08 [INFO] Checking phishing_army_blocklist_extended.txt...
+2026-03-14 23:02:09 [OK] Updated or verified: phishing_army_blocklist_extended.txt (HTTP 200)
+2026-03-14 23:02:09 [INFO] Downloading mixed lists...
+2026-03-14 23:02:09 [INFO] Checking urlhaus-filter-domains.txt...
+2026-03-14 23:02:13 [OK] Updated or verified: urlhaus-filter-domains.txt (HTTP 200)
+2026-03-14 23:02:13 [INFO] Downloading advertisers...
+2026-03-14 23:02:13 [INFO] Checking d3host.txt...
+2026-03-14 23:02:13 [OK] Updated or verified: d3host.txt (HTTP 200)
+2026-03-14 23:02:13 [INFO] Checking hosts.txt...
+2026-03-14 23:02:14 [OK] Updated or verified: hosts.txt (HTTP 200)
+2026-03-14 23:02:14 [INFO] Downloading Capitole archive...
+2026-03-14 23:02:42 [OK] Updated or verified: blacklists.tar.gz (HTTP 200)
+2026-03-14 23:02:42 [INFO] Extracting Capitole archive...
+2026-03-14 23:02:44 [OK] Capitole archive extracted successfully.
+2026-03-14 23:02:44 [INFO] Processing Capitole categories...
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: adult
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: adult
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: agressif
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: agressif
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: arjel
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: astrology
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: astrology
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: audio-video
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: audio-video
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: bank
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: bitcoin
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: bitcoin
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: blog
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: blog
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: celebrity
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: celebrity
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: chat
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: chat
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: cooking
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: dangerous_material
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: dangerous_material
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: dating
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: dating
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: dialer
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: drogue
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: drogue
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: filehosting
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: filehosting
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: financial
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: financial
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: forums
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: forums
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: vpn
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: gambling
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: gambling
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: games
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: games
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: hacking
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: hacking
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: jobsearch
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: jobsearch
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: lingerie
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: lingerie
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: malware
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: malware
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: manga
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: manga
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: marketingware
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: marketingware
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: mixed_adult
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: mixed_adult
+2026-03-14 23:02:45 [OK] Capitole blacklist domains: mobile-phone
+2026-03-14 23:02:45 [OK] Capitole blacklist urls: mobile-phone
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: phishing
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: phishing
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: press
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: press
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: publicite
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: publicite
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: radio
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: radio
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: reaffected
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: reaffected
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: redirector
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: redirector
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: remote-control
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: remote-control
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: sect
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: sect
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: shopping
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: shopping
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: social_networks
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: social_networks
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: sports
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: sports
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: strict_redirector
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: strict_redirector
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: strong_redirector
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: strong_redirector
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: tricheur
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: tricheur
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: warez
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: warez
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: webmail
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: webmail
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: special
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: special
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: ddos
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: associations_religieuses
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: shortener
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: shortener
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: cryptojacking
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: cryptojacking
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: stalkerware
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: stalkerware
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: doh
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: doh
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: tricheur_pix
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: tricheur_pix
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: residential-proxies
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: fakenews
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: dynamic-dns
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: webhosting
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: webhosting
+2026-03-14 23:02:46 [OK] Capitole blacklist domains: ai
+2026-03-14 23:02:46 [OK] Capitole blacklist urls: ai
+2026-03-14 23:02:55 [OK] Capitole blacklist merged.
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: arjel
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: bank
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: chat
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: chat
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: child
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: child
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: cleaning
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: cleaning
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: cooking
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: educational_games
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: educational_games
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: jobsearch
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: jobsearch
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: liste_blanche
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: liste_blanche
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: liste_bu
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: liste_bu
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: remote-control
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: remote-control
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: sexual_education
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: sexual_education
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: translation
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: translation
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: webmail
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: webmail
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: download
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: download
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: update
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: update
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: examen_pix
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: examen_pix
+2026-03-14 23:02:56 [OK] Capitole whitelist domains: ai
+2026-03-14 23:02:56 [OK] Capitole whitelist urls: ai
+2026-03-14 23:02:56 [OK] Capitole whitelist merged into exception list (   76170 entries).
+2026-03-14 23:02:56 [OK] Capitole URLs and domains merged.
+2026-03-14 23:02:56 [INFO] Extracting domains from hostfile /etc/feeds/user/hostfiles/feed.txt...
+2026-03-14 23:02:56 [INFO] Extracting domains from hostfile /etc/feeds/user/hostfiles/firstparty-trackers-hosts.txt...
+2026-03-14 23:02:56 [INFO] Extracting domains from hostfile /etc/feeds/user/hostfiles/hostfile...
+2026-03-14 23:02:56 [INFO] Extracting domains from hostfile /etc/feeds/user/hostfiles/hosts...
+2026-03-14 23:02:56 [INFO] Extracting domains from hostfile /etc/feeds/user/hostfiles/phishing-domains-ACTIVE.txt...
+2026-03-14 23:02:57 [INFO] Extracting domains from URLs in /etc/feeds/user/domains/phishing_army_blocklist_extended.txt...
+2026-03-14 23:02:57 [INFO] Extracting domains from mixed list /etc/feeds/user/mix/urlhaus-filter-domains.txt...
+2026-03-14 23:02:57 [INFO] Extracting domains from hostfile /etc/feeds/user/ads/d3host.txt...
+2026-03-14 23:02:57 [INFO] Extracting domains from hostfile /etc/feeds/user/ads/hosts.txt...
+2026-03-14 23:03:07 [INFO] ========================================
+2026-03-14 23:03:07 [INFO] Extraction Summary:
+2026-03-14 23:03:07 [INFO] Domains extracted:   403535
+2026-03-14 23:03:07 [INFO] Total URLs:    22591
+2026-03-14 23:03:07 [INFO] Total Domains:  5065921
+2026-03-14 23:03:07 [INFO] ========================================
+2026-03-14 23:03:08 [INFO] Activated user filter configuration.
+2026-03-14 23:03:08 [INFO] Configuration files updated. Ready for reload.
+2026-03-14 23:03:08 [INFO] e2guardian is running (PID: 77462). Reloading configuration...
+2026-03-14 23:03:08 [INFO] e2guardian reload triggered successfully. DB rebuild running in background.
+2026-03-14 23:03:08 [DEBUG] About to call setup_e2guardian_cron
+2026-03-14 23:03:08 [DEBUG] Entered setup_e2guardian_cron
+2026-03-14 23:03:08 [INFO] Starting cron setup for e2g_user_filter.sh
+2026-03-14 23:03:08 [INFO] Replacing existing e2g filter job.
+2026-03-14 23:03:08 [INFO] Crontab updated successfully for e2g_user_filter.sh.
+2026-03-14 23:03:08 [INFO] Crontab setup completed for e2g_user_filter.sh.
+2026-03-14 23:03:08 [DEBUG] Finished setup_e2guardian_cron
+2026-03-14 23:03:08 [INFO] Processing complete.
+2026-03-14 23:03:08 [INFO] ========================================
+2026-03-14 23:03:08 [INFO] USER Filter Assets:
+  - Work directory: /etc/feeds/user
+  - Domains: /etc/e2guardian/lists/blacklists/webuser/domains ( 5065921 entries)
+  - URLs: /etc/e2guardian/lists/blacklists/webuser/urls (   22591 entries)
+  - Filter config: /etc/e2guardian/e2guardianf1.conf
+2026-03-14 23:03:08 [INFO] ========================================
+2026-03-14 23:03:08 [INFO] Script completed successfully.
+[Sat Mar 14 23:05:36 IST 2026] userfeeds.txt changed (checksum: 4294967295), triggering processor...
+[Sat Mar 14 23:05:36 IST 2026] Processor launched in background (PID: 87715)
+2026-03-14 23:05:36 [INFO] Current ulimit -n: 8192
+2026-03-14 23:05:36 [INFO] ulimit is sufficient (>= 2048)
+2026-03-14 23:05:36 [INFO] ========================================
+2026-03-14 23:05:36 [INFO] E2Guardian USER Filter
+2026-03-14 23:05:36 [INFO] Work directory: /etc/feeds/user
+2026-03-14 23:05:36 [INFO] Output directory: /etc/e2guardian/lists/blacklists/webuser
+2026-03-14 23:05:36 [INFO] ========================================
+2026-03-14 23:05:36 [INFO] Cleaning up old files in work directory...
+2026-03-14 23:05:36 [INFO] Cleaning up new_feeds directory...
+2026-03-14 23:05:36 [INFO] Reading feeds from /var/www/htdocs/tn/data/services/queue/e2gfilters/userlist/userfeeds.txt...
+2026-03-14 23:05:36 [INFO] Extracting domains from hostfile /etc/feeds/user/hostfiles/feed.txt...
+2026-03-14 23:05:36 [INFO] Extracting domains from hostfile /etc/feeds/user/hostfiles/firstparty-trackers-hosts.txt...
+2026-03-14 23:05:36 [INFO] Extracting domains from hostfile /etc/feeds/user/hostfiles/hostfile...
+2026-03-14 23:05:36 [INFO] Extracting domains from hostfile /etc/feeds/user/hostfiles/hosts...
+2026-03-14 23:05:36 [INFO] Extracting domains from hostfile /etc/feeds/user/hostfiles/phishing-domains-ACTIVE.txt...
+2026-03-14 23:05:36 [INFO] Extracting domains from URLs in /etc/feeds/user/domains/phishing_army_blocklist_extended.txt...
+2026-03-14 23:05:36 [INFO] Extracting domains from mixed list /etc/feeds/user/mix/urlhaus-filter-domains.txt...
+2026-03-14 23:05:37 [INFO] Extracting domains from hostfile /etc/feeds/user/ads/d3host.txt...
+2026-03-14 23:05:37 [INFO] Extracting domains from hostfile /etc/feeds/user/ads/hosts.txt...
+2026-03-14 23:05:46 [INFO] ========================================
+2026-03-14 23:05:46 [INFO] Extraction Summary:
+2026-03-14 23:05:46 [INFO] Domains extracted:   403535
+2026-03-14 23:05:46 [INFO] Total URLs:    22591
+2026-03-14 23:05:46 [INFO] Total Domains:  5423745
+2026-03-14 23:05:46 [INFO] ========================================
+2026-03-14 23:05:47 [INFO] Activated user filter configuration.
+2026-03-14 23:05:47 [INFO] Configuration files updated. Ready for reload.
+2026-03-14 23:05:47 [INFO] e2guardian is running (PID: 77462). Reloading configuration...
+2026-03-14 23:05:47 [INFO] e2guardian reload triggered successfully. DB rebuild running in background.
+2026-03-14 23:05:47 [DEBUG] About to call setup_e2guardian_cron
+2026-03-14 23:05:47 [DEBUG] Entered setup_e2guardian_cron
+2026-03-14 23:05:47 [INFO] Starting cron setup for e2g_user_filter.sh
+2026-03-14 23:05:47 [INFO] e2g_user_filter.sh job is already in crontab. No changes needed.
+2026-03-14 23:05:47 [INFO] Crontab setup completed for e2g_user_filter.sh.
+2026-03-14 23:05:47 [DEBUG] Finished setup_e2guardian_cron
+2026-03-14 23:05:47 [INFO] Processing complete.
+2026-03-14 23:05:47 [INFO] ========================================
+2026-03-14 23:05:47 [INFO] USER Filter Assets:
+  - Work directory: /etc/feeds/user
+  - Domains: /etc/e2guardian/lists/blacklists/webuser/domains ( 5423745 entries)
+  - URLs: /etc/e2guardian/lists/blacklists/webuser/urls (   22591 entries)
+  - Filter config: /etc/e2guardian/e2guardianf1.conf
+2026-03-14 23:05:47 [INFO] ========================================
+2026-03-14 23:05:47 [INFO] Script completed successfully.

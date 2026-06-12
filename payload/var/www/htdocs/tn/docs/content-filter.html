@@ -1,0 +1,888 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    This document covers the content inspection stack -- the chain of daemons
+    that PF diverts traffic through before forwarding it to its destination.
+    It covers SSLproxy, e2guardian, Snort IDS and IPS, snortsentry, p3scan,
+    smtp-gated, imspector, spamd, and the SOCKS proxy. It also covers the
+    e2guardian filter management system: the three filter profiles, the feed
+    download scripts, the queue processor, and the WebUI status pipeline.
+  </p>
+  <p>
+    The firewall document covers the PF divert rules that feed traffic into
+    this stack. This document covers what happens after diversion. Read the
+    firewall document first if you have not already.
+  </p>
+  <p>
+    Compilation details and custom patches for the programs in this stack
+    are documented separately. That documentation is not covered here.
+  </p>
+</div>
+
+<h1>Content Filtering</h1>
+
+<h2>Inspection Stack Overview</h2>
+<p>
+  The inspection stack is a chain of user-space daemons connected to the
+  traffic stream through PF divert rules. No traffic leaves the machine
+  uninspected. The chain for HTTP and HTTPS traffic is the deepest -- SSLproxy
+  decrypts TLS, e2guardian filters content, and Snort IPS performs deep packet
+  inspection on the decrypted stream. Other protocols have shallower chains
+  appropriate to their threat profile.
+</p>
+
+<dl>
+  <dt>SSLproxy</dt>
+  <dd>Transparent TLS interception proxy. Decrypts HTTPS connections using a
+  locally installed CA, forwards decrypted content to e2guardian, re-encrypts
+  outbound. Also handles POP3, POP3S, SMTP, SMTPS, and submission protocol
+  proxying.</dd>
+
+  <dt>e2guardian</dt>
+  <dd>Content filter. Receives decrypted HTTP traffic from SSLproxy on port
+  8080. Applies phrase matching, domain blacklists, URL blacklists, MIME type
+  filtering, and ClamAV virus scanning. Three switchable filter profiles.</dd>
+
+  <dt>Snort IDS</dt>
+  <dd>Network intrusion detection. Monitors the LAN interface (%%INT_IF%%) passively.
+  Writes alerts in fast format. Does not block traffic.</dd>
+
+  <dt>Snort IPS</dt>
+  <dd>Network intrusion prevention. Runs inline via the PF divert-packet
+  mechanism on loopback ports 8080, 8110, and 9199 -- the post-decryption
+  paths from SSLproxy. Receives decrypted content and can drop packets.</dd>
+
+  <dt>snortsentry</dt>
+  <dd>Tangent-authored Perl daemon. Watches the Snort IDS alert file and adds
+  offending source IPs to the PF <code>&lt;snort_block&gt;</code> table.
+  Supports IPv4 and IPv6. Escalating block durations.</dd>
+
+  <dt>p3scan</dt>
+  <dd>Transparent POP3 and POP3S proxy. Scans mail attachments with ClamAV
+  before delivery to the mail client.</dd>
+
+  <dt>smtp-gated</dt>
+  <dd>Transparent SMTP proxy. Scans outbound mail with ClamAV and
+  SpamAssassin before forwarding to the destination mail server.</dd>
+
+  <dt>imspector</dt>
+  <dd>Transparent instant messaging proxy. Logs and optionally filters
+  conversations on MSN, AIM, Yahoo, and IRC protocols.</dd>
+
+  <dt>spamd</dt>
+  <dd>OpenBSD spamd greylisting daemon. Delays connections from unknown
+  senders to reduce spam volume reaching smtp-gated.</dd>
+
+  <dt>Dante sockd</dt>
+  <dd>SOCKS5 proxy. Provides LAN clients with a proxied outbound connection
+  path for applications that support SOCKS.</dd>
+</dl>
+
+<h2>SSLproxy</h2>
+<p>
+  SSLproxy performs transparent TLS interception. LAN clients connect to
+  external HTTPS destinations normally. PF intercepts the connection and
+  diverts it to SSLproxy, which presents a forged certificate signed by the
+  local CA. SSLproxy then opens its own TLS connection to the real destination,
+  giving it access to the plaintext stream in both directions.
+</p>
+<p>
+  SSLproxy runs as <code>_sslproxy</code> under the PF user isolation rules.
+  The CA certificate and key are at
+  <code>/usr/local/etc/sslproxy/ca.crt</code> and
+  <code>/usr/local/etc/sslproxy/ca.key</code>. LAN clients must have the CA
+  certificate installed as a trusted root for HTTPS inspection to work
+  transparently -- without it, browsers will show certificate warnings for
+  every HTTPS site.
+</p>
+
+<h3>ProxySpecs</h3>
+<p>
+  Each ProxySpec defines a listening address and port, and where to forward
+  the decrypted stream. The <code>up:</code> parameter is the upstream port
+  where the next inspection daemon listens.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">conf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>
+### 1. Web Inspection Layer
+
+ http-v4-8081  -> ProxySpec http     127.0.0.1 8081 up:8080
+ http-v6-8081  -> ProxySpec http     ::1       8081 up:8080
+ https-v4-8443 -> ProxySpec https    127.0.0.1 8443 up:8080
+ https-v6-8443 -> ProxySpec https    ::1       8443 up:8080
+
+### 2. POP3 / POP3S Mail Retrieval Layer
+
+ pop3-v4-8994  -> ProxySpec pop3     127.0.0.1 8994 up:8110
+ pop3-v6-8994  -> ProxySpec pop3     ::1       8994 up:8110
+ pop3s-v4-8995 -> ProxySpec pop3s    127.0.0.1 8995 up:8110
+ pop3s-v6-8995 -> ProxySpec pop3s    ::1       8995 up:8110
+ pop3s-v4-8993 -> ProxySpec pop3s    127.0.0.1 8993 up:8110
+ pop3s-v6-8993 -> ProxySpec pop3s    ::1       8993 up:8110
+
+### 3. SMTP / SMTPS Mail Submission Layer
+
+ smtp-v4-8464  -> ProxySpec smtp     127.0.0.1 8464 up:9199
+ smtp-v6-8464  -> ProxySpec smtp     ::1       8464 up:9199
+ smtps-v4-8465 -> ProxySpec smtps    127.0.0.1 8465 up:9199
+ smtps-v6-8465 -> ProxySpec smtps    ::1       8465 up:9199
+
+### 4. Dynamic AutoSSL Engine Layer
+
+ autossl-v4-8466 -> ProxySpec autossl 127.0.0.1 8466 up:9199
+ autossl-v6-8466 -> ProxySpec autossl ::1       8466 up:9199
+</div>
+
+<p>
+  HTTP and HTTPS both forward to port 8080 where e2guardian listens. POP3
+  and POP3S forward to port 8110, SMTP variants to port 9199 -- these are
+  the Snort IPS divert ports for non-web protocols. SSLproxy handles the
+  protocol-level wrapping; the upstream daemon sees plaintext in all cases.
+</p>
+
+<h3>Key Configuration</h3>
+
+<dl>
+  <dt><code>CACert / CAKey</code></dt>
+  <dd><code>/usr/local/etc/sslproxy/ca.crt</code> and <code>ca.key</code> --
+  used to sign forged leaf certificates on the fly for each intercepted
+  HTTPS connection.</dd>
+
+  <dt><code>LeafKeyRSABits 2048</code></dt>
+  <dd>RSA key size for generated leaf certificates.</dd>
+
+  <dt><code>Ciphers ALL:!RC4</code></dt>
+  <dd>Excludes RC4 from the cipher list. All other ciphers permitted.</dd>
+
+  <dt><code>RemoveHTTPReferer yes</code></dt>
+  <dd>Strips the Referer header from forwarded requests. Reduces cross-site
+  tracking.</dd>
+
+  <dt><code>VerifyPeer yes</code></dt>
+  <dd>SSLproxy verifies the destination server's certificate. Connections to
+  servers with invalid certificates are handled according to the
+  <code>Passthrough</code> setting (default: drop).</dd>
+
+  <dt><code>UserAuth no</code></dt>
+  <dd>Per-user authentication is disabled. All LAN traffic is inspected
+  without user identification. The SSLproxy users database exists at
+  <code>/var/www/htdocs/tn/data/db/sslproxy/users.db</code> and is ready
+  for future integration with TNAuth when per-user inspection policies
+  are required.</dd>
+
+  <dt><code>ConnIdleTimeout 120</code></dt>
+  <dd>Connections idle for 120 seconds are closed. Prevents state accumulation
+  from abandoned connections.</dd>
+
+  <dt><code>OpenFilesLimit 1024</code></dt>
+  <dd>Each proxied connection uses file descriptors. This limit caps concurrent
+  connections. Increase if SSLproxy logs file descriptor errors under heavy
+  load.</dd>
+</dl>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check SSLproxy is running
+pgrep -l sslproxy
+
+# View connect log (one line per proxied connection)
+tail -f /var/www/htdocs/tn/data/logs/sslproxy/sslproxy_connect.log
+
+# Restart SSLproxy
+pkill sslproxy
+/usr/local/bin/sslproxy -f /usr/local/etc/sslproxy/sslproxy.conf</code></pre>
+</div>
+
+<h2>e2guardian</h2>
+<p>
+  e2guardian is the content filter. It receives decrypted HTTP traffic from
+  SSLproxy on loopback port 8080. It does not perform TLS -- SSLproxy handles
+  all encryption and decryption. <code>enablessl = off</code> and
+  <code>sslmitm = off</code> in the e2guardian configuration are correct and
+  intentional: e2guardian sees plaintext because SSLproxy has already unwrapped
+  it.
+</p>
+<p>
+  e2guardian runs as <code>_e2guardian</code> under PF user isolation rules,
+  which prevents it from opening direct connections to LAN or WAN addresses.
+  All its network communication happens through loopback, through SSLproxy.
+</p>
+
+<h3>Main Configuration</h3>
+
+<dl>
+  <dt><code>filterip = 127.0.0.1</code> / <code>filterports = 8080</code></dt>
+  <dd>e2guardian listens on loopback port 8080. Only SSLproxy sends traffic
+  here -- no direct client connections reach this port.</dd>
+
+  <dt><code>filtergroups = 1</code></dt>
+  <dd>Single filter group. All LAN clients are assigned to the same group and
+  subject to the same active filter profile. Group assignment is via
+  <code>/etc/e2guardian/lists/filtergroupslist</code>.</dd>
+
+  <dt><code>httpworkers = 50</code></dt>
+  <dd>Maximum concurrent HTTP worker threads. Sufficient for a home or small
+  office deployment. Increase if e2guardian logs worker exhaustion under
+  heavy concurrent load.</dd>
+
+  <dt><code>weightedphrasemode = 2</code> / <code>phrasefiltermode = 2</code></dt>
+  <dd>Full phrase weighted scanning on both URL and body content. Mode 2
+  scans both the URL and the page body. The naughtiness score from phrase
+  matching is compared against the <code>naughtynesslimit</code> in the
+  active filter profile (175 for all three profiles).</dd>
+
+  <dt><code>maxcontentfiltersize = 2048</code></dt>
+  <dd>Maximum content body size in KB that e2guardian will filter. Content
+  larger than 2 MB is passed without filtering. Increase cautiously --
+  larger values increase memory usage per worker thread.</dd>
+
+  <dt><code>contentscanner = clamdscan.conf</code></dt>
+  <dd>ClamAV daemon scanner. e2guardian passes downloaded content to clamd
+  for virus scanning. The clamd socket is at
+  <code>/var/www/htdocs/tn/data/tmp/clamd.socket</code>.</dd>
+
+  <dt><code>authplugin = ip.conf</code></dt>
+  <dd>IP-based client identification. e2guardian identifies clients by source
+  IP address for logging and group assignment purposes. No password
+  authentication.</dd>
+
+  <dt><code>loglevel = 3</code></dt>
+  <dd>Logs all requests including exceptions. The access log at
+  <code>/var/www/htdocs/tn/data/logs/e2guardian/access.log</code> receives
+  one line per request. The daemon log at
+  <code>/var/www/htdocs/tn/data/logs/e2guardian/e2guardian.log</code> receives
+  operational messages.</dd>
+</dl>
+
+<h2>e2guardian Filter Profiles</h2>
+<p>
+  Three filter profile configuration files exist in
+  <code>/etc/e2guardian/</code>. Only one is active at a time. The active
+  profile is <code>e2guardianf1.conf</code> -- the file e2guardian actually
+  loads. Each filter management script copies its profile template over this
+  file when activated, then reloads e2guardian.
+</p>
+<div class="callout callout-note">
+<p>
+  The template file extensions used here (such as e2guardianf1.conf.a, *.c, 
+  and *.u) are intentionally chosen configuration suffixes. Be aware that 
+  some graphical GUI text editors may misinterpret these extensions as source 
+  code language files (like C or Unshared source) and apply incorrect syntax 
+  highlighting. Tangent Networks is aware of this interface behavior, and a 
+  standardized extension schema will be implemented in the next release to 
+  resolve this confusion.
+</p>
+</div>
+<dl>
+  <dt><code>e2guardianf1.conf.c</code> -- Childsafe</dt>
+  <dd>Strict filtering. Blacklists point to
+  <code>lists/blacklists/childsafe/domains</code> and
+  <code>lists/blacklists/childsafe/urls</code>. Includes the childsafe
+  phrase lists for bad words, profanity, and spam phrases. Blocks adult
+  content, malware domains, ad networks, and general threat categories.
+  Updated by <code>e2g_childsafe_filter.sh</code>.</dd>
+
+  <dt><code>e2guardianf1.conf.a</code> -- Adult (General)</dt>
+  <dd>Permissive profile. Blacklists point to
+  <code>lists/blacklists/adult/domains</code> and
+  <code>lists/blacklists/adult/urls</code>. Blocks malware domains and ad
+  networks but does not include porn filtering categories. Updated by
+  <code>e2g_adult_filter.sh</code>.</dd>
+
+  <dt><code>e2guardianf1.conf.u</code> -- User (Custom)</dt>
+  <dd>User-defined profile. Blacklists point to
+  <code>lists/blacklists/webuser/domains</code> and
+  <code>lists/blacklists/webuser/urls</code>. Feed sources are defined
+  through the WebUI and written to
+  <code>/var/www/htdocs/tn/data/services/queue/e2gfilters/userlist/userfeeds.txt</code>.
+  Updated by <code>e2g_user_filter.sh</code>.</dd>
+</dl>
+
+<p>
+  All three profiles share the same storyboard
+  (<code>e2guardianf1.story</code>), the same phrase list base, the same
+  exception and grey list paths, and the same MIME and file extension lists.
+  The only difference between profiles is which blacklist directory the
+  <code>banned</code> site and URL lists point to, and which additional
+  phrase lists are loaded.
+</p>
+
+<div class="callout callout-note">
+  <p><strong>Only one filter script should be in crontab at a time.</strong>
+  The filter scripts self-manage the crontab entry -- when a filter is
+  activated via the WebUI queue processor, it removes any existing
+  <code>e2g_*_filter.sh</code> entry and adds its own. The crontab at any
+  given time reflects which profile is scheduled for daily feed updates.
+  The current active profile is also written to the status JSON file read
+  by the WebUI dashboard.</p>
+</div>
+
+<h2>Feed Management Scripts</h2>
+<p>
+  Each filter profile has a corresponding feed management script.
+  All three follow the same structure: download configured feeds into an
+  isolated work directory, extract and deduplicate domains and URLs, write the
+  final lists to the e2guardian blacklist directory, copy the profile template
+  over <code>e2guardianf1.conf</code>, and reload e2guardian. The adult,
+  childsafe, and user scripts all support the Capitole archive inline -- no
+  shared library is used. Capitole category routing is determined at runtime
+  by scanning each category&#39;s <code>usage</code> file with
+  <code>find</code> and <code>grep</code>: categories whose usage starts with
+  <code>black</code> are merged into the e2guardian blacklist; categories whose
+  usage starts with <code>white</code> are appended to
+  <code>/etc/e2guardian/lists/localexceptionsitelist</code> and deduplicated.
+  The user filter supports Capitole if a <code>CAPITOLE:</code> entry is present
+  in <code>userfeeds.txt</code>; without one it processes only the configured
+  feed URLs.
+</p>
+
+<h3>Feed source categories</h3>
+<p>
+  Feed sources are declared in a per-profile configuration file using
+  category prefixes. The childsafe and adult scripts read from
+  <code>/etc/e2guardian/feeds/</code>. The user script reads from the
+  WebUI-managed <code>userfeeds.txt</code>.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">conf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>HOSTFILE:  https://example.com/hosts.txt       # hosts-format blocklist
+DOMAIN:    https://example.com/domains.txt     # plain domain list
+PORN:      https://example.com/porn.txt        # adult domain list (childsafe only)
+MIXED:     https://example.com/mixed.txt       # mixed domains and IPs
+ADVERTISER: https://example.com/ads.txt        # ad network hosts format
+CAPITOLE:  https://example.com/blacklists.tar.gz  # Capitole-Toulouse archive</code></pre>
+</div>
+
+<p>
+  The Capitole archive from Toulouse University is a comprehensive categorised
+  blacklist/allowlist. Each category directory contains a <code>usage</code>
+  file whose first word is either <code>black</code> or <code>white</code>.
+  The scripts discover categories dynamically at runtime using
+  <code>find ... -name usage -exec grep -l</code> -- no category names are
+  hardcoded, so archive layout changes are handled automatically. Categories
+  whose usage starts with <code>black</code> are merged into the e2guardian
+  blacklist; categories whose usage starts with <code>white</code> are appended
+  to <code>/etc/e2guardian/lists/localexceptionsitelist</code> and sorted
+  deduplicated. Categories with any other usage value are skipped and logged.
+  This prevents legitimate domains in child-safe allowlist categories (such as
+  <code>child</code>, <code>educational</code>, <code>radio</code>) from being
+  incorrectly added to the blocklist. Other feed types are processed by
+  extraction method -- hostfile format extracts the last field of each line,
+  URL format extracts the hostname from each URL, mixed format filters out IP
+  addresses and keeps domain entries.
+</p>
+
+<h3>Work directories</h3>
+<p>
+  Each filter type has an isolated work directory under
+  <code>/etc/feeds/</code>:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>/etc/feeds/childsafe/    # childsafe work directory
+/etc/feeds/adult/        # adult work directory
+/etc/feeds/user/         # user/custom work directory
+  hostfiles/             # downloaded hostfile-format feeds
+  domains/               # downloaded domain list feeds
+  ads/                   # downloaded advertiser feeds
+  mix/                   # downloaded mixed list feeds
+  porn/                  # downloaded porn domain feeds (childsafe)
+  new_feeds/             # staging area before merge
+  domains.new            # raw extracted domains before dedup
+  blockdomains           # final merged domain list
+  blacklists/            # extracted Capitole archive (per-run, overwritten each update)
+
+/etc/e2guardian/feeds/
+  general.txt            # feed source URLs for adult/general filter
+  childsafe.txt          # feed source URLs for childsafe filter
+  # (user filter reads from WebUI-managed userfeeds.txt -- see above)
+
+/etc/e2guardian/lists/
+  localexceptionsitelist # Capitole white* domains and URLs appended here (all filter types)</code></pre>
+</div>
+
+<h3>Reload behaviour</h3>
+<p>
+  After updating the blacklist files and copying the profile template, the
+  scripts call <code>e2guardian -r</code> to trigger a configuration reload.
+  e2guardian keeps the old configuration in memory if the reload fails --
+  there is no service interruption on a bad config. If e2guardian is not
+  running when the script fires, it starts it instead of reloading.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check which filter is currently active
+cat /var/www/htdocs/tn/data/services/queue/e2gfilters/status/active_mode.json
+
+# Run feed update manually (as root)
+/usr/local/sbin/e2g_childsafe_filter.sh
+/usr/local/sbin/e2g_adult_filter.sh
+/usr/local/sbin/e2g_user_filter.sh
+
+# Check last feed update log
+ls -lt /var/www/htdocs/tn/data/logs/cron/ | grep e2g
+tail -50 /var/www/htdocs/tn/data/logs/cron/e2guardian-childsafe-*.log
+
+# Count current blacklist entries
+wc -l /etc/e2guardian/lists/blacklists/childsafe/domains
+wc -l /etc/e2guardian/lists/blacklists/childsafe/urls</code></pre>
+</div>
+
+<h2>WebUI Filter Management Pipeline</h2>
+<p>
+  Four daemons handle the bridge between the WebUI and the e2guardian filter
+  system. They run continuously from rc.local and communicate through a queue
+  directory structure.
+</p>
+
+<dl>
+  <dt><code>e2g_status_writer.sh</code> via <code>e2g_status_writer_runner.sh</code></dt>
+  <dd>Polls <code>/etc/crontab</code> every 2 seconds. Determines which filter
+  script is currently scheduled, parses its cron time, and writes a status
+  JSON to
+  <code>/var/www/htdocs/tn/data/services/queue/e2gfilters/status/active_mode.json</code>.
+  The WebUI filter panel reads this file to display the current mode and
+  next scheduled update time. Modes reported: <code>general</code> (adult),
+  <code>childsafe</code>, <code>custom</code> (user), or <code>none</code>.</dd>
+
+  <dt><code>e2g_queue_processor.sh</code> via <code>e2g_queue_processor_runner.sh</code></dt>
+  <dd>Processes filter switch requests from the WebUI. Reads request files
+  from
+  <code>/var/www/htdocs/tn/data/services/queue/e2gfilters/request/</code>,
+  validates the requested mode, runs the appropriate filter script, and
+  writes the outcome to
+  <code>/var/www/htdocs/tn/data/services/queue/e2gfilters/outcome/</code>.
+  The queue processor runner uses <code>exec</code> rather than a loop --
+  it starts the processor once and exits when it completes, relying on
+  rc.local to restart it if needed.</dd>
+
+  <dt><code>e2g_user_filter_detector.sh</code> via <code>e2g_user_filter_runner.sh</code></dt>
+  <dd>Polls <code>userfeeds.txt</code> every 2 seconds using a checksum
+  comparison. When the file changes (WebUI adds or removes a user feed URL),
+  the detector launches <code>e2g_user_filter.sh</code> in the background
+  and updates the stored checksum. This gives near-immediate feed list updates
+  without waiting for the daily cron run.</dd>
+</dl>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check all four pipeline daemons are running
+pgrep -f e2g_status_writer_runner
+pgrep -f e2g_queue_processor_runner
+pgrep -f e2g_user_filter_runner
+
+# Check PID files
+ls /var/www/htdocs/tn/data/run/webui/e2g_*.pid
+
+# View status JSON
+cat /var/www/htdocs/tn/data/services/queue/e2gfilters/status/active_mode.json
+
+# View detector log
+tail -20 /var/www/htdocs/tn/data/services/queue/e2gfilters/outcome/detector.log</code></pre>
+</div>
+
+<h2>Snort IDS and IPS</h2>
+<p>
+  Two Snort instances run simultaneously serving different roles. Both are
+  started from rc.local and log through OpenBSD syslog using the
+  <code>logger</code> utility -- Snort's stderr output is piped to
+  <code>logger</code> with distinct tags, and syslog routes each tag to a
+  separate file.
+</p>
+
+<dl>
+  <dt>IDS instance -- passive monitoring</dt>
+  <dd>Runs on %%INT_IF%% with <code>snort -i %%INT_IF%% -d -c /etc/snort/snort.conf</code>.
+  Monitors all LAN traffic passively. Does not touch packets. Writes alerts
+  in fast format to
+  <code>/var/www/htdocs/tn/data/logs/snort/alert.log</code> (via
+  <code>output alert_fast: alert.log</code> in snort.conf). Also writes
+  binary capture logs. Syslog tag: <code>snort_ids</code>, log file:
+  <code>/var/www/htdocs/tn/data/logs/snort/snort.log</code>.
+  PID file: <code>/var/www/htdocs/tn/data/run/snort/snort_%%INT_IF%%.pid</code>.</dd>
+
+  <dt>IPS instance -- inline prevention</dt>
+  <dd>Runs with <code>snort -d -Q -c /etc/snort/snortinline.conf</code>.
+  Uses the ipfw DAQ in inline mode on divert port 700. Receives decrypted
+  traffic from the SSLproxy loopback chain. Can drop packets. No interface
+  flag -- the divert port in snortinline.conf provides the traffic source.
+  Syslog tag: <code>snort_ips</code>, log file:
+  <code>/var/www/htdocs/tn/data/logs/snort/snortinline.log</code>.
+  PID file: <code>/var/www/htdocs/tn/data/run/snort/snort_.pid</code>.</dd>
+</dl>
+
+<div class="callout callout-note">
+  <p><strong>Syslog routing for Snort.</strong> OpenBSD syslog is intentionally
+  minimal and does not support per-program log routing without explicit
+  facility/tag configuration. Both Snort instances pipe stderr through
+  <code>logger</code> -- IDS as <code>logger -t snort_ids -p daemon.info</code>,
+  IPS as <code>logger -t snort_ips -p daemon.info</code>. The syslog
+  configuration routes these tags to their respective log files. snortsentry
+  gets its own facility tag <code>snortsentry</code> routed to
+  <code>/var/www/htdocs/tn/data/logs/snortsentry/snortsentry.log</code>.
+  This is the standard approach for multi-instance daemons on OpenBSD.</p>
+</div>
+
+<h3>IDS configuration highlights</h3>
+<p>
+  <code>/etc/snort/snort.conf</code> uses the ac-split search method with
+  optimisation enabled. The DAQ directory is set to
+  <code>/usr/local/lib/daq/</code>. Output goes to both syslog
+  (<code>output alert_syslog: LOG_DAEMON LOG_ALERT LOG_AUTH</code>) and the
+  fast alert file. The null log output (<code>output log_null</code>) suppresses
+  packet logging to disk -- alerts only. Rules are loaded from
+  <code>/etc/snort/rules/</code>.
+</p>
+
+<h3>IPS configuration highlights</h3>
+<p>
+  <code>/etc/snort/snortinline.conf</code> adds the inline-specific directives
+  to the base configuration. The DAQ is set to <code>ipfw</code> in inline
+  mode on divert port 700 (<code>config daq: ipfw</code>,
+  <code>config daq_mode: inline</code>, <code>config daq_var: port=700</code>).
+  Policy mode is inline (<code>config policy_mode: inline</code>) and snaplen
+  is set to 65535 to capture full packets. This instance sees only the traffic
+  that PF has diverted to loopback ports 8080, 8110, and 9199 -- decrypted
+  HTTP, POP3, and SMTP streams.
+</p>
+
+<h3>Rule updates</h3>
+<p>
+  Snort rules are updated daily at 11:30 by
+  <code>oinkmaster_update_snortinline.sh</code>, which runs oinkmaster against
+  <code>/etc/snort/rules/</code> using <code>/etc/oinkmaster.conf</code>.
+  Output is logged to <code>oinkmaster.log</code>.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check both Snort instances are running
+pgrep -a snort
+
+# IDS PID file
+cat /var/www/htdocs/tn/data/run/snort/snort_%%INT_IF%%.pid
+
+# IPS PID file
+cat /var/www/htdocs/tn/data/run/snort/snort_.pid
+
+# Tail IDS alerts
+tail -f /var/www/htdocs/tn/data/logs/snort/alert.log
+
+# Count alerts by type
+sort -t[ -k2 /var/www/htdocs/tn/data/logs/snort/alert.log | uniq -c | sort -rn | head -20
+
+# Update rules manually
+/usr/local/sbin/oinkmaster_update_snortinline.sh</code></pre>
+</div>
+
+<h2>snortsentry</h2>
+<p>
+  snortsentry is a Tangent-authored Perl daemon that bridges the Snort IDS
+  alert file and the PF firewall. It watches
+  <code>/var/www/htdocs/tn/data/logs/snort/alert.log</code> for new alerts
+  and adds the source IP addresses of offending hosts to the PF
+  <code>&lt;snort_block&gt;</code> table. It was written specifically to
+  handle IPv6 addresses, which tools available at the time rejected silently.
+</p>
+
+<h3>Key configuration</h3>
+
+<dl>
+  <dt><code>CheckInterval 1</code> / <code>BatchInterval 5</code></dt>
+  <dd>Checks the alert file every second. Applies pending blocks to PF every
+  5 seconds. The batch interval prevents excessive pfctl calls under sustained
+  attack traffic.</dd>
+
+  <dt><code>Priority 1</code></dt>
+  <dd>Only blocks alerts at Snort priority 1 (highest severity). Lower
+  priority alerts are logged but do not result in PF blocks. Adjust upward
+  to reduce false-positive blocks.</dd>
+
+  <dt><code>BlockDuration 60</code> / <code>MaxBlockDuration 86400</code></dt>
+  <dd>Initial block is 60 seconds. If the same IP triggers further alerts,
+  the block escalates through the tiers below up to a maximum of 24 hours.</dd>
+
+  <dt><code>EscalationTiers 60, 300, 1800, 3600</code></dt>
+  <dd>Block duration escalation: 1 minute, 5 minutes, 30 minutes, 1 hour.
+  Each subsequent offence from the same IP moves to the next tier.</dd>
+
+  <dt><code>UseAnchor no</code></dt>
+  <dd>Table-only mode. snortsentry manages the <code>&lt;snort_block&gt;</code>
+  table directly via <code>pfctl -t snort_block -T add</code>. It does not
+  create or use the PF anchor named in <code>PfAnchor</code> -- that setting
+  is available for operators who prefer anchor-based management. The blocking
+  rule is defined in <code>pf.conf</code>:
+  <code>block drop quick from &lt;snort_block&gt;</code>.</dd>
+
+  <dt><code>AutoWhitelistRFC1918 yes</code></dt>
+  <dd>Automatically whitelists all RFC 1918 private ranges. Prevents LAN
+  clients from being blocked by a misbehaving or misconfigured local device
+  triggering a Snort rule.</dd>
+
+  <dt><code>Whitelist 192.168.122.0/24 %%INT_NET4%% %%INT_NET4%%</code></dt>
+  <dd>Additional explicit whitelists beyond RFC 1918 auto-whitelist. Includes
+  the VM management network and the LAN subnet.</dd>
+
+  <dt><code>UnblockOnExit no</code></dt>
+  <dd>Blocks persist in the PF table when snortsentry stops or restarts. State
+  is saved to
+  <code>/var/www/htdocs/tn/data/db/snortsentry/snortsentry.state</code> and
+  restored on restart.</dd>
+
+  <dt><code>MaxBlocks 10000</code></dt>
+  <dd>Maximum concurrent blocked IPs. Prevents the
+  <code>&lt;snort_block&gt;</code> table from growing without bound under a
+  sustained scanning attack.</dd>
+</dl>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check snortsentry is running
+pgrep -l snortsentry
+
+# View current snort_block table
+pfctl -t snort_block -T show
+
+# Count blocked IPs
+pfctl -t snort_block -T show | wc -l
+
+# Flush all snortsentry blocks
+pfctl -t snort_block -T flush
+
+# Run in foreground for debugging
+/usr/local/sbin/snortsentry --no-daemon --log-level debug</code></pre>
+</div>
+
+<h2>p3scan</h2>
+<p>
+  p3scan is a transparent POP3 proxy that scans mail attachments for malware
+  before they reach the mail client. PF diverts POP3 (port 110) to loopback
+  port 8994 and POP3S (port 995) to loopback port 8995. SSLproxy handles TLS
+  for POP3S and forwards the decrypted stream to p3scan via its ProxySpec.
+  p3scan passes attachments to ClamAV for scanning and holds the message
+  if a virus is detected.
+</p>
+<p>
+  p3scan runs under the <code>_p3scan</code> user and is blocked from direct
+  network access by PF user isolation rules. Upstream POP3 connections are
+  made through the router's own address via the NAT chain, not by p3scan
+  directly opening connections.
+</p>
+
+<h2>smtp-gated</h2>
+<p>
+  smtp-gated intercepts outbound mail on SMTP (25), SMTPS (465), and
+  submission (587) ports. It scans messages with both ClamAV and SpamAssassin
+  before forwarding to the destination mail server. Messages containing
+  viruses or scoring above the spam threshold are held in the spool.
+</p>
+
+<h3>Key configuration</h3>
+
+<dl>
+  <dt><code>mode pf</code></dt>
+  <dd>PF transparent proxy mode. smtp-gated recovers the original destination
+  from the PF state table.</dd>
+
+  <dt><code>bind_address 127.0.0.1</code></dt>
+  <dd>Listens on loopback only. PF diverts to this address.</dd>
+
+  <dt><code>antivirus_type clamd</code></dt>
+  <dd>ClamAV daemon. Socket at
+  <code>/var/www/htdocs/tn/data/tmp/clamd.socket</code>.</dd>
+
+  <dt><code>antispam_type spamassassin</code> / <code>antispam_path 127.0.0.1:783</code></dt>
+  <dd>SpamAssassin spamd listening on loopback port 783.</dd>
+
+  <dt><code>spam_threshold 5</code></dt>
+  <dd>Messages scoring 5 or above are treated as spam. SpamAssassin default
+  threshold. Adjust based on observed false positive rate.</dd>
+
+  <dt><code>lock_on virus,spam,maxhost</code></dt>
+  <dd>Locks (temporarily blocks further mail from) a sender on virus
+  detection, spam detection, or exceeding the per-host connection limit.</dd>
+
+  <dt><code>max_connections 8</code> / <code>max_per_host 4</code></dt>
+  <dd>Global and per-host connection limits. Prevents a single compromised
+  LAN host from consuming all smtp-gated capacity.</dd>
+
+  <dt><code>spool_leave_on error,spam</code></dt>
+  <dd>Leaves messages in the spool directory on error or spam detection for
+  manual review. Spool path:
+  <code>/var/www/htdocs/tn/data/spool/smtp-gated/msg/</code>.</dd>
+</dl>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check smtp-gated is running
+pgrep -l smtp-gated
+
+# Check spool for held messages
+ls /var/www/htdocs/tn/data/spool/smtp-gated/msg/
+ls /var/www/htdocs/tn/data/spool/smtp-gated/lock/</code></pre>
+</div>
+
+<h2>imspector</h2>
+<p>
+  imspector is a transparent instant messaging proxy. PF diverts IM protocol 
+  ports (MSN 1863, AIM 5190, Yahoo 5050, IRC 6667) to loopback port 16667 where 
+  imspector listens. imspector logs conversation content and can apply filtering 
+  rules. It runs as _imspector.
+</p>
+<p>
+  SSL support for IM protocols is not nonexistsent. Program logs plaintext IM 
+  traffic only.
+</p>
+<p>
+  Program binds an IPv4 socket only and has no IPv6 listener. PF passes IPv6 
+  IM traffic with an explicit quick rule to make this gap visible in the ruleset 
+  rather than letting it fall through silently. IPv6 IM traffic exits without 
+  logging or filtering.
+</p>
+
+<h2>spamd</h2>
+<p>
+  OpenBSD spamd provides greylisting for inbound SMTP connections. It delays
+  connections from unknown senders -- legitimate mail servers retry and
+  eventually deliver, while many spam sources do not retry. The active list
+  in <code>/etc/mail/spamd.conf</code> is the nixspam list of recent spam
+  sources. spamd-setup downloads and installs the list. Greylisted senders
+  are temporarily deferred; listed senders are trapped.
+</p>
+<p>
+  spamd complements smtp-gated -- spamd reduces the volume of spam that
+  reaches smtp-gated for content scanning, reducing ClamAV and SpamAssassin
+  load.
+</p>
+
+<h2>SOCKS Proxy -- Dante sockd</h2>
+<p>
+  Dante provides a SOCKS5 proxy for LAN clients. Applications that support
+  SOCKS can route connections through the proxy rather than using direct
+  TCP connections. sockd listens on %%INT_IF%% port 1080 and exits on %%EXT_IF%%.
+</p>
+
+<h3>Key configuration</h3>
+
+<dl>
+  <dt><code>internal: %%INT_IF%% port = 1080</code></dt>
+  <dd>Accepts SOCKS connections from the LAN interface only.</dd>
+
+  <dt><code>external: %%EXT_IF%%</code></dt>
+  <dd>Outbound connections exit on the WAN interface.</dd>
+
+  <dt><code>socksmethod: none</code></dt>
+  <dd>No SOCKS authentication required. LAN access is the access control.</dd>
+
+  <dt><code>user.notprivileged: _sockd</code></dt>
+  <dd>Drops privileges to <code>_sockd</code> after binding.</dd>
+</dl>
+
+<p>
+  The access rules permit all LAN clients (<code>%%INT_NET4%%</code>),
+  block connections targeting loopback (prevents the proxy from being used
+  to reach local services), block bind operations below port 1023, and
+  allow all other outbound connections. Log is at
+  <code>/var/www/htdocs/tn/data/logs/sockd/sockd.log</code>.
+</p>
+
+<h2>Cron Schedule</h2>
+<p>
+  Content inspection maintenance tasks in the daily cron schedule:
+</p>
+
+<dl>
+  <dt><code>0 10 * * *</code> -- e2g filter script (whichever is active)</dt>
+  <dd>Daily feed download, list rebuild, and e2guardian reload. Only one
+  of the three filter scripts is present in crontab at a time -- the active
+  one as determined by the last WebUI filter switch.</dd>
+
+  <dt><code>30 11 * * *</code> -- oinkmaster_update_snortinline.sh</dt>
+  <dd>Daily Snort rule update via oinkmaster.</dd>
+</dl>
+
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>All HTTP and HTTPS traffic passes through SSLproxy for TLS decryption,
+    then e2guardian for content filtering, then Snort IPS for deep packet
+    inspection. e2guardian does not handle TLS itself -- SSLproxy provides
+    plaintext. This is correct by design.</li>
+    <li>Three e2guardian filter profiles are available: childsafe (full block
+    including adult content), adult/general (malware and ads, no porn
+    filtering), and user/custom (WebUI-defined feeds). Only one is active at
+    a time. Profile switching is managed through the WebUI queue processor
+    and reflected in the status JSON within seconds.</li>
+    <li>Two Snort instances run simultaneously. The IDS monitors %%INT_IF%%
+    passively and feeds alerts to snortsentry, which blocks offending IPs
+    in the PF snort_block table with escalating durations. The IPS runs
+    inline on the post-decryption loopback chain and can drop packets
+    directly.</li>
+    <li>snortsentry uses table-only mode (UseAnchor no). The blocking rule
+    is in pf.conf. The PfAnchor setting is dormant -- available for operators
+    who prefer anchor-based management.</li>
+    <li>SSLproxy user authentication is disabled (UserAuth no). The users
+    database exists and is ready for future integration with TNAuth when
+    per-user inspection policies are needed.</li>
+    <li>p3scan, smtp-gated, imspector, spamd, and sockd cover mail scanning,
+    IM logging, spam greylisting, and SOCKS proxying respectively. All run
+    under dedicated system users and are subject to PF user isolation rules.</li>
+  </ul>
+</div>

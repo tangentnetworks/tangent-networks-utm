@@ -1,0 +1,1 @@
+49947 /usr/local/sbin/pmacctd -f /etc/pmacct/int_if_text_pipe.conf

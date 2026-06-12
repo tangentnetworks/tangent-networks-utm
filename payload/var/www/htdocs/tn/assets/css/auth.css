@@ -1,0 +1,419 @@
+/*
+ * SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+/* Auth page subset — safe for both light and dark mode */
+.auth-content-wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.auth-question-wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.auth-form-label {
+	display: block;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: #374151;
+}
+
+.dark .auth-form-label {
+	color: #d1d5db;
+}
+
+.auth-form-input {
+	display: block;
+	width: 100%;
+	border: 1px solid #d1d5db;
+	border-radius: 0.5rem;
+	background: #fff;
+	padding: 0.5rem 1rem;
+	font-size: 0.875rem;
+	color: #111827;
+	box-sizing: border-box;
+}
+
+.dark .auth-form-input {
+	border-color: #4b5563;
+	background: #374151;
+	color: #fff;
+}
+
+.auth-form-input:focus {
+	outline: none;
+	border-color: #3b82f6;
+	box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.auth-code-block {
+	background: #111827;
+	border-radius: 0.5rem;
+	padding: 1rem;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-size: 0.875rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.auth-code-block--green {
+	color: #4ade80;
+}
+
+.auth-code-block--blue {
+	color: #60a5fa;
+}
+
+.auth-section-title {
+	font-size: 1.125rem;
+	font-weight: 600;
+	margin-bottom: 0.5rem;
+}
+
+.auth-section-title--green {
+	color: #166534;
+}
+
+.dark .auth-section-title--green {
+	color: #bbf7d0;
+}
+
+.auth-section-title--blue {
+	color: #1e40af;
+}
+
+.dark .auth-section-title--blue {
+	color: #bfdbfe;
+}
+
+.auth-section-body {
+	font-size: 0.875rem;
+	margin-bottom: 0.75rem;
+}
+
+.auth-section-body--green {
+	color: #15803d;
+}
+
+.dark .auth-section-body--green {
+	color: #86efac;
+}
+
+.auth-section-body--blue {
+	color: #1d4ed8;
+}
+
+.dark .auth-section-body--blue {
+	color: #93c5fd;
+}
+
+.auth-continue-btn {
+	display: block;
+	width: 100%;
+	margin-top: 1rem;
+	border-radius: 0.5rem;
+	background-color: #15803d;
+	padding: 0.75rem 1.5rem;
+	font-weight: 500;
+	color: #fff;
+	border: none;
+	cursor: pointer;
+	transition: background-color 0.15s;
+	box-sizing: border-box;
+}
+
+.auth-continue-btn:hover {
+	background-color: #166534;
+}
+
+.auth-req--met {
+	color: #16a34a;
+}
+
+.dark .auth-req--met {
+	color: #4ade80;
+}
+
+.auth-req--unmet {
+	color: #9ca3af;
+}
+
+/* Error banner — dark mode fix */
+.dark #resetError,
+.dark #registerError {
+    background-color: rgba(127, 29, 29, 0.2);
+    border-color: #991b1b;
+}
+
+.dark #resetError p,
+.dark #registerError p {
+    color: #fca5a5;
+}
+
+/* Success banner — dark mode fix */
+.dark #resetSuccess,
+.dark #registerSuccess {
+    background-color: rgba(20, 83, 45, 0.2);
+    border-color: #166534;
+}
+
+.dark #resetSuccess p,
+.dark #registerSuccess p {
+    color: #86efac;
+}
+
+/* ── Code section wrapper ───────────────────────────────── */
+.auth-code-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.auth-code-section--green {
+    padding: 1.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid #bbf7d0;
+    background: #f0fdf4;
+}
+.dark .auth-code-section--green {
+    border-color: #166534;
+    background: rgba(20, 83, 45, 0.15);
+}
+
+.auth-code-section--blue {
+    padding: 1.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+}
+.dark .auth-code-section--blue {
+    border-color: #1e40af;
+    background: rgba(30, 58, 138, 0.15);
+}
+
+/* ── Divider between sections ───────────────────────────── */
+.auth-section-divider {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 0.5rem 0;
+}
+.dark .auth-section-divider {
+    border-top-color: #374151;
+}
+
+/* ── Individual code row ────────────────────────────────── */
+.auth-code-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.auth-code-row:last-child {
+    border-bottom: none;
+}
+
+.auth-code-text {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+    flex: 1;
+    word-break: break-all;
+}
+
+/* ── Individual copy button ─────────────────────────────── */
+.auth-copy-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.375rem;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    background: transparent;
+}
+.auth-copy-btn--green  { color: #4ade80; }
+.auth-copy-btn--green:hover  { background: rgba(74, 222, 128, 0.15); }
+.auth-copy-btn--blue   { color: #60a5fa; }
+.auth-copy-btn--blue:hover   { background: rgba(96, 165, 250, 0.15); }
+.auth-copy-btn--copied { color: #ffffff !important; background: #16a34a !important; }
+
+/* ── Copy All button ────────────────────────────────────── */
+.auth-copy-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    padding: 0.4rem 0.875rem;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.auth-copy-all-btn--green {
+    background: rgba(74, 222, 128, 0.12);
+    color: #15803d;
+    border-color: #bbf7d0;
+}
+.auth-copy-all-btn--green:hover {
+    background: rgba(74, 222, 128, 0.22);
+}
+.dark .auth-copy-all-btn--green {
+    color: #4ade80;
+    border-color: #166534;
+}
+.auth-copy-all-btn--blue {
+    background: rgba(96, 165, 250, 0.12);
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+}
+.auth-copy-all-btn--blue:hover {
+    background: rgba(96, 165, 250, 0.22);
+}
+.dark .auth-copy-all-btn--blue {
+    color: #60a5fa;
+    border-color: #1e40af;
+}
+.auth-copy-all-btn--copied {
+    background: #16a34a !important;
+    color: #fff !important;
+    border-color: #15803d !important;
+}
+
+
+/* ── Code section wrapper ───────────────────────────────── */
+.auth-code-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.auth-code-section--green {
+    padding: 1.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid #bbf7d0;
+    background: #f0fdf4;
+}
+.dark .auth-code-section--green {
+    border-color: #166534;
+    background: rgba(20, 83, 45, 0.15);
+}
+
+.auth-code-section--blue {
+    padding: 1.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+}
+.dark .auth-code-section--blue {
+    border-color: #1e40af;
+    background: rgba(30, 58, 138, 0.15);
+}
+
+/* ── Divider between sections ───────────────────────────── */
+.auth-section-divider {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 0.5rem 0;
+}
+.dark .auth-section-divider {
+    border-top-color: #374151;
+}
+
+/* ── Individual code row ────────────────────────────────── */
+.auth-code-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.auth-code-row:last-child {
+    border-bottom: none;
+}
+
+.auth-code-text {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+    flex: 1;
+    word-break: break-all;
+}
+
+/* ── Individual copy button ─────────────────────────────── */
+.auth-copy-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.375rem;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    background: transparent;
+}
+.auth-copy-btn--green  { color: #4ade80; }
+.auth-copy-btn--green:hover  { background: rgba(74, 222, 128, 0.15); }
+.auth-copy-btn--blue   { color: #60a5fa; }
+.auth-copy-btn--blue:hover   { background: rgba(96, 165, 250, 0.15); }
+.auth-copy-btn--copied { color: #ffffff !important; background: #16a34a !important; }
+
+/* ── Copy All button ────────────────────────────────────── */
+.auth-copy-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    padding: 0.4rem 0.875rem;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.auth-copy-all-btn--green {
+    background: rgba(74, 222, 128, 0.12);
+    color: #15803d;
+    border-color: #bbf7d0;
+}
+.auth-copy-all-btn--green:hover {
+    background: rgba(74, 222, 128, 0.22);
+}
+.dark .auth-copy-all-btn--green {
+    color: #4ade80;
+    border-color: #166534;
+}
+.auth-copy-all-btn--blue {
+    background: rgba(96, 165, 250, 0.12);
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+}
+.auth-copy-all-btn--blue:hover {
+    background: rgba(96, 165, 250, 0.22);
+}
+.dark .auth-copy-all-btn--blue {
+    color: #60a5fa;
+    border-color: #1e40af;
+}
+.auth-copy-all-btn--copied {
+    background: #16a34a !important;
+    color: #fff !important;
+    border-color: #15803d !important;
+}

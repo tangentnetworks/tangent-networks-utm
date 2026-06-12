@@ -1,0 +1,41 @@
+# /etc/crontab
+# System-wide crontab — do not edit without care.
+# Format: minute hour day month dayofweek user command
+
+SHELL=/bin/ksh
+PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+HOME=/
+MAILTO=root
+
+# Verify Rotation (runs every 20 minutes):
+1 0 * * *	root    /usr/local/sbin/tangent_logrotate.sh >/dev/null
+*/10 * * * *    root    /usr/local/sbin/tangent_logrotate.sh >/dev/null
+
+# Also ensure cleanup script runs daily:
+20 10 * * *     root    /usr/local/sbin/cleanup_old_logs.sh >/dev/null
+
+# Update snortinline rules with oinkmaster
+30 11 * * *	root	/usr/local/sbin/oinkmaster_update_snortinline.sh
+
+# GeoIP update from RIPE
+30 12 * * *	root	/usr/local/sbin/get_geoip_data.pl
+
+# Runs as www user every Monday
+1       15       *       *       1       www     perl -e 'use lib "/var/www/htdocs/tn/data/lib"; use TNAuth; TNAuth::cleanup_expired_sessions();' >/dev/null
+
+# Pf Blocking Intel
+0 11 * * * root /usr/local/sbin/pfblock.sh
+
+# TNAudit and TNWatch
+*    *  *  *  *  root  /usr/local/sbin/TNWatch_runner.sh >/dev/null 2>&1
+0    9  *  *  *  root  /usr/local/sbin/TNWatch.pl --send-digest
+0    8  *  *  1  root  /usr/local/sbin/TNWatch.pl --purge --days 7
+5    8  *  *  1  root  /usr/local/sbin/TNWatch.pl --init-db
+0    8  *  *  *  root  /usr/local/sbin/TNAudit.pl --create-baseline >> /var/log/integrity_baseline.log 2>&1
+1   15  *  *  1  www   perl -e 'use lib "/var/www/htdocs/tn/data/lib"; use TNAuth; TNAuth::cleanup_expired_sessions();' >/dev/null
+
+# Cleanup /var/www/tmp
+* * * * *  root /usr/local/sbin/pf_log_cleanup.sh >/dev/null
+
+# e2guardian filter rules updater
+0 10 * * * root /usr/local/sbin/e2g_adult_filter.sh

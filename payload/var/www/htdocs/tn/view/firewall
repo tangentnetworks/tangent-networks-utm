@@ -1,0 +1,318 @@
+<!-- BEGIN: /firewall content -->
+<!-- BEGIN: Banner -->
+<div class="top-0 border-gray-200 bg-gray-50 p-2 backdrop-blur-md dark:border-gray-700 dark:bg-gray-900 sticky z-30 flex items-center justify-between border-b">
+  <div class="gap-4 flex items-center">
+    <div class="rounded-xl bg-red-600 p-2.5 shadow-lg shadow-red-500/20">
+      <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+      </svg>
+    </div>
+    <div>
+      <h1 class="text-lg font-extrabold tracking-tight text-gray-900 dark:text-white uppercase italic">Firewall Logs</h1>
+      <p class="text-xs font-bold tracking-wider text-gray-500 dark:text-gray-400 uppercase">Packet Filter &amp; Security Monitoring</p>
+    </div>
+  </div>
+  <div class="gap-4 flex items-center">
+    <div class="text-xs font-bold text-gray-500 uppercase">Date: <span id="firewall-current-date" class="font-mono text-blue-600 dark:text-blue-400">--</span>
+    </div>
+  </div>
+</div>
+<!-- END: Banner -->
+<!-- BEGIN: Main Content -->
+<section class="max-w-9xl space-y-6 p-2 md:p-8 container mx-auto">
+  <!-- BEGIN: Stats -->
+  <div class="gap-6 sm:grid-cols-2 lg:grid-cols-4 grid grid-cols-1">
+    <div class="card card-hover rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="text-xs font-bold tracking-wider text-gray-500 dark:text-white mb-2 uppercase">Total Logs</p>
+      <p class="text-3xl font-bold text-gray-900 dark:text-white" id="firewall-total-logs">--</p>
+    </div>
+    <div class="card card-hover rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="text-xs font-bold tracking-wider text-gray-500 dark:text-white mb-2 uppercase">IPv4 Logs</p>
+      <p class="text-3xl font-bold text-gray-900 dark:text-white" id="firewall-ipv4-logs">--</p>
+    </div>
+    <div class="card card-hover rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="text-xs font-bold tracking-wider text-gray-500 dark:text-white mb-2 uppercase">IPv6 Logs</p>
+      <p class="text-3xl font-bold text-gray-900 dark:text-white" id="firewall-ipv6-logs">--</p>
+    </div>
+    <div class="card card-hover rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="text-xs font-bold tracking-wider text-gray-500 dark:text-white mb-2 uppercase">Status</p>
+      <div class="flex items-center">
+        <span id="firewall-status-indicator" class="h-3 w-3 mr-2 relative flex">
+          <!-- Will be populated by JS -->
+        </span>
+        <p class="text-lg font-bold text-gray-900 dark:text-white uppercase" id="firewall-status-text">--</p>
+      </div>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="firewall-status-detail">--</p>
+    </div>
+  </div>
+  <!-- END: Stats -->
+  <!-- BEGIN: Activity Display -->
+  <div class="gap-4 md:flex-row flex flex-col items-center justify-between">
+    <!-- BEGIN: Status Indicators -->
+    <div class="gap-4 flex items-center">
+      <!-- Live/Archive View Indicator -->
+      <div id="firewall-status-badge" class="badge badge-success space-x-2 flex items-center">
+        <span class="h-2 w-2 mr-2 relative flex">
+          <span class="animate-ping bg-green-400 absolute inline-flex h-full w-full rounded-full opacity-75"></span>
+          <span class="h-2 w-2 bg-green-500 relative inline-flex rounded-full"></span>
+        </span>
+        <span class="text-xs font-bold tracking-wider">Live Logs</span>
+      </div>
+      <div class="text-xs font-bold text-gray-500 uppercase">Updated: <span id="firewall-last-update" class="font-mono text-gray-700 dark:text-gray-300">--:--:--</span>
+      </div>
+    </div>
+    <!-- END: Status Indicators -->
+    <!-- BEGIN: Action Buttons -->
+    <div class="flex w-full items-center justify-between">
+      <button id="firewall-open-filter-modal" class="btn btn-sm bg-blue-700 text-white btn-secondary">
+        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+        </svg> Filters </button>
+      <button id="firewall-view-all-btn" class="btn btn-sm btn-secondary bg-blue-700 text-white">
+        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+        </svg> View All Logs </button>
+    </div>
+    <!-- END: Action Buttons -->
+  </div>
+  <!-- END: Activity Display -->
+  <!-- BEGIN: Logs Container (Preview) -->
+  <div id="firewall-main-container" class="min-h-[400px]">
+    <!-- NOTE: Logs will be populated here by JS -->
+  </div>
+  <!-- END: Logs Container -->
+</section>
+<!-- END: Main Content -->
+<!-- BEGIN: Filter Modal -->
+<div id="firewall-filter-modal" class="flex inset-0 hidden p-2 fixed z-50 items-center justify-center bg-gray-900/50">
+  <div class="inset-0 bg-black/50 backdrop-blur-sm absolute"></div>
+  <div class="card max-w-md relative mx-auto w-full border">
+    <div class="card-header flex items-center justify-between">
+      <h3 class="text-xl font-bold text-gray-900 dark:text-white">Firewall Log Filters</h3>
+      <button id="firewall-close-filter-modal" class="btn btn-icon text-gray-500 hover:text-red-500">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="card-body space-y-4">
+      <!-- BEGIN: Date and Interface -->
+      <div class="md:grid-cols-2 gap-4 grid grid-cols-1">
+        <div class="space-y-1">
+          <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Select Date</label>
+          <select id="firewall-filter-date" class="border-default w-full">
+            <!-- JavaScript will populate this with last 7 days -->
+          </select>
+          <p class="text-xs text-gray-500 dark:text-gray-400">Logs are retained for 7 days</p>
+        </div>
+        <div class="space-y-1">
+          <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Interface</label>
+          <select id="firewall-filter-interface" class="border-default w-full">
+            <option value="">Any Interface</option>
+            <option value="%%EXT_IF%%">%%EXT_IF%% (WAN/External)</option>
+            <option value="%%INT_IF%%">%%INT_IF%% (LAN/Internal)</option>
+            <option value="lo">lo (Loopback)</option>
+          </select>
+        </div>
+      </div>
+      <!-- BEGIN: IP Family and Protocol -->
+      <div class="md:grid-cols-2 gap-4 grid grid-cols-1">
+        <div class="space-y-1">
+          <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 block">IP Family</label>
+          <select id="firewall-filter-family" class="border-default w-full">
+            <option value="">Any Family</option>
+            <option value="IPv4">IPv4 Only</option>
+            <option value="IPv6">IPv6 Only</option>
+          </select>
+        </div>
+        <div class="space-y-1">
+          <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Protocol</label>
+          <select id="firewall-filter-proto" class="border-default w-full">
+            <option value="">Any Protocol</option>
+            <option value="tcp">TCP</option>
+            <option value="udp">UDP</option>
+            <option value="icmp">ICMP (IPv4)</option>
+            <option value="icmp6">ICMPv6 (IPv6)</option>
+          </select>
+        </div>
+      </div>
+      <!-- BEGIN: Port and Action -->
+      <div class="md:grid-cols-2 gap-4 grid grid-cols-1">
+        <div class="space-y-1">
+          <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Port Number</label>
+          <input type="number" id="firewall-filter-port" min="1" max="65535" placeholder="Any port (1-65535)" class="border-default w-full" />
+        </div>
+        <div class="space-y-1">
+          <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Action</label>
+          <select id="firewall-filter-action" class="border-default w-full">
+            <option value="">All Actions</option>
+            <option value="block">Block Only</option>
+            <option value="match">Match Only</option>
+          </select>
+        </div>
+      </div>
+      <!-- BEGIN: Logs per Page -->
+      <div class="space-y-1">
+        <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 block">Logs per Page</label>
+        <select id="firewall-filter-limit" class="border-default w-full">
+          <option value="20">20 logs</option>
+          <option value="50" selected>50 logs</option>
+          <option value="100">100 logs</option>
+          <option value="200">200 logs</option>
+        </select>
+      </div>
+      <!-- BEGIN: Action Buttons -->
+      <div class="space-x-2 pt-4 flex justify-between">
+        <button type="button" id="firewall-reset-filters" class="w-32 btn btn-secondary">Reset</button>
+        <button type="button" id="firewall-apply-filters" class="w-32 btn btn-primary">Apply</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- END: Filter Modal -->
+<!-- BEGIN: Paginated Results Modal -->
+<div id="firewall-paginated-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+  <div class="fixed inset-0 bg-black/50 backdrop-blur-sm"></div>
+  <!-- Modal Container: Centered, max height, scrollable body -->
+  <div class="relative flex items-center justify-center min-h-full p-2 md:p-4">
+    <div class="card max-w-4xl w-full max-w-5xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+      <!-- BEGIN: Modal Header -->
+      <div class="card-header border-gray-200 dark:border-gray-700 flex items-center justify-between border-b p-4">
+        <div>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white">Firewall Log Results</h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1"> Showing <span id="firewall-modal-showing">0-0</span> of <span id="firewall-modal-total">0</span> logs </p>
+        </div>
+        <button id="firewall-close-paginated-modal" class="btn btn-icon text-gray-500 dark:text-white">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <!-- END: Modal Header -->
+      <!-- BEGIN: Modal Body - Scrollable Content -->
+      <div class="p-4 md:p-6 flex-1 overflow-y-auto">
+        <div id="firewall-modal-logs-container" class="min-h-[200px]">
+          <!-- NOTE: Logs will be loaded here -->
+        </div>
+      </div>
+      <!-- END: Modal Body -->
+      <!-- BEGIN: Modal Footer - Pagination -->
+      <div class="card-footer border-gray-200 dark:border-gray-700 p-4 border-t">
+        <div class="flex items-center justify-between">
+          <div class="text-sm text-gray-500 dark:text-gray-400"> Page <span id="firewall-current-page">1</span> of <span id="firewall-total-pages">1</span>
+          </div>
+          <div class="space-x-2 flex items-center">
+            <button id="firewall-prev-page" class="btn btn-sm btn-secondary bg-gray-50 text-gray-500 dark:bg-gray-700 dark:text-white" disabled>
+              <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+              </svg> Previous </button>
+            <button id="firewall-next-page" class="btn btn-sm btn-secondary bg-blue-700 text-white" disabled> Next <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- END: Modal Footer -->
+    </div>
+  </div>
+</div>
+<!-- END: Paginated Results Modal -->
+<!-- BEGIN: Log Detail Modal -->
+<div id="firewall-log-modal" class="flex inset-0 hidden p-2 fixed z-50 items-center justify-center bg-gray-900/50">
+  <div class="inset-0 bg-black/50 backdrop-blur-sm absolute"></div>
+  <div class="card max-w-5xl relative mx-auto my-8 flex max-h-[85vh] w-full flex-col">
+    <div class="card-header flex items-center justify-between">
+      <div>
+        <p class="text-lg font-bold text-gray-900 dark:text-white">Firewall Log Details</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Full log entry information</p>
+      </div>
+      <div class="gap-2 flex items-center">
+        <button id="firewall-copy-log-btn" class="btn btn-sm btn-secondary bg-blue-700 text-white  gap-2 flex items-center">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+          </svg> Copy </button>
+        <button id="firewall-close-log-modal" class="btn btn-icon text-gray-700 dark:text-white">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="p-6 flex-1 overflow-y-auto">
+      <div class="space-y-4">
+        <!-- BEGIN: Basic Info Row -->
+        <div class="gap-4 grid grid-cols-2">
+          <div>
+            <p class="text-xs font-bold text-gray-500 mb-1 uppercase">Timestamp</p>
+            <p id="firewall-log-time" class="font-mono text-sm text-gray-900 dark:text-white"></p>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-gray-500 mb-1 uppercase">Action</p>
+            <span id="firewall-log-action" class="badge"></span>
+          </div>
+        </div>
+        <!-- BEGIN: Rule Info Row -->
+        <div class="gap-4 grid grid-cols-2">
+          <div>
+            <p class="text-xs font-bold text-gray-500 mb-1 uppercase">Rule</p>
+            <p id="firewall-log-rule" class="font-mono text-sm text-gray-900 dark:text-white"></p>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-gray-500 mb-1 uppercase">Interface</p>
+            <p id="firewall-log-iface" class="font-mono text-sm text-gray-900 dark:text-white"></p>
+          </div>
+        </div>
+        <!-- BEGIN: Source & Destination -->
+        <div class="gap-4 grid grid-cols-2">
+          <div>
+            <p class="text-xs font-bold text-gray-500 mb-1 uppercase">Source</p>
+            <p id="firewall-log-src" class="font-mono text-sm text-gray-900 dark:text-white"></p>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-gray-500 mb-1 uppercase">Destination</p>
+            <p id="firewall-log-dst" class="font-mono text-sm text-gray-900 dark:text-white"></p>
+          </div>
+        </div>
+        <!-- BEGIN: Protocol & Port -->
+        <div class="gap-4 grid grid-cols-2">
+          <div>
+            <p class="text-xs font-bold text-gray-500 mb-1 uppercase">Protocol</p>
+            <p id="firewall-log-proto" class="font-mono text-sm text-gray-900 dark:text-white"></p>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-gray-500 mb-1 uppercase">Port</p>
+            <p id="firewall-log-port" class="font-mono text-sm text-gray-900 dark:text-white"></p>
+          </div>
+        </div>
+        <!-- BEGIN: Direction & Reason -->
+        <div class="gap-4 grid grid-cols-2">
+          <div>
+            <p class="text-xs font-bold text-gray-500 mb-1 uppercase">Direction</p>
+            <p id="firewall-log-dir" class="font-mono text-sm text-gray-900 dark:text-white"></p>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-gray-500 mb-1 uppercase">Reason</p>
+            <p id="firewall-log-reason" class="font-mono text-sm text-gray-900 dark:text-white"></p>
+          </div>
+        </div>
+        <!-- BEGIN: Full Payload -->
+        <div>
+          <p class="text-xs font-bold text-gray-500 mb-1 uppercase">Full Payload</p>
+          <pre id="firewall-log-payload" class="font-mono text-xs text-gray-700 dark:text-white bg-gray-50 dark:bg-gray-800 p-3 rounded border-gray-200 dark:border-gray-700 overflow-x-auto border break-all whitespace-pre-wrap"></pre>
+        </div>
+        <!-- BEGIN: Raw JSON (hidden initially) -->
+        <div class="mt-4">
+          <button id="firewall-toggle-json-view" class="btn btn-sm btn-secondary mb-2">Show Raw JSON</button>
+          <pre id="firewall-log-json" class="font-mono text-xs bg-gray-900 text-gray-100 p-3 rounded border-gray-700 hidden overflow-x-auto border whitespace-pre-wrap"></pre>
+        </div>
+      </div>
+    </div>
+    <div class="card-footer border-gray-200 dark:border-gray-700 p-4 border-t">
+      <p class="text-xs text-gray-500 text-center">Click copy button to copy log details to clipboard</p>
+    </div>
+  </div>
+</div>
+<!-- END: Log Detail Modal -->
+<link rel="stylesheet" href="./assets/css/dynamic.css" />
+<script src="./assets/js/firewall.js" integrity="sha384-71YcxLfb3fIMLqpdRyjl0ZH3FvkM2V3yXG/fxLzBux7PIvj7q+h/9RKpz8nWtRVJ" defer crossorigin="anonymous"></script>

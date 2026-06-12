@@ -1,0 +1,373 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    TNSecurity is the cryptographic and security utility layer. It owns password
+    hashing, session ID signing, CSRF token generation and validation, SRI hash
+    computation, HMAC operations, key management, and security event logging.
+    Every other module calls into TNSecurity for these operations. This document
+    covers each subsystem, the algorithm choices, and the file paths involved.
+  </p>
+</div>
+
+<h1>TNSecurity</h1>
+
+<p>
+  <strong>Location:</strong>
+  <code>/var/www/htdocs/tn/data/lib/TNSecurity.pm</code><br>
+  <strong>Version:</strong> 2.1.0
+</p>
+
+<h2>Password Hashing</h2>
+
+<p>
+  Passwords are hashed with PBKDF2-HMAC-SHA256 via the
+  <code>Crypt::PBKDF2</code> module (p5-Crypt-PBKDF2-0.161520). The algorithm
+  parameters are fixed constants in the module:
+</p>
+
+<ul>
+  <li>Hash function: HMAC-SHA256</li>
+  <li>Iterations: 100,000</li>
+  <li>Output length: 32 bytes (one SHA-256 block)</li>
+  <li>Salt: 32-character alphanumeric string from <code>/dev/urandom</code></li>
+</ul>
+
+<p>
+  The <code>Crypt::PBKDF2</code> object is constructed once at module load time
+  and reused on every call. The derived key is stored in hex encoding, prefixed
+  with <code>pbkdf2:</code> so the verification path can identify the algorithm
+  without a separate metadata column.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Hash a password (returns hash string and salt)
+my ($hash, $salt) = TNSecurity::hash_password($plaintext);
+# $hash: "pbkdf2:a3f8c2..."
+# $salt: "rXk2mNpQ..."
+
+# Verify
+if (TNSecurity::verify_password($plaintext, $hash, $salt)) { ... }</code></pre>
+</div>
+
+<h3>Legacy Algorithm</h3>
+
+<p>
+  Prior to the PBKDF2 migration, passwords were stored as the result of
+  10,000 iterations of SHA-256: <code>sha256_hex(sha256_hex(... password . salt ...))</code>.
+  These hashes are plain 64-character hex strings with no prefix.
+</p>
+
+<p>
+  <code>verify_password()</code> detects the legacy format by checking for the
+  absence of the <code>pbkdf2:</code> prefix and uses the legacy verification
+  path. <code>needs_rehash()</code> returns true for any hash without the
+  prefix. TNAuth calls <code>needs_rehash()</code> on every successful login
+  and immediately re-hashes the password with PBKDF2 while the plaintext is
+  available, upgrading the stored hash transparently without any user
+  interaction.
+</p>
+
+<h3>Recovery Code Hashing</h3>
+
+<p>
+  Recovery codes use a simpler scheme: <code>sha256_hex($code)</code> with no
+  salt. No salt is needed because recovery codes are long random strings that
+  are not susceptible to dictionary attack. The contract is:
+</p>
+
+<ul>
+  <li><code>hash_recovery_code($code)</code> returns <code>sha256_hex($code)</code>.</li>
+  <li><code>verify_recovery_hash($code, $stored_hash)</code> computes the hash and compares with <code>timing_safe_compare()</code>.</li>
+</ul>
+
+<h2>Session ID Signing</h2>
+
+<p>
+  Raw session IDs are 64-character hex strings stored in the database. Before
+  being set as a cookie, the session ID is signed with HMAC-SHA256 using the
+  session key:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>cookie_value = session_id + "." + hmac_sha256_hex(session_id, session.key)</code></pre>
+</div>
+
+<p>
+  On every incoming request, <code>verify_session_id()</code> splits the cookie
+  value on the first dot, recomputes the expected signature, and compares with
+  <code>timing_safe_compare()</code>. Only the raw session ID (before the dot)
+  is used for the database lookup. A tampered or forged cookie value fails
+  signature verification and returns <code>undef</code> before any database
+  access occurs.
+</p>
+
+<p>
+  The session key file: <code>data/keys/session.key</code>. A missing key file
+  is always a fatal error -- the process dies with a message directing the
+  operator to run <code>init_db.pl</code>. Silent auto-generation is
+  intentionally not implemented: generating a new key would invalidate all
+  existing sessions without any operator alert.
+</p>
+
+<h2>CSRF Tokens</h2>
+
+<p>
+  CSRF tokens are stateless. There is no database table. A token is an
+  HMAC-SHA256 of a time-window string using the HMAC key:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>token = hmac_sha256_hex("csrf:" + floor(time / TOKEN_LIFETIME), hmac.key)</code></pre>
+</div>
+
+<p>
+  Validation accepts the current window and the previous window:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>return 1 if timing_safe_compare($token, hmac_sha256_hex("csrf:$window",   $key));
+return 1 if timing_safe_compare($token, hmac_sha256_hex("csrf:$window-1", $key));</code></pre>
+</div>
+
+<p>
+  Accepting the previous window handles the case where the browser fetched a
+  token just before a boundary and submitted the form just after it.
+  <code>TOKEN_LIFETIME</code> is read from <code>security.conf [csrf]</code>,
+  floored at 60 seconds. The default is 3600 seconds (1 hour).
+</p>
+
+<p>
+  The HMAC key file: <code>data/keys/hmac.key</code>. Same fatal-on-missing
+  behaviour as the session key.
+</p>
+
+<p>
+  In DEVEL mode, <code>generate_csrf_token()</code> returns a token derived
+  from the string <code>'devel'</code> as the key rather than the real HMAC
+  key, and <code>validate_csrf_token()</code> returns 1 unconditionally.
+</p>
+
+<h2>Reset Tokens</h2>
+
+<p>
+  Password reset tokens are short-lived proof that a user completed the
+  identity challenge (security questions or recovery code). They are generated
+  and verified by <code>control.pl</code>, not by TNSecurity directly, but they
+  use <code>TNSecurity::hmac_hex()</code> internally.
+</p>
+
+<p>
+  The token format is:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>reset_token = base64("username:expiry") + "." + hmac_sha256_hex(payload + ":reset", hmac.key)</code></pre>
+</div>
+
+<p>
+  The <code>:reset</code> purpose tag in the HMAC input prevents a reset token
+  from being replayed as a session signature and vice versa, even though both
+  use the same HMAC key file. Reset tokens expire after 600 seconds (10
+  minutes).
+</p>
+
+<p>
+  <code>hmac_hex($data, $key_name)</code> maps key names to files:
+  <code>'session'</code> maps to <code>session.key</code>, any other name maps
+  to <code>hmac.key</code>.
+</p>
+
+<h2>Key Management</h2>
+
+<p>
+  Two key files are used at runtime:
+</p>
+
+<dl>
+  <dt><code>data/keys/session.key</code></dt>
+  <dd>Used for HMAC-SHA256 session ID signing.</dd>
+  <dt><code>data/keys/hmac.key</code></dt>
+  <dd>Used for CSRF tokens and reset tokens.</dd>
+</dl>
+
+<p>
+  Both files contain a 64-character alphanumeric string generated by
+  <code>generate_random_string(64)</code> from <code>/dev/urandom</code>.
+  Permissions are <code>0600</code>, owned <code>www:www</code>. They are
+  created by <code>init_db.pl</code> at install time via
+  <code>TNSecurity::generate_key()</code>.
+</p>
+
+<p>
+  <code>read_key()</code> untaints the file path, verifies the file exists, and
+  reads the key. A missing key file is a fatal error that crashes the process
+  immediately with a message directing the operator to run
+  <code>init_db.pl</code>. This is deliberate: a missing key in production
+  means something has gone wrong and the operator must be notified. Silent
+  auto-generation would invalidate all existing sessions without any alert.
+</p>
+
+<div class="callout callout-warning">
+  <p>
+    Do not rotate the session key or HMAC key while users have active sessions.
+    Rotating the session key invalidates all signed cookies immediately -- every
+    logged-in user is forced to re-authenticate. Rotating the HMAC key
+    invalidates all CSRF tokens, which causes every in-flight form submission
+    to fail until the user fetches a new token.
+  </p>
+</div>
+
+<h2>SRI Hash Generation</h2>
+
+<p>
+  <code>generate_sri_hash($file_path)</code> reads a file, computes SHA-384,
+  base64-encodes the result, and returns an <code>integrity=</code> attribute
+  value:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>sha384-&lt;base64-padded-hash&gt;</code></pre>
+</div>
+
+<p>
+  <code>update_all_sri_hashes()</code> iterates over the known JS and CSS
+  asset files and generates hashes for each. It returns a count and list of
+  processed files. In DEVEL mode both functions return empty string and 1
+  respectively, skipping all I/O.
+</p>
+
+<p>
+  The SRI hash table in TNWAF is the authoritative store of known-good hashes.
+  The table is populated by running the <code>POST /devel/regenerate_sri</code>
+  endpoint after any change to the asset files. See the TNWAF document for
+  the server-side tamper detection that uses this table.
+</p>
+
+<h2>Input Validation</h2>
+
+<dl>
+  <dt><code>validate_username($username)</code></dt>
+  <dd>Returns true if the username matches <code>/^[a-zA-Z0-9_-]{3,32}$/</code>.</dd>
+  <dt><code>validate_email($email)</code></dt>
+  <dd>Returns true if the email matches a basic RFC 5322 pattern.</dd>
+  <dt><code>sanitize_input($input)</code></dt>
+  <dd>Strips control characters (<code>\x00-\x1F\x7F</code>). Returns empty string for undef input.</dd>
+  <dt><code>untaint_filepath($path)</code></dt>
+  <dd>Rejects paths containing <code>..</code>, then allows only <code>[-/\w.]</code>. Returns undef on failure.</dd>
+</dl>
+
+<h2>Random Generation</h2>
+
+<p>
+  All random values come from <code>/dev/urandom</code>, read in binary mode.
+  <code>generate_random_string($length)</code> reads <code>$length</code> raw
+  bytes and maps each byte modulo 62 to the alphanumeric character set.
+  <code>generate_token($length)</code> calls <code>generate_random_string</code>
+  and then takes <code>sha256_hex</code> of the result concatenated with the
+  current time, returning a 64-character hex string.
+</p>
+
+<h2>Security Event Logging</h2>
+
+<p>
+  <code>log_security_event($level, $event, $details)</code> formats a log line
+  and writes it to <code>data/logs/security.log</code> if
+  <code>LOG_TO_FILE = 1</code> in the config. Each line includes a timestamp,
+  level, client IP from <code>$ENV{REMOTE_ADDR}</code>, the event name, and
+  details.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>[Mon Mar  9 14:22:01 2026] [warning] [10.10.10.42] ACCOUNT_LOCKED - alice locked after 5 failed attempts</code></pre>
+</div>
+
+<p>
+  File writes use <code>flock(LOCK_EX)</code> to prevent interleaved lines from
+  concurrent slowcgi workers. The log directory is created if it does not exist.
+</p>
+
+<h2>Timing-Safe Comparison</h2>
+
+<p>
+  <code>timing_safe_compare($a, $b)</code> compares two strings in constant
+  time by XOR-ing each byte pair and ORing the results. It returns true only if
+  all bytes match and both strings are the same length. Used for all HMAC
+  comparisons, password verification, and CSRF validation. Never use
+  <code>eq</code> for cryptographic comparisons.
+</p>
+
+<h2>HTTP Security Headers</h2>
+
+<p>
+  <code>print_secure_headers($content_type, $cache)</code> emits the standard
+  security header set for CGI JSON API responses. It is the single point of
+  truth for API response headers; TNWAF's <code>print_headers()</code> covers
+  routed file responses separately.
+</p>
+
+<p>Headers emitted:</p>
+
+<dl>
+  <dt><code>Content-Security-Policy</code></dt>
+  <dd><code>default-src 'none'; connect-src 'self'</code> -- maximum restriction for JSON API endpoints that serve no HTML, CSS, or JS.</dd>
+  <dt><code>Strict-Transport-Security</code></dt>
+  <dd><code>max-age=31536000; includeSubDomains</code> -- effective only over HTTPS; harmless over HTTP.</dd>
+  <dt><code>Referrer-Policy</code></dt>
+  <dd><code>strict-origin-when-cross-origin</code></dd>
+  <dt><code>Permissions-Policy</code></dt>
+  <dd>Denies geolocation, microphone, camera, and payment APIs.</dd>
+  <dt><code>X-Frame-Options</code></dt>
+  <dd><code>DENY</code> -- belt-and-suspenders alongside CSP <code>frame-ancestors 'none'</code>.</dd>
+  <dt><code>X-Content-Type-Options</code></dt>
+  <dd><code>nosniff</code></dd>
+  <dt><code>Cache-Control</code></dt>
+  <dd><code>no-cache, no-store, must-revalidate</code> unless <code>$cache</code> is true.</dd>
+</dl>
+
+<!-- SUMMARY -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Passwords use PBKDF2-HMAC-SHA256, 100,000 iterations, 32-byte output, prefixed <code>pbkdf2:</code>. Legacy SHA-256 hashes are detected by the absent prefix and upgraded transparently on next login.</li>
+    <li>Session IDs are HMAC-signed before being set as cookies. A missing or tampered signature returns undef before any database lookup. A missing key file is always fatal -- no silent key generation.</li>
+    <li>CSRF tokens are stateless. No database table. Tokens are HMAC-SHA256 of a time-window string. Both the current and previous window are accepted to handle boundary edge cases.</li>
+    <li>Reset tokens embed username and expiry, signed with HMAC using a <code>:reset</code> purpose tag to prevent cross-use with session signatures.</li>
+    <li>All cryptographic comparisons use <code>timing_safe_compare()</code>. Never use <code>eq</code> for HMAC or hash comparisons.</li>
+    <li>Security log writes are flock-protected. The log file is never truncated by the application.</li>
+  </ul>
+</div>

@@ -1,0 +1,66 @@
+$OpenBSD$
+Index: src/ConnectionHandler.cpp
+--- src/ConnectionHandler.cpp.orig
++++ src/ConnectionHandler.cpp
+@@ -485,8 +485,14 @@ ConnectionHandler::connectUpstream(Socket &sock, Naugh
+         cm.upfailure = false;
+         if (cm.isdirect) {
+             String des_ip;
+-            if (cm.isiphost) {
+-                des_ip = cm.urldomain;
++            if (cm.isiphost || !cm.sslproxy_ip.empty()) {
++                if (!cm.sslproxy_ip.empty()) {
++                    des_ip = cm.sslproxy_ip;
++                    port = cm.sslproxy_port;
++                } else {
++                    des_ip = cm.urldomain;
++                }
++
+                 if (may_be_loop) {  // check check_ip list
+                     bool do_break = false;
+                     if (o.check_ip.size() > 0) {
+@@ -735,8 +741,9 @@ int ConnectionHandler::handleConnection(Socket &peerco
+                     //int pport = peerconn.getPeerSourcePort();
+                     std::string peerIP = peerconn.getPeerIP();
+ 
+-                    syslog(LOG_INFO, "%s No header recd from client at %s - errno: %d", thread_id.c_str(),
+-                           peerIP.c_str(), err);
++                    // This happens too often, but does not seem to cause any issue, so disable
++                    //syslog(LOG_INFO, "%s No header recd from client at %s - errno: %d", thread_id.c_str(),
++                    //       peerIP.c_str(), err);
+ #ifdef DGDEBUG
+                     std::cerr << thread_id << " No header recd from client - errno: " << err << std::endl;
+ #endif
+@@ -824,6 +831,23 @@ int ConnectionHandler::handleConnection(Socket &peerco
+ 
+             }
+ //
++            checkme.sslproxy_ip = "";
++            checkme.sslproxy_port = 0;
++            String sslproxy_ip, sslproxy_port, sslproxy_client_ip, sslproxy_client_port, sslproxy_ssl, sslproxy_user;
++            if (header.parseSSLproxyLine(sslproxy_ip, sslproxy_port, sslproxy_client_ip, sslproxy_client_port, sslproxy_ssl, sslproxy_user)) {
++                checkme.sslproxy_ip = sslproxy_ip;
++                checkme.sslproxy_port = sslproxy_port.toInteger();
++                clientip = sslproxy_client_ip;
++                peerconn.setActualPeerAddrPort(clientip, sslproxy_client_port.toInteger());
++                header.setClientIP(sslproxy_client_ip);
++                checkme.is_ssl = (sslproxy_ssl == "s");
++                clientuser = sslproxy_user;
++            }
++
++            if (checkme.is_ssl && header.header.front().contains("http://")) {
++                header.header.front() = header.header.front().before("http://") + "https://" + header.header.front().after("http://");
++            }
++
+             // do this normalisation etc just the once at the start.
+             checkme.setURL(ismitm);
+ 
+@@ -2548,7 +2572,7 @@ bool ConnectionHandler::getdnstxt(std::string &clienti
+     // get info from DNS
+     union {
+         HEADER hdr;
+-        u_char buf[NS_PACKETSZ];
++        u_char buf[PACKETSZ];
+     } response;
+     int responseLen;
+     ns_msg handle; /* handle for response message */

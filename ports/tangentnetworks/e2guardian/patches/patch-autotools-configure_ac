@@ -1,0 +1,10 @@
+--- configure.ac-orig	Fri Nov  7 17:04:46 2025
++++ configure.ac	Fri Nov  7 17:06:22 2025
+@@ -6,7 +6,6 @@
+ 
+ AC_PREREQ(2.57)
+ AC_INIT(e2guardian, 5.3.5)
+-AM_INIT_AUTOMAKE
+ AC_CONFIG_HEADERS([dgconfig.h])
+ AC_CONFIG_MACRO_DIR([m4])
+ AM_INIT_AUTOMAKE([subdir-objects])

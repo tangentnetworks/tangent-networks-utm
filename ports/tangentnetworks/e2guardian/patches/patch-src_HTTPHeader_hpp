@@ -1,0 +1,12 @@
+$OpenBSD$
+Index: src/HTTPHeader.hpp
+--- src/HTTPHeader.hpp.orig
++++ src/HTTPHeader.hpp
+@@ -182,6 +182,7 @@ class HTTPHeader
+ 
+     // grab referer url from headers
+     String getReferer();
++    bool parseSSLproxyLine(String &sslproxy_ip, String &sslproxy_port, String &sslproxy_client_ip, String &sslproxy_client_port, String &sslproxy_ssl, String &sslproxy_user);
+ 
+     HTTPHeader()
+     //    : port(0), timeout(120000), contentlength(0), postdata(NULL), dirty(true), is_response(false)

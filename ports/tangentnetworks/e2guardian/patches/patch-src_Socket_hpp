@@ -1,0 +1,22 @@
+$OpenBSD$
+Index: src/Socket.hpp
+--- src/Socket.hpp.orig
++++ src/Socket.hpp
+@@ -55,6 +55,8 @@ class Socket : public BaseSocket
+     void setPort(int port);
+     unsigned long int getPeerSourceAddr();
+ 
++    void setActualPeerAddrPort(std::string addr, int port);
++
+     // get local IP
+     std::string getLocalIP();
+     int getLocalPort();
+@@ -145,6 +147,8 @@ class Socket : public BaseSocket
+     struct sockaddr_in my_adr;
+     struct sockaddr_in peer_adr;
+     int my_port;
++    std::string actualPeerAddr;
++    int actualPeerPort;
+     bool ieof = false;
+ };
+ 

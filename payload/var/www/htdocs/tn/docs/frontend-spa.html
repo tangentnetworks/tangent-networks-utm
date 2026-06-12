@@ -1,0 +1,239 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>This document covers the client-side JavaScript layer of the Tangent Networks dashboard: the authentication system on the sign-in page, the session and CSRF infrastructure shared across both pages, the SPA view management system, the power management module, and the UI utility layer. The Perl CGI endpoints that these scripts call are documented in the CGI Scripts document. Read that first if you have not already.</p>
+</div>
+
+<h1>View System and Authentication: JavaScript Architecture</h1>
+
+<p>The dashboard is served across two HTML pages. <code>index.html</code> is the sign-in page. <code>view.html</code> is the authenticated dashboard shell. Both are static HTML files. All dynamic behaviour is delivered by JavaScript fetching content from the Perl CGI backend.</p>
+
+<p>The application follows a strict separation: JavaScript handles UI state, navigation, and API calls. Perl generates all HTML content served into the dashboard. JavaScript never constructs application HTML directly.</p>
+
+<h2>Page Structure</h2>
+
+<h3>index.html</h3>
+
+<p>The sign-in page. Loads two scripts: <code>token.js</code> then <code>auth.js</code>, both deferred and SRI-protected. <code>token.js</code> must load before <code>auth.js</code> because <code>auth.js</code> references <code>window.TNToken</code> at call time. Also loads <code>ts.js</code> for theme toggle and UI utilities. The page is a PWA with full Apple splash screen and icon declarations in the head for all current iPhone and iPad form factors.</p>
+
+<p>The login form submits to <code>#</code> and is intercepted by <code>auth.js</code>. The page also links to <code>register.html</code> and <code>pwreset.html</code>, both opening in new tabs.</p>
+
+<h3>view.html</h3>
+
+<p>The authenticated dashboard shell. The page structure is fixed: a top navbar, a collapsible sidebar, an empty <code>&lt;main id="main-content"&gt;</code> element, a back-to-top button, and a footer. All dashboard content loads dynamically into <code>#main-content</code> by <code>view.js</code>.</p>
+
+<p>The sidebar is organised into three navigation sections. System covers Overview, Logs, Firewall, Services, and System Mail. Network covers External Traffic and Internal Traffic. Manage System covers System Setup and Integrity Check. Each link uses a <code>/view/</code> path prefix that <code>view.js</code> intercepts.</p>
+
+<p>Scripts load in this order: <code>session.js</code> in <code>&lt;head&gt;</code> deferred (runs first, guards the page), then in the body: <code>token.js</code>, <code>ts.js</code>, <code>view.js</code>, <code>powermgmt.js</code>. All are deferred and SRI-protected with SHA-384 integrity hashes.</p>
+
+<p>The sidebar footer contains three power state buttons: logout (green), restart (blue), and poweroff (red). These are wired by <code>powermgmt.js</code>, not <code>view.js</code>.</p>
+
+<h2>Script Reference</h2>
+
+<h3>token.js</h3>
+
+<p>Manages the CSRF token lifecycle. Runs as a self-contained IIFE. Exposes <code>window.TNToken</code> as the public API.</p>
+
+<p>On initialisation it fetches a token from <code>/cgi-bin/control.pl/api/csrf</code> and starts a 30-minute auto-refresh interval. The fetch uses up to three retry attempts with a one-second delay between each. The refresh interval is a separate <code>setInterval</code> call; if a refresh is already in progress when the timer fires, the duplicate is silently skipped via an <code>isRefreshing</code> guard flag.</p>
+
+<p>The token is held in a module-scoped variable, never in <code>localStorage</code> or <code>sessionStorage</code>. It is cleared from memory on logout via <code>window.TNToken.clear()</code>, which also stops the auto-refresh timer.</p>
+
+<p>The public API on <code>window.TNToken</code>:</p>
+
+<dl>
+  <dt><code>TNToken.fetch()</code></dt>
+  <dd>Fetches a fresh token from the server. Returns a Promise resolving to the token string.</dd>
+
+  <dt><code>TNToken.get()</code></dt>
+  <dd>Returns the current token string, or null if not yet loaded. Logs a warning if called before the token is ready.</dd>
+
+  <dt><code>TNToken.has()</code></dt>
+  <dd>Returns true if a non-empty token is loaded.</dd>
+
+  <dt><code>TNToken.refresh()</code></dt>
+  <dd>Fetches a new token and updates the stored value. Returns a Promise.</dd>
+
+  <dt><code>TNToken.clear()</code></dt>
+  <dd>Clears the token from memory and stops the auto-refresh timer. Called on logout.</dd>
+
+  <dt><code>TNToken.initialize()</code></dt>
+  <dd>Fetches the initial token and starts auto-refresh. Called automatically on DOM ready.</dd>
+
+  <dt><code>TNToken.startAutoRefresh()</code> / <code>TNToken.stopAutoRefresh()</code></dt>
+  <dd>Manual control of the refresh interval.</dd>
+</dl>
+
+<p>Security considerations: the token is in-memory only and is cleared on logout. Auto-refresh prevents token expiry during long sessions without requiring user interaction. The retry mechanism handles transient network failures at startup without silently leaving the form unprotected. All state-changing requests in the application gate on <code>TNToken.has()</code> before proceeding and refuse to submit if the token is absent.</p>
+
+<h3>session.js</h3>
+
+<p>Guards the authenticated dashboard. Runs as an immediately-invoked async function, which means it executes as soon as the script tag is evaluated, before the rest of the page finishes loading. If the session check fails for any reason, the user is redirected to <code>/index.html</code> before any dashboard content is visible.</p>
+
+<p>On a successful session check it does the following: populates <code>window.currentUser</code> with username, user ID, role, session age, DEVEL mode flag, and an <code>authenticatedAt</code> timestamp; adds the <code>session-valid</code> class to the document root element; starts a 5-minute periodic recheck interval; calls <code>updateUserInfo()</code> to expose session data to other scripts; and conditionally activates DEVEL mode if the server reports it enabled.</p>
+
+<p>The periodic recheck calls <code>/cgi-bin/control.pl/api/session</code> every five minutes. The server-side session TTL is 30 minutes, so this polling interval catches expiry within one cycle. If the server returns a non-ok HTTP status the user is redirected immediately. If the session is found to be unauthenticated an alert is shown before redirect. Network errors and JSON parse failures during a periodic check are logged but do not redirect, as a transient network blip should not terminate an active session. Genuine expiry will be caught on the next polling cycle.</p>
+
+<p>The <code>window.logout</code> function sends a POST to <code>/cgi-bin/control.pl/auth/logout</code> with the current CSRF token from <code>window.TNToken</code>, then redirects to <code>/index.html</code> in the <code>finally</code> block regardless of whether the server call succeeded. This ensures the user always lands on the login page even if the logout request fails, while the CSRF token ensures the server destroys the session row in the database when the request succeeds.</p>
+
+<p>DEVEL mode handling: if <code>data.devel_mode</code> is true, <code>showDevelWarning()</code> injects a dismissible warning banner into the page body and adds <code>devel-active</code> to the body class. <code>loadDevelScript()</code> then dynamically appends a <code>&lt;script&gt;</code> tag for <code>devel.js</code> without an SRI integrity attribute. This is intentional: in DEVEL mode the server disables SRI enforcement, so the attribute would be redundant. In production <code>data.devel_mode</code> is always false, so neither function ever runs.</p>
+
+<p>Security considerations: the session check runs before any view content loads, making it impossible to reach the dashboard UI with an expired or invalid session. The <code>session-valid</code> class on the document root can be used by CSS to hide content until session validity is confirmed. The periodic recheck provides ongoing enforcement for long-lived tabs. Logout always redirects regardless of server response, preventing the user from remaining on a page after session destruction.</p>
+
+<h3>auth.js</h3>
+
+<p>Handles the full authentication UI on <code>index.html</code>: login, registration, and a four-step password reset flow. Runs as a self-contained IIFE. Exposes <code>window.TNAuth</code>.</p>
+
+<p>The minimum password length constant (<code>MIN_PASSWORD_LENGTH = 12</code>) is the single authoritative value for client-side validation, matching the server-side minimum in <code>TNSecurity::validate_password()</code>.</p>
+
+<p>All user-facing text input is passed through a <code>sanitize()</code> function that HTML-encodes the six characters <code>&amp;</code>, <code>&lt;</code>, <code>&gt;</code>, <code>"</code>, <code>'</code>, and <code>/</code> before the value is used anywhere. Password fields are not sanitized because the raw value is needed for hashing on the server. The sanitized username is what gets sent to the API.</p>
+
+<p>Every API call checks for the CSRF token via <code>window.TNToken.get()</code> before building the request body. If the token is absent the form shows an error and the request is not sent. All requests use <code>credentials: 'same-origin'</code> to ensure the session cookie is included.</p>
+
+<p>Backend error messages are mapped to user-friendly strings via a local <code>getUserFriendlyError()</code> table before display. Raw server error strings are never shown to the user. Unmapped errors fall through to a generic message.</p>
+
+<p>The login handler validates the username length client-side and checks that the password meets the minimum length before sending anything to the server. On success it redirects to <code>/view.html</code>.</p>
+
+<p>Registration checks username format (3 to 32 characters, letters, numbers, dash, and underscore), optional email format, password strength against five criteria (minimum length, uppercase, lowercase, digit, special character), password confirmation match, and that all five security questions are answered with distinct questions selected. The password strength indicator updates live as the user types. On success the response includes recovery codes and optionally registration tokens (issued to the first admin), which are displayed in a structured block before the user is redirected to login. The form is hidden once the success block is shown to prevent double-submission.</p>
+
+<p>The password reset flow has four steps managed by a module-scoped <code>resetState</code> object. Step 1 collects the username and fetches security questions. Step 2 displays those questions and verifies answers. Step 3 is the alternative recovery code path. Steps 2 and 3 both converge at step 4, which accepts the new password. The server issues a short-lived HMAC-signed reset token after step 2 or step 3 succeeds; this token is stored in <code>resetState.resetToken</code> and submitted with the new password in step 4. The reset token has a 10-minute TTL on the server. Incorrect security answers at step 2 are subject to rate limiting enforced by the server.</p>
+
+<p>The event listener setup on DOMContentLoaded detects which page is loaded by checking for the presence of specific elements before attaching handlers. The login handler is only attached when the form is present and the step elements are absent, preventing it from firing on the reset page.</p>
+
+<p>Security considerations: CSRF token is required before any form submission. Input is sanitized before use. Password is never sanitized or logged. Error messages from the server are never displayed raw. The reset token flow requires server-side verification at every step, meaning a client that bypasses step 2 cannot reach step 4 without a valid server-issued token. Recovery codes are 32-character hex strings validated on the client before submission.</p>
+
+<h3>devel.js</h3>
+
+<p>The developer tools panel. Only ever loaded dynamically by <code>session.js</code> when the server confirms DEVEL mode is active. Never present in production. Never referenced by a static script tag in any HTML file.</p>
+
+<p>On load it immediately injects <code>devel.css</code> by appending a <code>&lt;link&gt;</code> element to the document head. This is the only way <code>devel.css</code> enters the page, ensuring it is never loaded in production.</p>
+
+<p>The panel is a floating element appended to <code>document.body</code>. In its collapsed state it shows a small pill button labelled DEV TOOLS. Clicking the pill expands the panel to show current username, role, and session age from <code>window.currentUser</code>, and four action buttons.</p>
+
+<dl>
+  <dt>Disable DEVEL Mode</dt>
+  <dd>Shows a confirmation dialog, then POSTs to <code>/cgi-bin/control.pl/devel/disable</code>. On success shows an alert instructing the operator to restart httpd and slowcgi.</dd>
+
+  <dt>Regenerate SRI Hashes</dt>
+  <dd>POSTs to <code>/cgi-bin/control.pl/devel/regenerate_sri</code>. Triggers the server to recompute SHA-384 hashes for all static assets and update the stored values.</dd>
+
+  <dt>Show Session Info</dt>
+  <dd>GETs <code>/cgi-bin/control.pl/api/session</code> and logs the full response to the browser console as a grouped output.</dd>
+
+  <dt>Clear Console</dt>
+  <dd>Calls <code>console.clear()</code>.</dd>
+</dl>
+
+<p>Keyboard shortcuts: Ctrl+Shift+D toggles the panel, Ctrl+Shift+C clears the console, Ctrl+Shift+I shows session info.</p>
+
+<p>Status messages within the panel auto-dismiss after five seconds.</p>
+
+<h3>view.js</h3>
+
+<p>The SPA view management system. Handles sidebar navigation, content loading, active link state, and script lifecycle management for all nine dashboard views. Exposes <code>window.ViewSystem</code>.</p>
+
+<p>The nine configured views are: dashboard, logs, firewall, services, mail, external, internal, manage, and integrity. Each maps a view ID to a display title and a server template path under <code>/view/</code>. These paths are served by the Perl backend, which returns complete HTML fragments including any view-specific inline scripts.</p>
+
+<p>The system is built from four cooperating modules.</p>
+
+<p><code>ViewState</code> is a closure that holds the current view ID and the active link element reference. It provides get, set, and reset functions. No state is stored in the DOM or in any global variable outside the closure.</p>
+
+<p><code>ActiveLinkManager</code> manages the sidebar link highlighting. When a view is activated, it removes the active CSS classes from the previously active link and applies them to the new one, updating <code>aria-current</code> attributes accordingly. The view ID is extracted from the link href by parsing the URL and finding the path segment after <code>/view/</code>. If the user clicks a link for the view already loaded, the click is a no-op.</p>
+
+<p><code>ContentLoader</code> handles all content fetching and lifecycle management. Its <code>loadViewContent()</code> function follows a strict seven-step sequence on every navigation: clean up the previous view, show a loading spinner, validate the view configuration, fetch the HTML from the server, insert the HTML into <code>#main-content</code>, execute any scripts embedded in the new content, and dispatch a <code>viewLoaded</code> custom event.</p>
+
+<p>The cleanup step is a full DOM replacement rather than an <code>innerHTML</code> clear. The entire <code>&lt;main&gt;</code> element is replaced with a fresh element carrying the same attributes. This fires a <code>viewCleanup</code> custom event first, giving view scripts an opportunity to clean up before they are destroyed. The replacement ensures that no event listeners, timers, or object references from the previous view survive to interfere with the next one.</p>
+
+<p>Scripts embedded in the fetched HTML are not executed automatically by <code>innerHTML</code> assignment. <code>_executeViewScripts()</code> iterates over all <code>&lt;script&gt;</code> elements found in the new content and re-creates each one as a new element, which triggers execution. Inline scripts are wrapped in an immediately-invoked function expression with a try-catch so that a runtime error in one view script does not prevent other scripts in the same view from running. External script tags have their <code>data-view</code> attribute set and error handlers attached.</p>
+
+<p><code>EventHandler</code> sets up click listeners on all sidebar links matching <code>#nav-system a[href^="/view/"]</code>. It calls <code>removeEventListener</code> before <code>addEventListener</code> on each link to prevent duplicate handlers if the setup runs more than once.</p>
+
+<p>On initialisation the system activates the dashboard view by default, then loads its content via AJAX. The AJAX loading flag (<code>ENABLE_AJAX_LOADING</code>) can be set to false for UI-only testing without a backend.</p>
+
+<p>Fetch requests to the view templates include <code>X-Requested-With: XMLHttpRequest</code> so the server can distinguish AJAX requests from full page loads, and <code>cache: 'no-cache'</code> to prevent stale view content.</p>
+
+<p>The public API on <code>window.ViewSystem</code>:</p>
+
+<dl>
+  <dt><code>ViewSystem.getCurrentView()</code></dt>
+  <dd>Returns the current view ID string.</dd>
+
+  <dt><code>ViewSystem.loadView(viewId)</code></dt>
+  <dd>Programmatically loads a view by ID. Can be called by view scripts or from the console.</dd>
+
+  <dt><code>ViewSystem.debug.getState()</code></dt>
+  <dd>Returns the current view ID and full configuration object. Useful during development.</dd>
+
+  <dt><code>ViewSystem.debug.reset()</code></dt>
+  <dd>Resets view state. Useful for testing.</dd>
+</dl>
+
+<h3>powermgmt.js</h3>
+
+<p>Handles the three power state actions in the sidebar footer: logout, restart, and poweroff. Runs as a self-contained IIFE.</p>
+
+<p>All three actions require user confirmation through custom modal dialogs. The module replaces all use of browser-native <code>confirm()</code>, <code>alert()</code>, and <code>prompt()</code> with styled modal implementations that match the system visual language.</p>
+
+<p>Logout shows a single confirmation modal then POSTs to <code>/cgi-bin/control.pl/auth/logout</code> with the CSRF token. On success it redirects to <code>/index.html</code>.</p>
+
+<p>Restart shows two sequential confirmation modals. The first warns that network connections will be interrupted. The second asks for a final confirmation. Only after both are accepted does the power action proceed.</p>
+
+<p>Poweroff shows a confirmation modal then a typed confirmation modal requiring the operator to type <code>POWEROFF</code> in capital letters before the action is accepted. An incorrect entry clears the input and shows an inline error rather than dismissing the modal. This two-factor confirmation prevents accidental shutdown.</p>
+
+<p>The power action sequence for restart and shutdown is: POST to <code>/cgi-bin/power_mgmt.pl</code> with the action and CSRF token; on success, silently POST logout to destroy the session (failure here is non-fatal since the system is going down); clear the CSRF token from memory via <code>window.TNToken.clear()</code>; disable all buttons on the page to prevent further requests; redirect to <code>/maintenance.html?action=restart</code> or <code>/maintenance.html?action=shutdown</code>.</p>
+
+<p>The CSRF token is retrieved via a polling helper that waits up to 5 seconds for <code>window.TNToken</code> to be populated by <code>token.js</code>. This handles the case where <code>powermgmt.js</code> initialises before the token fetch completes.</p>
+
+<p>The four modal types are: spinner (non-interactive, shown during async operations), confirm (yes/no with configurable button labels and variants), alert (single OK button, wraps the confirm modal with no cancel), and prompt (text input with exact-match validation). All modals use a dark overlay and centred card, support keyboard navigation via Escape and Enter, and close if the user clicks the overlay background.</p>
+
+<p>Security considerations: all destructive actions require at least one explicit confirmation. Poweroff requires typed confirmation to prevent accidental execution. The CSRF token is included with every mutating request. The session is destroyed silently before the maintenance redirect so no authenticated requests can fire from the page after the system begins shutting down. All buttons are disabled after a power action is queued to prevent duplicate requests.</p>
+
+<h3>ts.js</h3>
+
+<p>UI utility script. Initialises four independent features on DOMContentLoaded: theme toggle, sidebar toggle, user dropdown, and back-to-top button. Also initialises a mobile menu handler, though the mobile menu button is not present in the current <code>view.html</code> markup; the handler degrades gracefully if the element is absent.</p>
+
+<p>Theme toggle switches the <code>dark</code> class on the root <code>&lt;html&gt;</code> element and swaps the sun and moon SVG icons. There is no persistence to <code>localStorage</code>; the theme resets to the default on page reload.</p>
+
+<p>Sidebar toggle adds and removes <code>sidebar--closed</code> on the aside element and updates <code>aria-expanded</code> and <code>aria-hidden</code> accordingly.</p>
+
+<p>User dropdown toggles the <code>hidden</code> class on the dropdown menu. It closes on outside click via a document-level listener and on link click within the menu. Event propagation is stopped on the toggle button click to prevent the document listener from immediately closing the menu that was just opened.</p>
+
+<p>Back-to-top button becomes visible after 300 pixels of scroll and triggers smooth scroll to top on click.</p>
+
+<h2>Script Load Order and Dependencies</h2>
+
+<p>On <code>index.html</code> the load order is: <code>token.js</code>, then <code>auth.js</code>, then <code>ts.js</code>. The comment in the HTML explicitly documents that <code>token.js</code> must precede <code>auth.js</code> because <code>auth.js</code> references <code>window.TNToken</code>. Both are deferred, so they execute after HTML parsing in declaration order.</p>
+
+<p>On <code>view.html</code> the load order is: <code>session.js</code> (in head, deferred), then <code>token.js</code>, <code>ts.js</code>, <code>view.js</code>, <code>powermgmt.js</code> (all in body, deferred). <code>session.js</code> is in the head to signal intent that it runs first, though deferred execution means it runs after parsing in declaration order with the body scripts. <code>powermgmt.js</code> polls for <code>window.TNToken</code> rather than assuming it is already loaded, which decouples its initialisation from the exact token fetch timing.</p>
+
+<h2>SRI Integrity</h2>
+
+<p>Every script tag on both pages carries a <code>crossorigin="anonymous"</code> attribute and a SHA-384 integrity hash. The browser will refuse to execute any script whose hash does not match, providing protection against CDN compromise or file tampering. <code>devel.js</code> is the only script loaded without an integrity attribute, and only when the server has already confirmed DEVEL mode is active, at which point SRI enforcement is disabled server-side. In production this code path never runs.</p>
+
+<p>SRI hashes are regenerated via the <code>devel/regenerate_sri</code> endpoint whenever static assets change during development. This is exposed as a button in the DEVEL tools panel.</p>
+
+<div class="callout callout-warning">
+  <p>After any change to a static asset file in production, the corresponding SRI hash in the HTML must be updated before the file is deployed. A hash mismatch will cause the browser to block the script entirely, breaking the page for all users. Use the DEVEL mode SRI regeneration tool during development to keep hashes current, then commit both the asset and the updated HTML together.</p>
+</div>
+
+<div class="callout callout-note">
+  <p>View scripts embedded in HTML returned by the Perl backend are re-executed by <code>view.js</code> via DOM element replacement on every navigation. These scripts do not carry SRI attributes and are not subject to SRI checking. They are server-generated, served over the authenticated session, and covered by the same transport security as all other CGI responses.</p>
+</div>
+
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Two pages: <code>index.html</code> for sign-in, <code>view.html</code> as the authenticated dashboard shell. All dashboard content loads dynamically into a single <code>#main-content</code> element. JavaScript handles UI and API calls; Perl generates all application HTML.</li>
+    <li><code>token.js</code> manages the CSRF token in memory only. It auto-fetches on load, retries up to three times, refreshes every 30 minutes, and clears the token on logout. All state-changing requests gate on token availability before submitting.</li>
+    <li><code>session.js</code> validates the session before any dashboard content loads. On success it populates <code>window.currentUser</code>, marks the document as session-valid, and starts a 5-minute periodic recheck. Transient network errors during periodic checks do not redirect; only confirmed session expiry does.</li>
+    <li><code>auth.js</code> covers login, registration with five security questions, and a four-step password reset with both security answer and recovery code paths. Input is sanitized before use. CSRF token is required for every submission. Backend errors are mapped to user-friendly messages before display.</li>
+    <li><code>devel.js</code> is only loaded dynamically when the server confirms DEVEL mode. It injects its own CSS, provides a floating tools panel with disable, SRI regeneration, session info, and console clear actions, and registers keyboard shortcuts. It is never present in production.</li>
+    <li><code>view.js</code> intercepts all sidebar link clicks, fetches view HTML from the Perl backend, and inserts it into <code>#main-content</code>. On each navigation the entire main element is replaced to eliminate zombie listeners and stale references from the previous view. Embedded scripts in view HTML are re-executed via DOM element replacement.</li>
+    <li><code>powermgmt.js</code> wires the logout, restart, and poweroff buttons. Restart requires two confirmations. Poweroff requires a typed confirmation. Power actions silently destroy the session, clear the CSRF token, disable all buttons, and redirect to the maintenance page before the system goes down.</li>
+    <li>All static scripts on both pages carry SHA-384 SRI integrity hashes and <code>crossorigin="anonymous"</code>. Any file change requires a hash update before deployment.</li>
+  </ul>
+</div>

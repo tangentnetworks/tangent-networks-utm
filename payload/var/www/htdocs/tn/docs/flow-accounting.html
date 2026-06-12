@@ -1,0 +1,343 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    This document covers flow accounting -- the capture, aggregation, and
+    storage of network traffic data using pmacct. Three pmacctd instances
+    run simultaneously, each with a distinct role: real-time WAN display,
+    real-time LAN display, and persistent per-quarter-hour JSON logs for
+    historical analysis. It also covers the MFS truncation utility that
+    keeps the real-time pipe files within bounds.
+  </p>
+  <p>
+    pmacct data feeds the network traffic panels in the WebUI dashboard.
+    The MFS pipe files are the live data source; the timestamped JSON log
+    files under <code>network/pmacct/ext/</code> are the historical record.
+  </p>
+</div>
+
+<h1>Flow Accounting</h1>
+
+<h2>Architecture Overview</h2>
+<p>
+  pmacct captures traffic by opening BPF devices on the network interfaces.
+  Three pmacctd instances run from rc.local, each reading a separate
+  configuration file. Two instances write to MFS-backed pipe files for
+  real-time WebUI consumption. One instance writes to timestamped JSON files
+  on persistent storage for historical analysis.
+</p>
+
+<dl>
+  <dt><code>ext_if_json_mfs</code> -- WAN real-time pipe</dt>
+  <dd>Captures on %%EXT_IF%% (WAN). Aggregates by source host, destination host,
+  source port, destination port, protocol, TCP flags, and ToS. Writes JSON
+  to the MFS pipe file every 10 seconds. WebUI reads this for live WAN
+  traffic display.</dd>
+
+  <dt><code>int_if_json_mfs</code> -- LAN real-time pipe</dt>
+  <dd>Captures on %%INT_IF%% (LAN). Aggregates by source host, source MAC,
+  source port, destination host, and protocol. MAC address capture
+  identifies individual LAN devices beyond IP alone. Writes JSON to the
+  MFS pipe file every 10 seconds.</dd>
+
+  <dt><code>ext_if_json_log</code> -- WAN persistent log</dt>
+  <dd>Captures on %%EXT_IF%% (WAN). Same aggregation fields as the WAN MFS
+  instance. Writes to a new timestamped JSON file every 60 seconds under
+  <code>network/pmacct/ext/</code> using the filename pattern
+  <code>ext_if-YYYYMMDD-HHMM.json</code>. Quarter-hour files are merged
+  daily by the rc.local boot routine into a single dated JSON file and
+  kept for 7 days.</dd>
+</dl>
+
+<h2>MFS Pipe Files</h2>
+<p>
+  The two real-time pipe files live on a 64 MB memory filesystem mounted
+  at boot from fstab:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">fstab</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>swap /var/www/htdocs/tn/data/pipes/pmacct mfs rw,nosuid,nodev,noatime,noexec,-s=64m 0 0</code></pre>
+</div>
+
+<p>
+  Writing to MFS rather than disk eliminates I/O overhead for files that
+  are updated every 10 seconds continuously. The <code>noatime</code> flag
+  suppresses access time updates. The 64 MB allocation is generous -- the
+  two pipe files are capped at 16 MB each by newsyslog before SIGHUP
+  rotation, and pmacct_mfs_manage.sh keeps them at 200 lines in practice.
+</p>
+
+<div class="callout callout-warning">
+  <p><strong>MFS contents are lost on reboot.</strong> rc.local pre-creates
+  the pipe files with correct permissions before starting pmacctd. If the
+  MFS mount fails or the files are absent, pmacctd will fail to open its
+  output path and start without writing any data. After any unexpected
+  reboot, verify the MFS is mounted and the files exist before checking
+  pmacct status.</p>
+</div>
+
+<h2>Instance Configurations</h2>
+
+<h3>ext_if_json_mfs -- WAN real-time</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">conf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pcap_interface: %%EXT_IF%%
+promisc: true
+plugins: print[jsonpipe]
+aggregate[jsonpipe]: src_host, dst_host, src_port, dst_port, proto, tcpflags, tos
+print_output_file[jsonpipe]: /var/www/htdocs/tn/data/pipes/pmacct/ext_if_json.log
+print_output[jsonpipe]: json
+plugin_pipe_size: 4194304
+print_refresh_time[jsonpipe]: 10
+print_output_file_append: true
+print_history[jsonpipe]: 15m
+print_cache_entries[jsonpipe]: 8192
+pidfile: /var/www/htdocs/tn/data/run/pmacct/pmacct-ext_if_json_mfs.pid
+imt_path: /var/www/htdocs/tn/data/tmp/pmacct/pmacct-ext_if_json_mfs.imt</code></pre>
+</div>
+
+<p>
+  <code>print_refresh_time: 10</code> -- flushes the aggregation cache and
+  appends a JSON record to the pipe file every 10 seconds.
+  <code>print_history: 15m</code> -- each record covers a 15-minute
+  accounting window. <code>plugin_pipe_size: 4194304</code> -- 4 MB internal
+  pipe buffer between the capture thread and the print plugin. This instance
+  does not set <code>snaplen</code> explicitly, using the pmacct default
+  (96 bytes) -- sufficient for header capture used in flow aggregation.
+</p>
+
+<h3>int_if_json_mfs -- LAN real-time</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">conf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pcap_interface: %%INT_IF%%
+snaplen: 1500
+promisc: true
+plugins: print[jsonpipe]
+aggregate[jsonpipe]: src_host, src_mac, src_port, dst_host, proto
+print_output_file[jsonpipe]: /var/www/htdocs/tn/data/pipes/pmacct/int_if_json.log
+print_output[jsonpipe]: json
+plugin_pipe_size: 4194304
+print_refresh_time[jsonpipe]: 10
+print_output_file_append: true
+print_history[jsonpipe]: 15m
+print_cache_entries[jsonpipe]: 8192
+pidfile: /var/www/htdocs/tn/data/run/pmacct/pmacct-int_if_json_mfs.pid
+imt_path: /var/www/htdocs/tn/data/tmp/pmacct/pmacct-int_if_json_mfs.imt</code></pre>
+</div>
+
+<p>
+  The LAN instance adds <code>src_mac</code> to the aggregation fields.
+  MAC addresses identify LAN devices independently of their IP address,
+  which matters when DHCP reassigns addresses or a device uses multiple
+  IPs. <code>snaplen: 1500</code> captures full Ethernet frames on the LAN
+  interface. The aggregation set is narrower than the WAN instance --
+  TCP flags and ToS are omitted as they are less relevant for LAN device
+  identification.
+</p>
+
+<h3>ext_if_json_log -- WAN persistent log</h3>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">conf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>pcap_interface: %%EXT_IF%%
+snaplen: 1500
+promisc: true
+plugin_pipe_size: 1048576
+plugins: print[jsonlog]
+aggregate[jsonlog]: src_host, dst_host, src_port, dst_port, proto, tcpflags, tos
+print_output_file[jsonlog]: /var/www/htdocs/tn/data/network/pmacct/ext/ext_if-%Y%m%d-%H%M.json
+print_output[jsonlog]: json
+print_refresh_time[jsonlog]: 60
+print_output_file_append: true
+print_history[jsonlog]: 15m
+print_cache_entries[jsonlog]: 8192
+pidfile: /var/www/htdocs/tn/data/run/pmacct/pmacct-ext_if_json_log.pid
+imt_path: /var/www/htdocs/tn/data/tmp/pmacct/pmacct-ext_if.imt</code></pre>
+</div>
+
+<p>
+  <code>print_refresh_time: 60</code> -- writes a new record every 60
+  seconds. The filename pattern <code>ext_if-%Y%m%d-%H%M.json</code>
+  produces one file per minute, giving 15 files per quarter-hour window.
+  <code>plugin_pipe_size: 1048576</code> -- 1 MB internal pipe buffer,
+  smaller than the MFS instances because the flush interval is longer and
+  the write destination is persistent storage rather than MFS.
+</p>
+
+<h2>Startup Sequence</h2>
+<p>
+  rc.local starts the three pmacctd instances in two phases. The MFS
+  instances start immediately at boot. The log instance waits until the
+  next quarter-hour boundary before starting, so that its timestamped
+  output files align cleanly to 15-minute boundaries (00, 15, 30, 45
+  minutes past the hour).
+</p>
+<p>
+  The quarter-hour alignment calculation: rc.local computes how many
+  seconds remain until the next 15-minute boundary and sleeps that long
+  in a background subshell before starting <code>ext_if_json_log</code>.
+  If the system boots exactly on a boundary, the sleep is skipped. The
+  alignment subshell runs in the background -- rc.local does not block
+  waiting for it.
+</p>
+<p>
+  A background permission fixer loop also starts at boot. It runs
+  <code>find</code> every 8 seconds on the MFS pipe directory and the
+  persistent log directory, setting 644 permissions on any new files
+  pmacct creates. This is necessary because pmacctd creates new output
+  files with restrictive permissions inherited from its umask, which
+  prevents the www user from reading them.
+</p>
+
+<h2>Daily Log Consolidation</h2>
+<p>
+  The rc.local pmacct section also handles log consolidation from the
+  previous day at each boot. It finds all JSON and text files from
+  yesterday's date under <code>network/pmacct/ext/</code>, concatenates
+  them into a single dated file (<code>YYYY-MM-DD.json</code>), and
+  removes individual quarter-hour files. Files older than 7 days are
+  deleted. This runs synchronously at boot before the pmacctd instances
+  start.
+</p>
+
+<div class="callout callout-note">
+  <p><strong>Consolidation runs at boot only.</strong> If the system runs
+  continuously for multiple days without a reboot, per-minute JSON files
+  accumulate in <code>network/pmacct/ext/</code> without being consolidated.
+  A dedicated daily consolidation cron job is a deferred improvement.
+  For now, the consolidation happens on the next boot.</p>
+</div>
+
+<h2>MFS Pipe Management -- pmacct_mfs_manage.sh</h2>
+<p>
+  <code>pmacct_mfs_manage.sh</code> is a ksh utility that keeps the two
+  MFS pipe files within a fixed line count. It runs every 60 seconds via
+  <code>pmacct_mfs_manage_runner.sh</code>, which loops indefinitely from
+  rc.local.
+</p>
+<p>
+  The script truncates each pipe file to the last 200 lines when the file
+  exceeds that count. It preserves the inode by writing back via
+  redirection (<code>cat tmpfile &gt;| logfile</code>) rather than replacing
+  the file -- this is critical because pmacctd holds the file open by inode.
+  Replacing the file would leave pmacctd writing to the old unlinked inode
+  while the WebUI reads an empty new file.
+</p>
+<p>
+  Per-file locking uses a lock directory (<code>logfile.lock/</code>)
+  rather than a lock file, because directory creation is atomic on all
+  POSIX filesystems. The lock timeout is 5 seconds. If a lock cannot be
+  acquired and the file is open by another process, the script skips
+  silently -- this is the normal case when pmacctd is actively writing.
+</p>
+
+<h2>newsyslog Integration</h2>
+<p>
+  The two MFS pipe files have newsyslog entries that provide a size-based
+  safety net at 16 MB, sending SIGHUP to the respective pmacctd instance
+  after rotation so it re-opens the file:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">conf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>/var/www/htdocs/tn/data/pipes/pmacct/ext_if_json.log  www:wheel  644  0  16000  *  Z  pmacct-ext_if_json_mfs.pid  SIGHUP
+/var/www/htdocs/tn/data/pipes/pmacct/int_if_json.log  www:wheel  644  0  16000  *  Z  pmacct-int_if_json_mfs.pid  SIGHUP</code></pre>
+</div>
+
+<p>
+  The count field is 0 -- no rotated copies are kept. The size field is
+  16000 KB. In normal operation pmacct_mfs_manage.sh keeps files well
+  under this limit. The newsyslog entry fires only if the management
+  script fails or falls behind. The PID filenames in newsyslog match the
+  <code>pidfile</code> directives in the respective configs exactly.
+</p>
+
+<h2>Operational Reference</h2>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check all three pmacctd instances are running
+pgrep -a pmacctd
+
+# Check PID files
+ls /var/www/htdocs/tn/data/run/pmacct/
+
+# Verify MFS is mounted
+mount | grep pipes/pmacct
+
+# Check MFS pipe file sizes and line counts
+wc -l /var/www/htdocs/tn/data/pipes/pmacct/ext_if_json.log
+wc -l /var/www/htdocs/tn/data/pipes/pmacct/int_if_json.log
+
+# Tail live WAN traffic feed
+tail -f /var/www/htdocs/tn/data/pipes/pmacct/ext_if_json.log
+
+# Check persistent log files
+ls -lh /var/www/htdocs/tn/data/network/pmacct/ext/ | tail -20
+
+# Check pmacct_mfs_manage_runner is running
+pgrep -f pmacct_mfs_manage_runner
+
+# Check pmacct startup log
+tail -50 /var/www/htdocs/tn/data/logs/pmacct/pmacct.log</code></pre>
+</div>
+
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Three pmacctd instances serve two purposes: real-time WebUI feed
+    (MFS pipe files, 10-second flush) and persistent historical logging
+    (timestamped JSON files, 60-second flush, 7-day retention).</li>
+    <li>The WAN real-time and log instances capture on %%EXT_IF%% with full
+    flow fields including TCP flags and ToS. The LAN real-time instance
+    captures on %%INT_IF%% and adds MAC address to identify devices independently
+    of IP assignment.</li>
+    <li>The log instance starts quarter-hour aligned to produce clean
+    15-minute boundary files. MFS instances start immediately at boot.</li>
+    <li>pmacct_mfs_manage.sh keeps MFS pipe files at 200 lines with
+    inode-preserving truncation and per-file locking. newsyslog provides
+    a 16 MB size-based safety net with SIGHUP re-open signalling.</li>
+    <li>Daily log consolidation runs at boot, merging previous-day
+    per-minute files into a single dated JSON. A dedicated consolidation
+    cron job is a deferred improvement for systems that run continuously.</li>
+  </ul>
+</div>

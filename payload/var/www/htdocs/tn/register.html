@@ -1,0 +1,182 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Take control of your network security with Tangent Networkss Firewall and Router. Easily manage access, configure settings, and protect your devices.">
+    <title>Tangent Networkss | Web interface for managing your firewall and router</title>
+    <link rel="stylesheet" href="./assets/css/tangent.css">
+    <link rel="stylesheet" href="./assets/css/auth.css">
+  </head>
+  <body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center">
+    <!-- BEGIN: NAVIGATION -->
+    <header id="layout-navigation-block">
+      <!-- BEGIN: NAVBAR -->
+      <nav class="bg-white dark:bg-gray-900 fixed w-full z-20 top-0 start-0 border-b border-gray-200 dark:border-gray-700 shadow-lg">
+        <div class="max-w-screen-xl flex items-center justify-between mx-auto p-4">
+          <button class="inline-flex items-center justify-center p-2 rounded-lg text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90 shadow-md">
+            <div class="flex items-center">
+              <img src="./assets/images/logo/icon.svg" alt="TN logo icon" class="h-5 w-auto object-contain md:hidden">
+              <img src="./assets/images/logo/tnw.svg" alt="TN logo full" class="h-5 w-auto object-contain hidden md:block">
+            </div>
+          </button>
+          <div class="flex items-center space-x-2">
+            <button id="theme-toggle" type="button" class="inline-flex items-center justify-center p-2 rounded-lg text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90 shadow-md">
+              <svg id="theme-toggle-dark-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+              </svg>
+              <svg id="theme-toggle-light-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"></path>
+              </svg>
+            </button>
+            <div class="relative">
+              <button id="user-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90" aria-expanded="false">
+                <span class="sr-only">Open user menu</span>
+                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <path stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M5 7h14M5 12h14M5 17h14"></path>
+                </svg>
+              </button>
+              <div id="dropdown-user" class="z-50 absolute right-0 mt-2 bg-gray-50 dark:bg-gray-900 border border-default rounded-lg shadow-lg w-44 hidden">
+                <ul class="p-2 text-sm font-medium" role="none">
+                  <li>
+                    <a href="index.html" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Sign In</a>
+                  </li>
+                  <li>
+                    <a href="documentation.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Documentation</a>
+                  </li>
+                  <li>
+                    <a href="privacy.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Privacy</a>
+                  </li>
+                  <li>
+                    <a href="legal.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Legal</a>
+                  </li>
+                  <li>
+                    <a href="license.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">License</a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+      <!-- END: Navigation -->
+      <!-- BEGIN: Registration Section -->
+      <main class="relative flex-grow flex items-center justify-center">
+        <div class="w-full mt-20 mb-10 mx-4 bg-white dark:bg-gray-800 rounded-xl shadow-2xl space-y-8 border border-gray-200 dark:border-gray-700 transition-all duration-300 hover:shadow-blue-500/50">
+          <div class="w-full max-w-lg mx-auto flex flex-col">
+            <div class="w-full">
+              <div class="rounded-lg bg-white p-4 shadow-xl dark:bg-gray-800">
+                <h1 class="mb-2 text-3xl font-bold text-gray-900 dark:text-white text-center">Create Account</h1>
+                <p class="mb-8 text-gray-600 dark:text-gray-400 text-center">Register for Tangent Networks Dashboard</p>
+                <div id="registerError" class="hidden mb-4 rounded-lg bg-red-50 dark:bg-red-900/20 p-4 border border-red-200 dark:border-red-800">
+                  <p class="text-sm text-red-800 dark:text-red-300"></p>
+                </div>
+                <div id="registerSuccess" class="hidden mb-4 overflow-x-hidden">
+  		  <div class="space-y-4"></div>
+		</div>
+                <!-- BEGIN: Registration Status Messages (dynamic) -->
+                <div id="tokenField" class="mb-6 hidden">
+                  <div class="mb-4 rounded-lg border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-900/20 border">
+                    <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                      <strong>Registration Token Required:</strong> A valid registration token is required to create an account. Contact an existing administrator for a token.
+                    </p>
+                  </div>
+                  <label for="registrationToken" class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300 block"> Registration Token * </label>
+                  <input type="text" id="registrationToken" name="registrationToken" maxlength="64" class="rounded-lg border-gray-300 bg-white px-4 py-2 text-gray-900 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white w-full border uppercase focus:border-transparent focus:ring-2" placeholder="Enter registration token" />
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Provided by an administrator</p>
+                </div>
+                <!-- BEGIN: Banner -->
+                <div id="firstUserMessage" class="mb-6 hidden">
+                  <div class="rounded-lg border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20 border">
+                    <div class="flex">
+                      <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                      </div>
+                      <div class="ml-3">
+                        <h1 class="text-sm font-medium text-blue-800 dark:text-blue-200">Welcome, Administrator!</h1>
+                        <div class="mt-2 text-sm text-blue-700 dark:text-blue-200">
+                          <p>You are creating the first account on this system. This account will have administrator privileges and no registration token is required.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- BEGIN: Registration Form -->
+                <form id="registerForm" class="space-y-6">
+                  <!-- BEGIN: Username -->
+                  <div>
+                    <label for="username" class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300 block"> Username </label>
+                    <input type="text" id="username" name="username" required minlength="3" maxlength="32" pattern="[a-zA-Z0-9_\-]+" class="rounded-lg border-gray-300 bg-white px-4 py-2 text-gray-900 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white w-full border focus:border-transparent focus:ring-2" placeholder="Enter username" />
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">3-32 characters, alphanumeric, dash, underscore</p>
+                  </div>
+                  <!-- BEGIN: Email -->
+                  <div>
+                    <label for="email" class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300 block"> Email (Optional) </label>
+                    <input type="email" id="email" name="email" class="rounded-lg border-gray-300 bg-white px-4 py-2 text-gray-900 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white w-full border focus:border-transparent focus:ring-2" placeholder="your@email.com" />
+                  </div>
+                  <!-- BEGIN: USER Password -->
+                  <div>
+                    <label for="password" class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300 block"> Password </label>
+                    <input type="password" id="password" name="password" required minlength="12" class="rounded-lg border-gray-300 bg-white px-4 py-2 text-gray-900 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white w-full border focus:border-transparent focus:ring-2" placeholder="Enter password" />
+                    <div id="passwordStrength" class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      <p>Password must contain:</p>
+                      <ul class="mt-1 space-y-1 list-inside list-disc">
+                        <li id="req-length" class="text-gray-400">At least 12 characters</li>
+                        <li id="req-upper" class="text-gray-400">One uppercase letter</li>
+                        <li id="req-lower" class="text-gray-400">One lowercase letter</li>
+                        <li id="req-number" class="text-gray-400">One number</li>
+                        <li id="req-special" class="text-gray-400">One special character</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <!-- BEGIN: CONFIRM USER Password -->
+                  <div>
+                    <label for="confirmPassword" class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300 block"> Confirm Password </label>
+                    <input type="password" id="confirmPassword" name="confirmPassword" required class="rounded-lg border-gray-300 bg-white px-4 py-2 text-gray-900 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white w-full border focus:border-transparent focus:ring-2" placeholder="Confirm password" />
+                  </div>
+                  <!-- BEGIN: SECURITY QUESTIONS -->
+                  <div class="border-gray-200 pt-6 dark:border-gray-700 border-t">
+                    <h2 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Security Questions</h2>
+                    <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">Select and answer 5 security questions. These will be used to recover your account if you forget your password.</p>
+                    <div id="securityQuestions" class="space-y-4">
+                      <!--NOTE: Questions will be dynamically loaded -->
+                    </div>
+                  </div>
+                  <!-- BEGIN: Create Account Button -->
+                  <div class="gap-4 flex">
+                    <button type="submit" id="submitBtn" class="rounded-lg bg-blue-700 px-6 py-3 font-medium text-white hover:bg-blue-800 flex-1 transition-colors">Register</button>
+                    <a href="index.html" class="rounded-lg bg-gray-200 px-6 py-3 font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-1 text-center transition-colors"> Login </a>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+      <!-- BEGIN: Modal -->
+      <div id="successModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+    	<div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-sm border border-gray-200 dark:border-gray-700">
+	 	<h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Registration Successful!</h2>
+        	<p class="text-gray-600 dark:text-gray-400 mb-6">Your recovery codes have been generated. Please download them now to secure your account.</p>
+           	<div class="flex flex-col gap-3">
+            		<button id="modalDownloadBtn" class="w-full bg-blue-700 text-white py-3 rounded-lg font-semibold hover:bg-blue-800 transition-all">
+                		Download & Redirect
+            		</button>
+           	</div>
+    	</div>
+      </div>
+      <!-- END: Registration Section -->
+      <script src="./assets/js/ts.js" integrity="sha384-TH4RWg6PiUgp3X5p0KFpJPI48AYQL3BjUGLmYsswiOPb3uRy6AfJ0OawHKaN2lmo" defer crossorigin="anonymous"></script>
+      <script src="./assets/js/token.js" integrity="sha384-klUKP7N3iOfziRPsL6XrgPgO3JQbkMUofalL1p+6OQ5SG/UOWlgH79KnPTaqHeUn" defer crossorigin="anonymous"></script>
+      <script src="./assets/js/auth.js" integrity="sha384-zxVXOdCbp5CF2QfNoz+nbGhpNTQl/P6AzaGhSTQMXhWOQZERnBpdrHWUghEmWlkq" defer crossorigin="anonymous"></script>
+  </body>
+</html>

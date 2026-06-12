@@ -1,0 +1,125 @@
+// SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+################################################################################
+# e2guardian Childsafe Filter Configuration
+# Save as /etc/e2guardian/e2guardianf1.conf.c
+# Purpose: Strict filtering for child safety
+################################################################################
+
+# Core settings
+groupname = 'default group'
+storyboard = '/etc/e2guardian/e2guardianf1.story'
+
+# Phrase lists
+bannedphraselist = '/etc/e2guardian/lists/bannedphraselist'
+weightedphraselist = '/etc/e2guardian/lists/weightedphraselist'
+exceptionphraselist = '/etc/e2guardian/lists/exceptionphraselist'
+
+# Banned lists - CHILDSAFE FILTER SPECIFIC PATHS
+sitelist = 'name=banned,messageno=500,path=/etc/e2guardian/lists/blacklists/childsafe/domains'
+urllist = 'name=banned,messageno=501,path=/etc/e2guardian/lists/blacklists/childsafe/urls'
+ipsitelist = 'name=banned,messageno=510,path=/etc/e2guardian/lists/bannedsiteiplist'
+regexpboollist = 'name=banned,messageno=503,path=/etc/e2guardian/lists/bannedregexpurllist'
+regexpboollist = 'name=banneduseragent,messageno=522,path=/etc/e2guardian/lists/bannedregexpuseragentlist'
+sitelist = 'name=bannedssl,messageno=520,path=/etc/e2guardian/lists/bannedsslsitelist'
+ipsitelist = 'name=bannedssl,messageno=520,path=/etc/e2guardian/lists/bannedsslsiteiplist'
+
+# Grey lists
+sitelist = 'name=grey,path=/etc/e2guardian/lists/greysitelist'
+ipsitelist = 'name=grey,path=/etc/e2guardian/lists/greysiteiplist'
+urllist = 'name=grey,path=/etc/e2guardian/lists/greyurllist'
+sitelist = 'name=greyssl,path=/etc/e2guardian/lists/greysslsitelist'
+ipsitelist = 'name=greyssl,path=/etc/e2guardian/lists/greysslsiteiplist'
+
+# Exception lists
+sitelist = 'name=exception,messageno=602,path=/etc/e2guardian/lists/exceptionsitelist'
+ipsitelist = 'name=exception,messageno=602,path=/etc/e2guardian/lists/exceptionsiteiplist'
+urllist = 'name=exception,messageno=603,path=/etc/e2guardian/lists/exceptionurllist'
+regexpboollist = 'name=exception,messageno=609,path=/etc/e2guardian/lists/exceptionregexpurllist'
+regexpboollist = 'name=exceptionuseragent,messageno=610,path=/etc/e2guardian/lists/exceptionregexpuseragentlist'
+
+# Referer exception lists
+sitelist = 'name=refererexception,messageno=620,path=/etc/e2guardian/lists/refererexceptionsitelist'
+ipsitelist = 'name=refererexception,messageno=620,path=/etc/e2guardian/lists/refererexceptionsiteiplist'
+urllist = 'name=refererexception,messageno=620,path=/etc/e2guardian/lists/refererexceptionurllist'
+
+# Embedded referer lists
+sitelist = 'name=embededreferer,path=/etc/e2guardian/lists/embededreferersitelist'
+ipsitelist = 'name=embededreferer,path=/etc/e2guardian/lists/embededreferersiteiplist'
+urllist = 'name=embededreferer,path=/etc/e2guardian/lists/embededrefererurllist'
+
+# Regex replace lists
+regexpreplacelist = 'name=change,path=/etc/e2guardian/lists/urlregexplist'
+regexpreplacelist = 'name=sslreplace,path=/etc/e2guardian/lists/sslsiteregexplist'
+regexpreplacelist = 'name=redirect,path=/etc/e2guardian/lists/urlredirectregexplist'
+
+# Content regex list
+contentregexplist = '/etc/e2guardian/lists/contentregexplist'
+
+# Local banned lists
+sitelist = 'name=localbanned,messageno=560,path=/etc/e2guardian/lists/localbannedsitelist'
+searchlist = 'name=localbanned,messageno=581,path=/etc/e2guardian/lists/localbannedsearchlist'
+
+# Local grey lists
+sitelist = 'name=localgrey,path=/etc/e2guardian/lists/localgreysitelist'
+sitelist = 'name=localgreyssl,path=/etc/e2guardian/lists/localgreysslsitelist'
+
+# Local exception lists
+sitelist = 'name=localexception,messageno=662,path=/etc/e2guardian/lists/localexceptionsitelist'
+
+# File extension and MIME lists
+fileextlist = 'name=exceptionextension,path=/etc/e2guardian/lists/exceptionextensionlist'
+mimelist = 'name=exceptionmime,path=/etc/e2guardian/lists/exceptionmimetypelist'
+fileextlist = 'name=bannedextension,messageno=900,path=/etc/e2guardian/lists/bannedextensionlist'
+mimelist = 'name=bannedmime,messageno=800,path=/etc/e2guardian/lists/bannedmimetypelist'
+
+# Exception file lists
+sitelist = 'name=exceptionfile,path=/etc/e2guardian/lists/exceptionfilesitelist'
+ipsitelist = 'name=exceptionfile,path=/etc/e2guardian/lists/exceptionfilesiteiplist'
+urllist = 'name=exceptionfile,path=/etc/e2guardian/lists/exceptionfileurllist'
+
+# Upload and naughtiness settings
+maxuploadsize = -1
+naughtynesslimit = 175
+
+# Header and virus exception lists
+regexpreplacelist = 'name=headermods,path=/etc/e2guardian/lists/headerregexplist'
+regexpboollist = 'name=bannedheader,path=/etc/e2guardian/lists/bannedregexpheaderlist'
+regexpboollist = 'name=exceptionheader,path=/etc/e2guardian/lists/exceptionregexpheaderlist'
+regexpreplacelist = 'name=addheader,path=/etc/e2guardian/lists/addheaderregexplist'
+mimelist = 'name=exceptionvirus,path=/etc/e2guardian/lists/contentscanners/exceptionvirusmimetypelist'
+fileextlist = 'name=exceptionvirus,path=/etc/e2guardian/lists/contentscanners/exceptionvirusextensionlist'
+sitelist = 'name=exceptionvirus,path=/etc/e2guardian/lists/contentscanners/exceptionvirussitelist'
+urllist = 'name=exceptionvirus,path=/etc/e2guardian/lists/contentscanners/exceptionvirusurllist'
+
+# Search term and category settings
+regexpreplacelist = 'name=searchterms,path=/etc/e2guardian/lists/searchregexplist'
+searchlist = 'name=banned,path=/etc/e2guardian/lists/bannedsearchlist'
+searchlist = 'name=override,path=/etc/e2guardian/lists/bannedsearchoveridelist'
+categorydisplaythreshold = 0
+embeddedurlweight = 0
+
+# Bypass and SSL settings
+bypass = 300
+bypasskey = ''
+sitelist = 'name=bannedbypass,messageno=500,path=/etc/e2guardian/lists/domainsnobypass'
+infectionbypass = 300
+infectionbypasskey = ''
+infectionbypasserrorsonly = on
+disablecontentscan = off
+disablecontentscanerror = off
+contentscanexceptions = on
+deepurlanalysis = off
+reportinglevel = 3
+sslmitm = off
+mitmcheckcert = on
+sitelist = 'name=nocheckcert,path=/etc/e2guardian/lists/nocheckcertsitelist'
+ipsitelist = 'name=nocheckcert,path=/etc/e2guardian/lists/nocheckcertsiteiplist'
+
+## Custom Lists for child safety - CHILDSAFE SPECIFIC PATHS
+bannedphraselist = '/etc/e2guardian/lists/blacklists/childsafe/bad_words'
+bannedphraselist = '/etc/e2guardian/lists/blacklists/childsafe/profanity'
+bannedphraselist = '/etc/e2guardian/lists/blacklists/childsafe/spam_phrases'
+regexpboollist = 'name=bannedregex,messageno=503,path=/etc/e2guardian/lists/blacklists/childsafe/regexlist'

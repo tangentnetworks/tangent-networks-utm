@@ -1,0 +1,202 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!DOCTYPE html>
+<html lang="en" class="">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Take control of your network security with Tangent Networkss Firewall and Router. Easily manage access, configure settings, and protect your devices.">
+    <title>Tangent Networkss | Web interface for managing your firewall and router</title>
+    <link rel="stylesheet" href="./assets/css/tangent.css">
+    <link rel="stylesheet" href="./assets/css/auth.css">
+  </head>
+  <!-- BEGIN: Page -->
+  <!-- BEGIN: Page -->
+  <body class="flex flex-col min-h-screen bg-white dark:bg-gray-900 transition-colors duration-300">
+    <!-- BEGIN: NAVIGATION -->
+    <header id="layout-navigation-block">
+      <!-- BEGIN: NAVBAR -->
+      <nav class="bg-white dark:bg-gray-900 fixed w-full z-20 top-0 start-0 border-b border-gray-200 dark:border-gray-700 shadow-lg">
+        <div class="max-w-screen-xl flex items-center justify-between mx-auto p-4">
+          <!-- 1. Logo/Brand (FIX: Combined into one responsive anchor to prevent the logo gap) -->
+          <button class="inline-flex items-center justify-center p-2 rounded-lg text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90 shadow-md">
+            <div class="flex items-center">
+              <!-- NOTE: Mobile Icon Logo -->
+              <img src="./assets/images/logo/icon.svg" alt="TN logo icon" class="h-5 w-auto object-contain md:hidden">
+              <!-- NOTE: Desktop Full Logo -->
+              <img src="./assets/images/logo/tnw.svg" alt="TN logo full" class="h-5 w-auto object-contain hidden md:block">
+            </div>
+          </button>
+          <!-- END: Logo/Brand -->
+          <div class="flex items-center space-x-2">
+            <!-- BEGIN: Theme Toggle Button -->
+            <button id="theme-toggle" type="button" class="inline-flex items-center justify-center p-2 rounded-lg text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90 shadow-md">
+              <!-- NOTE: Dark Mode -->
+              <svg id="theme-toggle-dark-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+              </svg>
+              <!-- NOTE: Light Mode-->
+              <svg id="theme-toggle-light-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"></path>
+              </svg>
+            </button>
+            <!-- END: Theme Toggle Button -->
+            <!-- BEGIN: User Dropdown Container -->
+            <div class="relative">
+              <!-- User Dropdown Toggle Button (Serving as the main utility menu) -->
+              <button id="user-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-xl text-white font-semibold bg-blue-700 hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-200 hover:scale-105 active:scale-95 hover:opacity-90" aria-expanded="false">
+                <span class="sr-only">Open user menu</span>
+                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <path stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M5 7h14M5 12h14M5 17h14"></path>
+                </svg>
+              </button>
+              <!-- BEGIN: Dropdown Menu -->
+              <div id="dropdown-user" class="z-50 absolute right-0 mt-2 bg-gray-50 dark:bg-gray-900 border border-default rounded-lg shadow-lg w-44 hidden">
+                <ul class="p-2 text-sm font-medium" role="none">
+                  <li>
+                    <a href="index.html" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Sign In</a>
+                  </li>
+                  <li>
+                    <a href="documentation.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Documentation</a>
+                  </li>
+                  <li>
+                    <a href="privacy.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Privacy</a>
+                  </li>
+                  <li>
+                    <a href="legal.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">Legal</a>
+                  </li>
+                  <li>
+                    <a href="license.html" target="_blank" rel="noopener noreferrer" class="inline-flex text-gray-700 dark:text-white items-center w-full p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150">License</a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <!-- END: User Dropdown Container -->
+          </div>
+          <!-- END: Action Buttons -->
+        </div>
+      </nav>
+    </header>
+    <!-- END: NAVIGATION -->
+    <!-- BEGIN: Main Content - LOGIN FORM -->
+    <main class="relative flex-grow flex items-center justify-center">
+      <!-- BEGIN: Password Reset Form -->
+      <div class="p-4 bg-white dark:bg-gray-900 flex min-h-screen items-center justify-center">
+        <div class="max-w-md p-8 mt-20 mb-10 mx-4 bg-white dark:bg-gray-800 rounded-xl shadow-2xl space-y-8 border-gray-200 dark:border-gray-700 w-full place-items-center-safe border">
+          <!-- BEGIN: Error/Success Messages -->
+          <div id="resetError" class="mb-4 rounded-lg bg-red-50 dark:bg-red-900/20 p-4 border-red-200 dark:border-red-800 hidden border">
+            <p class="text-sm text-red-800 dark:text-red-300"></p>
+          </div>
+          <div id="resetSuccess" class="mb-4 rounded-lg bg-green-50 dark:bg-green-900/20 p-4 border-green-200 dark:border-green-800 hidden border">
+            <p class="text-sm text-green-800 dark:text-green-300"></p>
+          </div>
+          <!-- END: Error/Success Messages -->
+          <!-- BEGIN: Step 1 Username Entry -->
+          <div id="step1" class="space-y-6">
+            <div class="text-center">
+              <h2 class="text-3xl font-extrabold text-gray-600 dark:text-white">Reset Password</h2>
+              <p class="mt-2 text-sm text-gray-600 dark:text-white">Step 1: Enter your username</p>
+            </div>
+            <form id="step1Form" class="space-y-6">
+              <div>
+                <label for="username" class="mb-2 text-sm font-medium text-gray-600 dark:text-white block">Username</label>
+                <input type="text" id="username" name="username" required class="rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2.5 text-sm text-gray-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 block w-full border" placeholder="Enter your username" />
+              </div>
+              <button type="submit" id="step1Btn" class="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 w-full text-center">Continue</button>
+            </form>
+          </div>
+          <!-- END: Step 1 Username Entry -->
+          <!-- BEGIN: Step 2: Security Questions -->
+          <div id="step2" class="space-y-6 hidden">
+            <div class="text-center">
+              <h2 class="text-3xl font-extrabold text-gray-600 dark:text-white">Security Questions</h2>
+              <p class="mt-2 text-sm text-gray-600 dark:text-white">Step 2: Answer your security questions</p>
+            </div>
+            <form id="step2Form" class="space-y-6">
+              <div id="questionsContainer" class="space-y-4">
+                <!-- NOTE: Questions loaded dynamically -->
+              </div>
+              <button type="submit" id="step2Btn" class="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 w-full text-center">Verify Answers</button>
+              <button type="button" id="useRecoveryCodeBtn" class="rounded-lg bg-gray-200 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 w-full text-center">Use Recovery Code Instead</button>
+            </form>
+          </div>
+          <!-- END: Step 2: Security Questions -->
+          <!-- BEGIN: Step 3: Recovery Code (ALT) -->
+          <div id="step3" class="space-y-6 hidden">
+            <div class="text-center">
+              <h2 class="text-3xl font-extrabold text-gray-600 dark:text-white">Recovery Code</h2>
+              <p class="mt-2 text-sm text-gray-600 dark:text-white">Step 3: Enter your recovery code</p>
+            </div>
+            <form id="step3Form" class="space-y-6">
+              <div>
+                <label for="recoveryCode" class="mb-2 text-sm font-medium text-gray-600 dark:text-white block">Recovery Code</label>
+                <input type="text" id="recoveryCode" name="recoveryCode" required class="rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2.5 text-sm text-gray-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 font-mono block w-full border" maxlength="64" pattern="[0-9a-fA-F]{64}" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" />
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Enter one of your 10 recovery codes (64-character hex)</p>
+              </div>
+              <button type="submit" id="step3Btn" class="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 w-full text-center">Verify Code</button>
+              <button type="button" id="backToQuestionsBtn" class="rounded-lg bg-gray-200 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 w-full text-center">Back to Security Questions</button>
+            </form>
+          </div>
+          <!-- END: Step 3: Recovery Code (ALT) -->
+          <!-- BEGIN: Step 4 New Password -->
+          <div id="step4" class="space-y-6 hidden">
+            <div class="text-center">
+              <h2 class="text-3xl font-extrabold text-gray-600 dark:text-white">Set New Password</h2>
+              <p class="mt-2 text-sm text-gray-600 dark:text-white">Step 4: Choose a new secure password</p>
+            </div>
+            <form id="step4Form" class="space-y-6">
+              <div>
+                <label for="newPassword" class="mb-2 text-sm font-medium text-gray-600 dark:text-white block">New Password</label>
+                <input type="password" id="newPassword" name="newPassword" required minlength="12" class="rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2.5 text-sm text-gray-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 block w-full border" placeholder="••••••••" />
+              </div>
+              <div>
+                <label for="confirmNewPassword" class="mb-2 text-sm font-medium text-gray-600 dark:text-white block">Confirm New Password</label>
+                <input type="password" id="confirmNewPassword" name="confirmNewPassword" required class="rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-2.5 text-sm text-gray-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 block w-full border" placeholder="••••••••" />
+              </div>
+              <button type="submit" id="step4Btn" class="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 w-full text-center">Reset Password</button>
+            </form>
+          </div>
+          <!-- END: Step 4 New Password -->
+          <!-- BEGIN: Back to Login Link -->
+          <div class="text-center">
+            <a href="/index.html" class="text-sm text-blue-500 hover:text-blue-400 hover:underline"> Back to Login </a>
+          </div>
+          <!-- END: Back to Login Link -->
+        </div>
+      </div>
+      <!-- END: Password Reset Form -->
+    </main>
+    <!-- END: Main Content -->
+    <!-- BEGIN: Back To Top -->
+    <button id="backToTop" type="button" class="back-to-top text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-full text-lg p-3 text-center opacity-0 invisible transition-opacity duration-300 shadow-xl">
+      <svg class="w-6 h-6 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v13m0-13 4 4m-4-4-4 4"></path>
+      </svg>
+    </button>
+    <!-- END: Back To Top -->
+    <!-- BEGIN: Footer -->
+    <footer class="bg-white dark:bg-gray-900 rounded-t-xl shadow-inner border-t border-gray-200 dark:border-gray-700 mt-auto">
+      <div class="w-full mx-auto max-w-screen-xl p-4 md:flex md:items-center md:justify-between">
+        <span class="text-xs text-gray-600 dark:text-white sm:text-center">© 2023 <a href="https://tangentnet.top/" class="hover:underline text-blue-500 hover:text-blue-400">Tangent Networkss™</a>. All Rights Reserved. </span>
+        <ul class="flex flex-wrap items-center mt-3 text-sm font-medium text-body sm:mt-0">
+          <li>
+            <a href="privacy.html" target="_blank" rel="noopener noreferrer" class="hover:underline text-blue-500 hover:text-blue-400 me-4 md:me-6">Privacy</a>
+          </li>
+          <li>
+            <a href="legal.html" target="_blank" rel="noopener noreferrer" class="hover:underline text-blue-500 hover:text-blue-400 me-4 md:me-6">Legal</a>
+          </li>
+        </ul>
+      </div>
+    </footer>
+    <!-- END: Footer -->
+    <!-- BEGIN: JavaScript -->
+    <script src="./assets/js/ts.js" integrity="sha384-TH4RWg6PiUgp3X5p0KFpJPI48AYQL3BjUGLmYsswiOPb3uRy6AfJ0OawHKaN2lmo" defer crossorigin="anonymous"></script>
+    <script src="./assets/js/token.js" integrity="sha384-klUKP7N3iOfziRPsL6XrgPgO3JQbkMUofalL1p+6OQ5SG/UOWlgH79KnPTaqHeUn" defer crossorigin="anonymous"></script>
+    <script src="./assets/js/auth.js" integrity="sha384-zxVXOdCbp5CF2QfNoz+nbGhpNTQl/P6AzaGhSTQMXhWOQZERnBpdrHWUghEmWlkq" defer crossorigin="anonymous"></script>
+  </body>
+</html>

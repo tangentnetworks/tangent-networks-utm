@@ -1,0 +1,6 @@
+{
+  "success": true,
+  "request_id": "1775523983022_78005",
+  "output": "The following name servers are used for lookup of openbsd.org.\nforwarding request:\nDelegation with 0 names, of which 0 can be examined to query further addresses.\nIt provides 8 IP addresses.\n9.9.9.11        \tnot in infra cache.\n149.112.112.11  \tnot in infra cache.\n1.1.1.1         \tnot in infra cache.\n1.0.0.1         \tnot in infra cache.\n2620:fe::11     \trto 504 msec, ttl 84, ping 24 var 120 rtt 504, tA 0, tAAAA 0, tother 0, EDNS 0 assumed.\n2620:fe::fe:11  \trto 504 msec, ttl 84, ping 24 var 120 rtt 504, tA 0, tAAAA 0, tother 0, EDNS 0 assumed.\n2606:4700:4700::1111\tnot in infra cache.\n2606:4700:4700::1001\tnot in infra cache.",
+  "timestamp": 1775523985
+}

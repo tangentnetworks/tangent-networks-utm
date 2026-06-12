@@ -1,0 +1,748 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    This document is for anyone (operator, sysadmin, or developer) who needs
+    to find something quickly. Open it first when something is broken, when you
+    cannot remember a path, when you need a command, or when you want to
+    understand what is running and where. It is a map, not an explanation.
+    Every path here is exact. Every command has been verified on the live
+    system. For the reasoning behind any of it, follow the cross-references
+    to the relevant document.
+  </p>
+</div>
+
+<h1>Quick Reference</h1>
+
+<h2>Filesystem Layout</h2>
+<p>
+  Everything Tangent Networks owns lives under the httpd webroot at
+  <code>/var/www/htdocs/tn/</code>. The chroot boundary is
+  <code>/var/www</code>; httpd and slowcgi operate within it. Paths shown
+  here are from the host shell perspective. CGI scripts running inside the
+  chroot see <code>/htdocs/tn/</code> as their root instead.
+</p>
+
+<dl>
+  <dt><code>/var/www/htdocs/tn/documentation.html</code></dt>
+  <dd>Documentation SPA shell.</dd>
+
+  <dt><code>/var/www/htdocs/tn/assets/css/docs.css</code></dt>
+  <dd>Documentation stylesheet.</dd>
+
+  <dt><code>/var/www/htdocs/tn/assets/js/doc.js</code></dt>
+  <dd>Documentation SPA script.</dd>
+
+  <dt><code>/var/www/htdocs/tn/docs/</code></dt>
+  <dd>Documentation HTML fragments served on demand by the SPA.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/</code></dt>
+  <dd>All runtime data: logs, databases, queues, sockets, keys, config.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/config/</code></dt>
+  <dd>4 configuration files. Root-owned, not readable by www.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/db/</code></dt>
+  <dd>SQLite databases: geoip.db, e2g.db, pf.db, snortsentry.db,
+      sslproxy.db, unbound.db.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/keys/</code></dt>
+  <dd>2 key files. Root-owned 0600. Never served.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/lib/</code></dt>
+  <dd>6 Perl library modules (TNEnv, TNConfig, TNAuth, TNSecurity,
+      TNSecurityCheck, TNWAF). Root-owned. Loaded via FindBin path.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/network/pmacct/ext/</code></dt>
+  <dd>pmacct disk archive: quarter-hour JSON files, persistent across reboots.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/pipes/pmacct/</code></dt>
+  <dd>MFS 64MB: ext_if_json.log and int_if_json.log. Lost on every reboot.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/run/</code></dt>
+  <dd>PID files for all services and WebUI runners.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/services/queue/</code></dt>
+  <dd>Active queue tree: pf-rules/, e2gfilters/, unbound/ subdirectories.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/services/status/</code></dt>
+  <dd>38 service status subdirectories read by the dashboard.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/sockets/collectd/collectd.sock</code></dt>
+  <dd>collectd unix socket, primary data source for dashboard stats.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/tmp/clamav/clamd.socket</code></dt>
+  <dd>ClamAV unix socket. Created by clamd at startup.</dd>
+
+  <dt><code>/var/www/htdocs/tn/view/</code></dt>
+  <dd>Perl HTML view templates, 9 files.</dd>
+
+  <dt><code>/var/www/cgi-bin/</code></dt>
+  <dd>29 CGI scripts. All routed through router.pl via TNWAF.</dd>
+</dl>
+
+<h2>MFS Memory Filesystems</h2>
+<div class="callout callout-danger">
+  <p>
+    <strong>Critical:</strong> These two paths are mounted as swap-backed
+    memory filesystems. Their contents are destroyed on every reboot,
+    including WebUI-initiated reboots and power cycles. This is intentional
+    and correct. rc.local recreates the necessary files at boot. If these
+    paths appear as regular directories with no mount, check
+    <code>/etc/fstab</code> -- the MFS entries may be missing.
+  </p>
+</div>
+
+<dl>
+  <dt><code>/var/www/htdocs/tn/data/logs/pf/</code></dt>
+  <dd>128MB MFS. Contains <code>pflog1.log</code>, a live tcpdump feed of all
+      traffic logged by PF. newsyslog truncates at 64MB and calls
+      <code>pf-tcpdump.sh</code> to archive before truncation. Empty after
+      every reboot; this is correct.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/pipes/pmacct/</code></dt>
+  <dd>64MB MFS. Contains <code>ext_if_json.log</code> and
+      <code>int_if_json.log</code>, the live pmacct network flow feeds.
+      newsyslog truncates each at ~16MB and sends SIGHUP to pmacctd.
+      Empty after every reboot; this is correct.</dd>
+</dl>
+
+<h2>Interfaces</h2>
+<dl>
+  <dt><code>%%EXT_IF%%</code> -- WAN</dt>
+  <dd><code>192.168.122.92</code>, <code>fd00:cafe:1:0:8bce:e1c1:a74:d3b1</code>.
+      External interface. Default gateway: <code>%%WAN_GW4%%</code>
+      (see <code>/etc/mygate</code>) and IPv6 gateway <code>%%WAN_GW6%%</code>
+      (see <code>/etc/mygate6</code>).</dd>
+
+  <dt><code>%%INT_IF%%</code> -- LAN</dt>
+  <dd><code>%%INT_IP4%%/24</code>, <code>%%INT_IP6%%</code>.
+      Internal interface. DHCP served on this interface.
+      LAN clients receive IPv4 leases from dhcpd and IPv6 via SLAAC (rad).</dd>
+
+  <dt><code>pflog0</code></dt>
+  <dd>PF block log interface. pflogd writes to <code>/var/log/pflog</code>
+      (standard binary pcap). Contains blocked packets only.</dd>
+
+  <dt><code>pflog1</code></dt>
+  <dd>PF full traffic log interface. All traffic logged via
+      <code>match log (to pflog1) on { %%EXT_IF%% %%INT_IF%% }</code> in pf.conf. tcpdump reads
+      this interface and writes to the MFS path above.
+      Brought up by <code>/etc/hostname.pflog1</code>,
+      which must contain: <code>up</code>.</dd>
+</dl>
+
+<h2>Service Binaries and Configurations</h2>
+<dl>
+  <dt><code>/usr/local/bin/snort</code></dt>
+  <dd>Custom build patched with SSLproxy integration. Two instances:
+      IDS on %%INT_IF%% (<code>/etc/snort/snort.conf</code>),
+      IPS in divert mode (<code>/etc/snort/snortinline.conf</code>).
+      Both log via <code>logger</code> to syslog tags
+      <code>snort_ids</code> and <code>snort_ips</code>.</dd>
+
+  <dt><code>/usr/local/sbin/snortsentry</code></dt>
+  <dd>Tangent-authored IPv4+IPv6 dynamic PF blocker, v8.1.7.
+      Config: <code>/etc/snort/snortsentry.conf</code>.
+      State: <code>/var/db/snortsentry.state</code> (persists across reboots).
+      Alert input: <code>data/logs/snort/alert.log</code> (_snort:www 0644,
+      shared by IDS and IPS). PF table: <code>&lt;snort_block&gt;</code>.
+      See <code>snortsentry(8)</code> for full documentation.</dd>
+
+  <dt><code>/usr/local/sbin/e2guardian</code></dt>
+  <dd>Custom build patched with SSLproxy integration.
+      Config: <code>/etc/e2guardian/</code>. User: <code>_e2guardian</code>.</dd>
+
+  <dt><code>/usr/local/sbin/clamd</code></dt>
+  <dd>ClamAV daemon. Config: <code>/etc/clamd.conf</code>.
+      Socket: <code>data/tmp/clamav/clamd.socket</code>.
+      User: <code>_clamav</code>. Waits up to 90 seconds for socket at boot.</dd>
+
+  <dt><code>/usr/local/bin/freshclam</code></dt>
+  <dd>ClamAV signature updater. Starts as a daemon only after the clamd socket
+      is confirmed present.</dd>
+
+  <dt><code>/usr/local/sbin/pmacctd</code></dt>
+  <dd>Network flow accounting. Three instances; see the pmacct section below.
+      Configs: <code>/etc/pmacct/ext_if_json_mfs.conf</code>,
+      <code>/etc/pmacct/int_if_json_mfs.conf</code>,
+      <code>/etc/pmacct/ext_if_json_log.conf</code>.</dd>
+
+  <dt><code>/usr/local/sbin/collectd</code></dt>
+  <dd>System statistics daemon. Config: <code>/etc/collectd.conf</code>.
+      Socket: <code>data/sockets/collectd/collectd.sock</code>.
+      Socket is removed at boot start and recreated by collectd.
+      rc.local sleeps 2 seconds after start to ensure the socket is ready.</dd>
+
+  <dt><code>/usr/local/sbin/sockd</code></dt>
+  <dd>Dante SOCKS proxy. PID: <code>data/run/sockd/sockd.pid</code>.</dd>
+
+  <dt><code>/usr/local/bin/spamd</code></dt>
+  <dd>Spam deferral daemon. Flags: <code>-L -d -x -u _spamdaemon</code>.
+      PID: <code>data/run/spamd/spamd.pid</code>.</dd>
+
+  <dt><code>/usr/local/sbin/smtp-gated</code></dt>
+  <dd>Transparent SMTP scanning proxy.
+      Config: <code>/usr/local/etc/smtp-gated/smtp-gated.conf</code>.
+      Listens on lo:8464 (SMTP), lo:8465 (SMTPS), lo:8466 (submission).</dd>
+
+  <dt><code>/usr/local/bin/sslproxy</code></dt>
+  <dd>Transparent SSL/TLS interception proxy.
+      Config: <code>/usr/local/etc/sslproxy/sslproxy.conf</code>.
+      Listens on lo:8081 (HTTP) and lo:8443 (HTTPS).</dd>
+
+  <dt><code>/usr/local/sbin/imspector</code></dt>
+  <dd>Instant messaging transparent proxy. Custom build with SSLproxy patch.
+      Config: <code>/usr/local/etc/imspector/imspector.conf</code>.
+      Listens on lo:16667. Temp dir: <code>/tmp/imspector/</code>.
+      User: <code>_imspector</code>.</dd>
+
+  <dt><code>/usr/local/sbin/p3scan</code></dt>
+  <dd>Transparent POP3/POP3S scanning proxy. Custom build with SSLproxy patch.
+      Config: <code>/etc/p3scan/p3scan.conf</code>.
+      Listens on lo:8993 (IMAPS), lo:8994 (POP3), and lo:8995 (POP3S).
+      PID dir: <code>data/run/p3scan/</code>.</dd>
+</dl>
+
+<h2>PID Files</h2>
+<p>
+  All PID files live under <code>data/run/</code> and are truncated to zero
+  bytes at the start of every boot by rc.local. A non-empty PID file means
+  the service started successfully this boot session. An empty PID file means
+  the service was attempted but did not write its PID; check the service log.
+</p>
+
+<dl>
+  <dt><code>data/run/clamav/clamd.pid</code></dt>
+  <dd>ClamAV daemon.</dd>
+
+  <dt><code>data/run/collectd/collectd.pid</code></dt>
+  <dd>collectd statistics daemon.</dd>
+
+  <dt><code>data/run/p3scan/p3scan.pid</code></dt>
+  <dd>p3scan POP3/POP3S proxy.</dd>
+
+  <dt><code>data/run/pmacct/pmacct-ext_if_json_mfs.pid</code></dt>
+  <dd>pmacct MFS writer, external interface. Starts immediately at boot.</dd>
+
+  <dt><code>data/run/pmacct/pmacct-int_if_json_mfs.pid</code></dt>
+  <dd>pmacct MFS writer, internal interface. Starts immediately at boot.</dd>
+
+  <dt><code>data/run/pmacct/pmacct-ext_if_json_log.pid</code></dt>
+  <dd>pmacct disk archive writer. Starts at the next quarter-hour boundary;
+      an empty PID file for up to 15 minutes after boot is correct.</dd>
+
+  <dt><code>data/run/snortsentry/snortsentry.pid</code></dt>
+  <dd>snortsentry dynamic blocker.</dd>
+
+  <dt><code>data/run/snort/snort_%%INT_IF%%.pid</code></dt>
+  <dd>Snort IDS instance on %%INT_IF%%.</dd>
+
+  <dt><code>data/run/snort/snort_.pid</code></dt>
+  <dd>Snort IPS instance (divert mode).</dd>
+
+  <dt><code>data/run/sockd/sockd.pid</code></dt>
+  <dd>Dante SOCKS proxy.</dd>
+
+  <dt><code>data/run/spamd/spamd.pid</code></dt>
+  <dd>spamd spam deferral daemon.</dd>
+
+  <dt><code>data/run/webui/</code></dt>
+  <dd>17 WebUI runner PID files. See the WebUI Runners section below.</dd>
+</dl>
+
+<h2>Log Files</h2>
+<p>
+  All logs under <code>data/logs/</code> are on disk unless marked MFS.
+  Rotation is handled by <code>tangent_logrotate.sh</code>, which runs at boot
+  and every 10 minutes via cron. Rotated files are renamed to
+  <code>name_YYYY-MM-DD.log</code> and kept for 7 days.
+  The two MFS paths use newsyslog for in-place truncation instead.
+</p>
+
+<dl>
+  <dt><code>data/logs/bootlog/rc.local.log</code></dt>
+  <dd>Full boot log. First place to look when the dashboard is dark after
+      a reboot.</dd>
+
+  <dt><code>data/logs/bootlog/services.log</code></dt>
+  <dd>Boot-time service status in plain text. Written once by
+      process_monitor.pl at roughly 16 minutes after boot.</dd>
+
+  <dt><code>data/logs/bootlog/services.json</code></dt>
+  <dd>Live service status in JSON. Written continuously by monitor.pl.
+      Feeds the Services panel in the dashboard.</dd>
+
+  <dt><code>data/logs/clamd/clamd.log</code></dt>
+  <dd>ClamAV daemon log.</dd>
+
+  <dt><code>data/logs/collectd/collectd.log</code></dt>
+  <dd>collectd daemon log. 166MB or larger is normal; collectd is very chatty.</dd>
+
+  <dt><code>data/logs/dhcpd/dhcpd.log</code></dt>
+  <dd>dhcpd log via syslog <code>!dhcpd</code> rule.
+      Ground truth for leases is <code>/var/db/dhcpd.leases</code>.</dd>
+
+  <dt><code>data/logs/e2guardian/access.log</code></dt>
+  <dd>e2guardian web access log (local0.* syslog facility).</dd>
+
+  <dt><code>data/logs/e2guardian/e2guardian.log</code></dt>
+  <dd>e2guardian daemon log (all facilities).</dd>
+
+  <dt><code>data/logs/httpd/httpd_access.log</code></dt>
+  <dd>HTTP access log. Written directly by TNWAF.pm; syslogd routing
+      does not work for httpd.</dd>
+
+  <dt><code>data/logs/httpd/httpd_error.log</code></dt>
+  <dd>HTTP error log. Also written directly by TNWAF.pm.</dd>
+
+  <dt><code>data/logs/pf/pflog1.log</code></dt>
+  <dd>MFS 128MB, live tcpdump of all PF traffic. Lost on every reboot.</dd>
+
+  <dt><code>data/logs/snort/alert.log</code></dt>
+  <dd>Snort alert file. Shared by both IDS and IPS instances.
+      Permissions: _snort:www 0644. Input to snortsentry.</dd>
+
+  <dt><code>data/logs/snort/snort.log</code></dt>
+  <dd>Snort IDS daemon log (via <code>logger -t snort_ids</code>).</dd>
+
+  <dt><code>data/logs/snort/snortinline.log</code></dt>
+  <dd>Snort IPS daemon log (via <code>logger -t snort_ips</code>).</dd>
+
+  <dt><code>data/logs/sslproxy/sslproxy.log</code></dt>
+  <dd>SSLproxy full daemon log.</dd>
+
+  <dt><code>data/logs/sslproxy/sslproxy_connect.log</code></dt>
+  <dd>SSLproxy connection log only (local1.* syslog facility).</dd>
+
+  <dt><code>data/logs/waf/access.log</code></dt>
+  <dd>TNWAF request log. 45MB or larger is normal.</dd>
+
+  <dt><code>/var/log/pflog</code></dt>
+  <dd>pflogd binary pcap, blocked packets only.</dd>
+
+  <dt><code>/var/www/tmp/control.log</code></dt>
+  <dd>CGI compilation errors. Raw unformatted output from Perl errors
+      that bypass signal handlers.</dd>
+
+  <dt><code>/var/www/tmp/e2g_get_log_info_debug.log</code></dt>
+  <dd>323MB. Debug mode is left on. Investigate which script enables this
+      before production release.</dd>
+</dl>
+
+<h2>pmacct Three-Instance Architecture</h2>
+<p>
+  pmacct runs as three separate pmacctd processes. Knowing which instance
+  does what is essential for diagnosing flow accounting gaps.
+</p>
+
+<dl>
+  <dt><code>ext_if_json_mfs</code> -- external interface MFS writer</dt>
+  <dd>Config: <code>/etc/pmacct/ext_if_json_mfs.conf</code>.
+      Output: <code>data/pipes/pmacct/ext_if_json.log</code> (MFS, lost on reboot).
+      Starts immediately at boot. newsyslog sends SIGHUP at ~16MB.
+      PID: <code>data/run/pmacct/pmacct-ext_if_json_mfs.pid</code>.</dd>
+
+  <dt><code>int_if_json_mfs</code> -- internal interface MFS writer</dt>
+  <dd>Config: <code>/etc/pmacct/int_if_json_mfs.conf</code>.
+      Output: <code>data/pipes/pmacct/int_if_json.log</code> (MFS, lost on reboot).
+      Starts immediately at boot. newsyslog sends SIGHUP at ~16MB.
+      PID: <code>data/run/pmacct/pmacct-int_if_json_mfs.pid</code>.</dd>
+
+  <dt><code>ext_if_json_log</code> -- disk archive writer</dt>
+  <dd>Config: <code>/etc/pmacct/ext_if_json_log.conf</code>.
+      Output: <code>data/network/pmacct/ext/ext_if-%Y%m%d-%H%M.json</code>
+      (quarter-hour files on disk, persistent).
+      Starts at the next quarter-hour boundary after boot, up to 15 minutes
+      after startup. An empty PID file immediately after boot is correct.
+      rc.local merges yesterday's files into <code>YYYY-MM-DD.json</code>
+      at boot and purges files older than 7 days.
+      PID: <code>data/run/pmacct/pmacct-ext_if_json_log.pid</code>.</dd>
+</dl>
+
+<h2>PF Tables</h2>
+<dl>
+  <dt><code>&lt;snort_block&gt;</code> persist</dt>
+  <dd>Dynamic blocks from snortsentry. IPv4 and IPv6.
+      State file: <code>/var/db/snortsentry.state</code>.</dd>
+
+  <dt><code>&lt;blocklist&gt;</code> persist</dt>
+  <dd>Manual blocks managed via the dashboard firewall panel.</dd>
+
+  <dt><code>&lt;bogons&gt;</code> persist</dt>
+  <dd>Bogon address list. Populated by <code>pfblock.sh</code> daily at 11:00.</dd>
+
+  <dt><code>&lt;lan_nets&gt;</code></dt>
+  <dd><code>%%INT_NET4%%</code> and <code>%%INT_NET6%%</code>.
+      Both LAN prefixes in one table, used by the broad LAN pass rule at [S].</dd>
+</dl>
+
+<h2>PF Divert Chain</h2>
+<p>
+  PF intercepts LAN traffic on the following ports and diverts it to the
+  corresponding service listening on loopback. After inspection, traffic
+  is re-injected and may pass through Snort IPS before forwarding.
+</p>
+
+<dl>
+  <dt>LAN port 21 (FTP)</dt>
+  <dd>Diverted to ftp-proxy on lo:8021 / lo:8022.</dd>
+
+  <dt>LAN port 80 (HTTP)</dt>
+  <dd>Diverted to SSLproxy on lo:8081 for transparent interception.</dd>
+
+  <dt>LAN port 443 (HTTPS)</dt>
+  <dd>Diverted to SSLproxy on lo:8443 for transparent TLS interception.</dd>
+
+  <dt>LAN port 110 (POP3)</dt>
+  <dd>Diverted to SSLproxy on lo:8994, forwarded to p3scan for mail scanning.</dd>
+
+  <dt>LAN port 995 (POP3S)</dt>
+  <dd>Diverted to SSLproxy on lo:8995, forwarded to p3scan for encrypted mail scanning.</dd>
+
+  <dt>LAN port 993 (IMAPS)</dt>
+  <dd>Diverted to SSLproxy on lo:8993, forwarded to p3scan for encrypted IMAP mail scanning. IPv4 and IPv6.</dd>
+
+  <dt>LAN port 25 (SMTP)</dt>
+  <dd>Diverted to smtp-gated on lo:8464.</dd>
+
+  <dt>LAN port 465 (SMTPS)</dt>
+  <dd>Diverted to smtp-gated on lo:8465.</dd>
+
+  <dt>LAN port 587 (submission)</dt>
+  <dd>Diverted to smtp-gated on lo:8466.</dd>
+
+  <dt>LAN IM ports 1863, 5190, 5050, 6667</dt>
+  <dd>Diverted to imspector on lo:16667.</dd>
+
+  <dt>Loopback ports 8080, 8110, 9199</dt>
+  <dd>Diverted to Snort IPS via divert-packet port 700.
+      These are the post-proxy re-injection ports where traffic arrives
+      after SSLproxy has decrypted it.</dd>
+</dl>
+
+<h2>Inspection Chain</h2>
+<p>
+  Encrypted traffic from LAN clients passes through two inspection stages.
+  First, PF diverts it to SSLproxy, which decrypts the TLS session, makes the
+  plaintext available for inspection, and re-encrypts before forwarding.
+  The decrypted traffic is then re-injected on loopback, where PF diverts it a
+  second time to Snort IPS running in divert-packet mode on port 700. Snort
+  inspects the plaintext against IPS rules and either drops the packet or
+  allows it through to the destination. A block at either stage drops the
+  connection: SSLproxy blocks before Snort ever sees the traffic, and Snort
+  blocks after decryption but before anything reaches the destination.
+</p>
+
+<h2>Cron Schedule</h2>
+<dl>
+  <dt>Every minute</dt>
+  <dd><code>TNWatch_runner.sh</code> and <code>pf_log_cleanup.sh</code>.</dd>
+
+  <dt>Every 10 minutes</dt>
+  <dd><code>tangent_logrotate.sh</code>, incremental log rotation check.</dd>
+
+  <dt>Daily at 01:00</dt>
+  <dd><code>tangent_logrotate.sh</code>, full daily rotation run.</dd>
+
+  <dt>Sunday at 08:00</dt>
+  <dd><code>TNWatch.pl --purge --days 7</code>, purge old watch records.</dd>
+
+  <dt>Daily at 09:00</dt>
+  <dd><code>TNWatch.pl --send-digest</code>, email digest.</dd>
+
+  <dt>Daily at 10:00</dt>
+  <dd><code>e2g_childsafe_filter.sh</code>, update child-safe filter lists.</dd>
+
+  <dt>Daily at 11:00</dt>
+  <dd><code>pfblock.sh</code>, refresh bogon and blocklist tables.</dd>
+
+  <dt>Daily at 12:30</dt>
+  <dd><code>get_geoip_data.pl</code>, update GeoIP database.</dd>
+
+  <dt>Sunday at 14:00</dt>
+  <dd><code>TNAudit.pl --create-baseline</code>, weekly integrity baseline.</dd>
+
+  <dt>Daily at 20:00</dt>
+  <dd><code>cleanup_old_logs.sh</code>, purge logs beyond retention window.</dd>
+
+  <dt>Daily at 11:30</dt>
+  <dd><code>oinkmaster_update_snortinline.sh</code>, update Snort IPS rules.</dd>
+
+  <dt>Monday at 15:01</dt>
+  <dd><code>TNAuth::cleanup_expired_sessions()</code>, purge stale sessions.</dd>
+</dl>
+
+<h2>Key System Files</h2>
+<dl>
+  <dt><code>/etc/pf.conf</code></dt>
+  <dd>PF ruleset. Addons anchor loaded from <code>/etc/pf/pf-addons.conf</code>.</dd>
+
+  <dt><code>/etc/sysctl.conf</code></dt>
+  <dd>Kernel tuning. <code>net.bpf.bufsize=2097152</code> is critical:
+      if lost after sysupgrade, pflog and pmacct will silently drop packets.</dd>
+
+  <dt><code>/etc/login.conf</code></dt>
+  <dd>Resource limits. The <code>daemon</code> class sets
+      <code>datasize=8192M</code> and <code>openfiles-max=65536</code>,
+      which are required for e2guardian and ClamAV. If lost after sysupgrade,
+      these daemons will hit resource limits silently.</dd>
+
+  <dt><code>/etc/syslog.conf</code></dt>
+  <dd>Routes all service output to <code>data/logs/&lt;service&gt;/</code>.
+      Uses <code>!!program</code> (exclusive) and <code>!program</code>
+      (filter) rules. httpd routing does not work; TNWAF.pm writes
+      httpd logs directly.</dd>
+
+  <dt><code>/etc/newsyslog.conf</code></dt>
+  <dd>Active only for the two MFS paths. All other logs handled by
+      <code>tangent_logrotate.sh</code>.</dd>
+
+  <dt><code>/etc/fstab</code></dt>
+  <dd>Contains the two MFS mount entries. If missing, the MFS paths become
+      regular disk directories with no size limit.</dd>
+
+  <dt><code>/etc/rc.conf.local</code></dt>
+  <dd><code>resolvd_flags=NO</code> (unbound handles all DNS).
+      <code>dhcpd_flags=%%INT_IF%%</code>.</dd>
+
+  <dt><code>/etc/hostname.pflog1</code></dt>
+  <dd>Must contain <code>up</code>. If missing, pflog1 never comes up
+      and all traffic logging goes dark.</dd>
+
+  <dt><code>/var/db/dhcpd.leases</code></dt>
+  <dd>DHCP lease ground truth. dhcpd does not produce a traditional log;
+      this file is the authoritative source for lease activity.</dd>
+
+  <dt><code>/var/db/snortsentry.state</code></dt>
+  <dd>snortsentry block escalation state. Persists across reboots.
+      To reset: stop snortsentry, delete this file, then restart snortsentry.</dd>
+
+  <dt><code>/usr/local/share/tangent/rc.backup.*</code></dt>
+  <dd>Timestamped backups of <code>/etc/rc</code> created automatically
+      by <code>tangent_logrotate.sh</code> when it repairs the rotation hook
+      after a sysupgrade.</dd>
+</dl>
+
+<h2>WebUI Runner Scripts</h2>
+<p>
+  Each runner is a loop script in <code>/usr/local/sbin/</code> started by
+  <code>start_service</code> in rc.local. All PID files live under
+  <code>data/run/webui/</code>. If a runner stops, the corresponding
+  dashboard panel goes stale or dark. Check the PID file first, then the
+  relevant log.
+</p>
+
+<dl>
+  <dt><code>queue_processor_runner.sh</code> -- <code>queue_runner.pid</code></dt>
+  <dd>Processes PF rules and e2guardian filter change queues.
+      If stopped: rule changes and filter mode switches will queue but never apply.</dd>
+
+  <dt><code>unbound_stats_runner.sh</code> -- <code>unbound_stats_runner.pid</code></dt>
+  <dd>Collects unbound DNS statistics.
+      If stopped: DNS stats panel goes stale.</dd>
+
+  <dt><code>dashboard_stats_runner.sh</code> -- <code>dashboard_stats_runner.pid</code></dt>
+  <dd>Drives main dashboard stats panels via collectd_exporter.pl.
+      If stopped: CPU, memory, network, and disk panels go stale.</dd>
+
+  <dt><code>service_monitor_runner.sh</code> -- <code>service_monitor_runner.pid</code></dt>
+  <dd>Runs monitor.pl continuously and writes services.json.
+      If stopped: Services panel shows last known state.</dd>
+
+  <dt><code>pf_stats_runner.sh</code> -- <code>pf_stats_runner.pid</code></dt>
+  <dd>Collects PF statistics.
+      If stopped: PF stats panel goes stale.</dd>
+
+  <dt><code>pf_tcpdump_runner.sh</code> -- <code>pflog_maint.pid</code></dt>
+  <dd>Manages the pflog1 MFS tcpdump feed and archiving.
+      If stopped: PF log panel goes dark.</dd>
+
+  <dt><code>pmacct_mfs_manage_runner.sh</code> -- <code>pmacct_mfs_manage_runner.pid</code></dt>
+  <dd>Trims pmacct MFS pipe files before the 64MB MFS fills.
+      If stopped: the MFS fills within hours, pmacctd write failures follow,
+      and the flow accounting panel goes dark. Most operationally critical runner.</dd>
+
+  <dt><code>pf_change_detector_runner.sh</code> -- <code>pf_change_detector.pid</code></dt>
+  <dd>Detects external PF rule changes and syncs dashboard state.
+      If stopped: the dashboard PF state may drift from the actual ruleset.</dd>
+
+  <dt><code>e2g_user_filter_runner.sh</code> -- <code>e2g_user_filter_detector.pid</code></dt>
+  <dd>Detects e2guardian user filter changes.
+      If stopped: per-user filter overrides do not apply.</dd>
+
+  <dt><code>unbound_queue_runner.sh</code> -- <code>unbound_queue_runner.pid</code></dt>
+  <dd>Processes unbound configuration queue changes.
+      If stopped: DNS configuration changes queue but never apply.</dd>
+
+  <dt><code>e2g_status_writer_runner.sh</code> -- <code>e2g_status_writer.pid</code></dt>
+  <dd>Writes e2guardian status JSON for the dashboard.
+      If stopped: content filter status panel goes stale.</dd>
+
+  <dt><code>e2g_queue_processor_runner.sh</code> -- <code>e2g_queue_processor.pid</code></dt>
+  <dd>Processes e2guardian filter mode switch requests.
+      If stopped: filter mode switches queue but never execute.</dd>
+
+  <dt><code>pf_monitor_runner.sh</code> -- <code>pf_monitor.pid</code></dt>
+  <dd>Monitors the PF rule validation pipeline. Check this first when a
+      submitted rule change never completes.</dd>
+
+  <dt><code>integrity_check_runner.sh</code> -- <code>integrity_check.pid</code></dt>
+  <dd>Runs ongoing integrity checks against the TNAudit baseline.
+      If stopped: integrity status panel goes stale.</dd>
+
+  <dt><code>powermgmt_runner.sh</code> -- <code>powermgmt.pid</code></dt>
+  <dd>Handles WebUI reboot and shutdown requests.
+      If stopped: power management panel has no effect.</dd>
+
+  <dt><code>pf_asn_runner.sh</code> -- <code>pf_asn_lookip.pid</code></dt>
+  <dd>Resolves ASN lookups for the firewall panel. Also writes
+      <code>pf_asn_lookup.pid</code>, a cosmetic duplicate of the same PID
+      with no operational impact.
+      If stopped: ASN information is missing from the firewall panel.</dd>
+</dl>
+
+<h2>Common Recovery Commands</h2>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check boot log -- first stop when dashboard is dark after reboot
+tail -50 /var/www/htdocs/tn/data/logs/bootlog/rc.local.log
+
+# Check if a WebUI runner is alive
+cat /var/www/htdocs/tn/data/run/webui/queue_runner.pid
+kill -0 $(cat /var/www/htdocs/tn/data/run/webui/queue_runner.pid)
+
+# Restart a stopped WebUI runner manually
+/usr/local/sbin/queue_processor_runner.sh &
+
+# Check all WebUI runner PID files
+for f in /var/www/htdocs/tn/data/run/webui/*.pid; do
+    pid=$(cat "$f" 2>/dev/null)
+    name=$(basename "$f" .pid)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        echo "OK   $name ($pid)"
+    else
+        echo "DEAD $name"
+    fi
+done
+
+# Check snort_block table
+pfctl -t snort_block -T show
+
+# Reset PF addons anchor (clears all user-added rules)
+pfctl -a addons -F all
+
+# Reload PF ruleset
+pfctl -f /etc/pf.conf
+
+# Check MFS mounts are present
+mount | grep mfs
+
+# Check MFS space usage
+df -h /var/www/htdocs/tn/data/logs/pf \
+       /var/www/htdocs/tn/data/pipes/pmacct
+
+# Manually rotate logs now
+/usr/local/sbin/tangent_logrotate.sh
+
+# Truncate MFS logs manually if full
+truncate -s0 /var/www/htdocs/tn/data/logs/pf/pflog1.log
+truncate -s0 /var/www/htdocs/tn/data/pipes/pmacct/ext_if_json.log
+truncate -s0 /var/www/htdocs/tn/data/pipes/pmacct/int_if_json.log
+
+# Reset snortsentry block escalation state
+rcctl stop snortsentry
+rm /var/db/snortsentry.state
+rcctl start snortsentry
+
+# Check collectd socket exists
+ls -la /var/www/htdocs/tn/data/sockets/collectd/collectd.sock
+
+# Check ClamAV socket exists
+ls -la /var/www/htdocs/tn/data/tmp/clamav/clamd.socket
+
+# Check sysctl BPF buffer (critical for pflog + pmacct)
+sysctl net.bpf.bufsize net.bpf.maxbufsize
+
+# Verify login.conf daemon class limits
+grep -A10 '^daemon:' /etc/login.conf</code></pre>
+</div>
+
+<h2>Known Benign Conditions</h2>
+<dl>
+  <dt>pflog1.log is empty after reboot</dt>
+  <dd>MFS is fresh. tcpdump is writing to it. Normal.</dd>
+
+  <dt>ext_if_json.log and int_if_json.log are empty after reboot</dt>
+  <dd>MFS is fresh. pmacctd is writing to them. Normal.</dd>
+
+  <dt>pmacct-ext_if_json_log.pid is empty for up to 15 minutes after boot</dt>
+  <dd>That instance waits for the next quarter-hour boundary. Normal.</dd>
+
+  <dt>process_monitor.pl has not run immediately after boot</dt>
+  <dd>Delayed to the 15-minute boundary plus one minute. Normal.</dd>
+
+  <dt>Boot appears to pause for up to 90 seconds at ClamAV</dt>
+  <dd>rc.local is waiting for clamd.socket. Normal on cold hardware; not a hang.</dd>
+
+  <dt>pf_asn_lookip.pid and pf_asn_lookup.pid contain the same PID</dt>
+  <dd>Cosmetic duplicate from a name and pidfile mismatch in start_service.
+      One process, two PID files. No operational impact.</dd>
+
+  <dt>data/logs/collectd/collectd.log is 166MB or larger</dt>
+  <dd>collectd is very chatty. Normal. tangent_logrotate.sh rotates it daily.</dd>
+</dl>
+
+<h2>Dead Paths -- Do Not Remove</h2>
+<p>
+  These paths exist but are empty and superseded. They are retained for
+  structural consistency. Do not delete them.
+</p>
+<dl>
+  <dt><code>data/queue/</code></dt>
+  <dd>Superseded by <code>data/services/queue/</code>.</dd>
+
+  <dt><code>data/db/imspector/</code></dt>
+  <dd>imspector does not use this path.</dd>
+
+  <dt><code>data/sockets/logs/</code> and <code>data/sockets/pf/</code></dt>
+  <dd>Never used. The only live socket is collectd.sock.</dd>
+
+  <dt><code>data/session/</code></dt>
+  <dd>Sessions are in <code>data/run/session/</code>.</dd>
+
+  <dt><code>data/rrd/collectd/</code></dt>
+  <dd>RRD is not used. collectd_exporter.pl uses the unix socket directly.</dd>
+</dl>
+
+<!-- SUMMARY -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Everything Tangent Networks owns lives under
+        <code>/var/www/htdocs/tn/data/</code>: one root, fully
+        inspectable with standard Unix tools.</li>
+    <li>Two paths are on MFS memory filesystems and are empty after every
+        reboot: <code>data/logs/pf/</code> (128MB) and
+        <code>data/pipes/pmacct/</code> (64MB). This is correct behaviour.</li>
+    <li>If the dashboard is dark after reboot, read
+        <code>data/logs/bootlog/rc.local.log</code> first.</li>
+    <li>pmacct runs three instances: two MFS writers that start immediately,
+        and one disk writer that starts at the next quarter-hour boundary.</li>
+    <li>The BPF buffer (<code>net.bpf.bufsize=2097152</code>) and the
+        login.conf daemon class are silent hard dependencies. If either
+        is lost after sysupgrade, services will fail without any obvious error.</li>
+  </ul>
+</div>

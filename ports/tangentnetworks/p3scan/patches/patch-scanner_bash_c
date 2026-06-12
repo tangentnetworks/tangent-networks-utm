@@ -1,0 +1,24 @@
+$ComixWall: patch-scanner_bash_c,v 1.2 2009/07/25 09:55:30 soner Exp $
+Index: scanner_bash.c
+--- scanner_bash.c.orig
++++ scanner_bash.c
+@@ -39,8 +39,9 @@
+ #include <sys/wait.h>
+ #include <sys/stat.h>
+ #include <errno.h>
+-#include <malloc.h>
++#include <stdlib.h>
+ #include <pcre.h>
++#include <netinet/in.h>
+ 
+ #include "p3scan.h"
+ #include "parsefile.h"
+@@ -48,7 +49,7 @@
+ extern int checkbuff(int fdc);
+ extern int checktimeout(struct proxycontext *p);
+ extern char *strreplace(char *haystack,char *needle,char *rstr);
+-struct configuration_t * config;
++extern struct configuration_t * config;
+ extern void * w_malloc(size_t bytes);
+ extern void w_free(void *f_address);
+ 

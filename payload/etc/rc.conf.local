@@ -1,0 +1,24 @@
+
+# DHCPD FLAGS
+# Inbound FTP (external clients connecting to servers behind router)
+# Outbound FTP (clients behind router connecting out)
+# httpd FLAGS
+# rad FLAGS
+# resolvd DISABLED
+# unbound RESOLVER
+#dhcpd_flags=%%INT_IF%%
+dhcpd_flags="%%INT_IF%%"
+ftpproxy6_flags="-b ::1 -p 8021"
+ftpproxy6_reverse_flags="-r -b ::1 -p 8022"
+ftpproxy_flags="-b 127.0.0.1 -p 8021"
+ftpproxy_reverse_flags="-r -b 127.0.0.1 -p 8022"
+httpd_flags=
+pflogd_flags=-s 160 -i pflog0 -f /var/log/pflog
+rad_flags=
+resolvd_flags=NO
+slowcgi_flags=""
+unbound_flags=
+
+
+# APM -- appliance hardening (USB suspend disabled)
+apmd_flags="-H"

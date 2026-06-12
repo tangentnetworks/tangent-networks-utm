@@ -1,0 +1,77 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>This document covers the CSS architecture of the Tangent Networks dashboard. All stylesheets are served from <code>/assets/css/</code>. All fonts are localised and served from the same origin. There are no inline styles anywhere in the application and no external font or stylesheet dependencies.</p>
+</div>
+
+<h1>CSS Architecture: Stylesheets and Design System</h1>
+
+<p>The dashboard uses a layered CSS architecture. The foundation is a compiled Tailwind CSS v4 output that provides the utility class system. On top of that sit purpose-specific stylesheets for authentication, session state, button components, documentation, and the development tools panel. Each file has a single clear responsibility and none of them overlap.</p>
+
+<h2>Stylesheet Inventory</h2>
+
+<h3>tangent.css</h3>
+
+<p>The primary stylesheet. This is the compiled output of Tailwind CSS v4.1.7, scoped and configured for the Tangent Networks design system. It provides the full utility class set used across both <code>index.html</code> and <code>view.html</code>, including layout, spacing, typography, colour, borders, shadows, transitions, and responsive variants.</p>
+
+<p>The design system built on this foundation uses blue-700 as the primary interactive colour (buttons, active states, focus rings), gray-50 and gray-900 as the light and dark page backgrounds respectively, and a consistent border-radius and shadow scale across cards, modals, and form elements.</p>
+
+<p>Dark mode is implemented via Tailwind's class strategy. The <code>dark</code> class is toggled on the root <code>&lt;html&gt;</code> element by <code>ts.js</code>, and all dark mode variants throughout the markup use the <code>dark:</code> prefix. No media query detection is used; the theme is entirely user-controlled.</p>
+
+<p>Responsive breakpoints follow Tailwind's defaults. The sidebar is off-canvas on mobile and permanently visible from the <code>sm</code> breakpoint upward. The <code>sm:ml-64</code> offset on the main content area aligns it with the sidebar width at the same breakpoint. The navbar is fixed at the top on all screen sizes.</p>
+
+<h3>session.css</h3>
+
+<p>Manages visual states tied to session validity. Controls the <code>#session-loading</code> spinner shown while <code>session.js</code> performs its initial authentication check. Once <code>session.js</code> adds the <code>session-valid</code> class to the document root, the loading overlay is hidden and the dashboard content becomes visible. This creates a clean gate: the UI is not accessible until the session check completes, with no flash of unauthenticated content.</p>
+
+<p>Also handles the <code>devel-active</code> body class applied when DEVEL mode is detected, which adjusts layout to accommodate the DEVEL warning banner injected by <code>session.js</code>.</p>
+
+<h3>buttons.css</h3>
+
+<p>Defines the button component variants used across the dashboard. The power management modals in <code>powermgmt.js</code> reference variants by <code>data-variant</code> attribute (primary, danger, safe, neutral) rather than hardcoded class strings, keeping the visual definition in CSS and the logic in JavaScript. Also covers the back-to-top button's <code>tn-invisible</code> visibility state used by <code>ts.js</code>.</p>
+
+<h3>docs.css</h3>
+
+<p>Styles the documentation pages served at <code>/documentation.html</code>. Provides the <code>doc-foreword</code>, <code>doc-code-block</code>, <code>doc-code-header</code>, <code>doc-code-lang</code>, <code>doc-code-copy</code>, <code>callout</code>, <code>callout-tip</code>, <code>callout-warning</code>, <code>callout-danger</code>, <code>callout-note</code>, and <code>doc-summary</code> classes used throughout all operator documentation files. Definition list styling for <code>dl</code>, <code>dt</code>, and <code>dd</code> elements is also defined here, providing the consistent term-and-description layout used across the TNAudit, TNWatch, and CGI script documents.</p>
+
+<h3>devel.css</h3>
+
+<p>Styles the developer tools panel. Never loaded in production. Injected at runtime by <code>devel.js</code> as the first action when DEVEL mode is confirmed, by appending a <code>&lt;link&gt;</code> element to the document head. Provides styles for the floating panel, the collapsed pill button, the expanded panel state, the info block, action buttons with their colour variants (danger, primary, success, muted), the status message area, and the DEVEL warning banner. Because this file is only present in the DOM when DEVEL mode is active, its class names have no risk of colliding with production styles.</p>
+
+<h3>auth.css (implied)</h3>
+
+<p>The authentication pages (<code>index.html</code>, <code>register.html</code>, <code>pwreset.html</code>) use an <code>auth-*</code> prefixed class namespace visible throughout <code>auth.js</code>: <code>auth-form-input</code>, <code>auth-form-label</code>, <code>auth-question-wrap</code>, <code>auth-req--met</code>, <code>auth-req--unmet</code>, <code>auth-section-title</code>, <code>auth-code-block</code>, <code>auth-continue-btn</code>, and others. These are scoped to the auth flow and do not appear in the dashboard shell.</p>
+
+<h2>Typography</h2>
+
+<p>All fonts are localised. No requests are made to Google Fonts, Adobe Fonts, or any external font provider. Font files are served from the same origin as the application, eliminating any third-party font loading latency or privacy exposure from font service requests.</p>
+
+<h2>Design Principles</h2>
+
+<p>There are no inline styles anywhere in the application. All visual decisions are expressed through CSS classes. This keeps the HTML clean and ensures that visual changes are made in one place. The <code>powermgmt.js</code> modal system is a good example: buttons are styled by <code>data-variant</code> attribute selectors in <code>buttons.css</code> rather than by class strings injected from JavaScript.</p>
+
+<p>The Tailwind utility approach means that component appearance is assembled from small, composable classes at the HTML level rather than through component-specific CSS rules. The exception is the non-Tailwind stylesheets (<code>session.css</code>, <code>buttons.css</code>, <code>docs.css</code>, <code>devel.css</code>, <code>auth.css</code>), which use conventional class selectors for components with enough shared state or complexity that utility classes alone would be unwieldy.</p>
+
+<p>The active navigation link in the sidebar uses four Tailwind classes as a compound state: <code>border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/20</code>. These are managed programmatically by <code>view.js</code> via the <code>ActiveLinkManager</code>, which adds and removes them as a set defined in <code>VIEW_SYSTEM_CONFIG.ACTIVE_LINK_CLASSES</code>. The configuration is the single source of truth for the active style, keeping the CSS class names out of scattered JS logic.</p>
+
+<div class="callout callout-note">
+  <p>Because <code>tangent.css</code> is a compiled Tailwind v4 output, it only contains the utility classes actually used in the markup at compile time. Adding new Tailwind classes to HTML or JS without recompiling will have no effect. Recompile <code>tangent.css</code> after any markup changes that introduce new utility classes.</p>
+</div>
+
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>All stylesheets are served from <code>/assets/css/</code>. All fonts are localised. There are no external CSS or font dependencies and no inline styles anywhere in the application.</li>
+    <li><code>tangent.css</code> is the compiled Tailwind v4.1.7 output. Dark mode is class-based, toggled on the root element by <code>ts.js</code>. The primary colour is blue-700. Responsive sidebar visibility switches at the <code>sm</code> breakpoint.</li>
+    <li><code>session.css</code> controls the session loading overlay and the <code>session-valid</code> gate that prevents unauthenticated content from flashing before the session check completes.</li>
+    <li><code>buttons.css</code> defines button variants referenced by <code>data-variant</code> attribute in the power management modals, keeping visual definitions in CSS and behaviour in JavaScript.</li>
+    <li><code>docs.css</code> provides all styles for the operator documentation pages including callouts, code blocks, definition lists, and the summary section.</li>
+    <li><code>devel.css</code> is never loaded in production. It is injected at runtime by <code>devel.js</code> only when DEVEL mode is active.</li>
+    <li>Active sidebar link state is managed as a class set defined in <code>VIEW_SYSTEM_CONFIG.ACTIVE_LINK_CLASSES</code>, making the visual definition easy to change without touching the link management logic.</li>
+  </ul>
+</div>

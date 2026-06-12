@@ -1,0 +1,282 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    TNEnv is loaded first in every script and every TN module. It sets up the
+    library path, cleans the environment for taint mode, configures I/O
+    encoding, and provides the path resolution functions that every other module
+    depends on. This document is short because TNEnv is intentionally minimal --
+    it does one thing well and stays out of the way.
+  </p>
+</div>
+
+<h1>TNEnv</h1>
+
+<p>
+  <strong>Location:</strong>
+  <code>/var/www/htdocs/tn/data/lib/TNEnv.pm</code><br>
+  <strong>Version:</strong> 1.0.0<br>
+  <strong>Load order:</strong> First. Always before any other TN module.
+</p>
+
+<h2>Purpose</h2>
+
+<p>
+  TNEnv solves a specific problem: CGI scripts, command-line tools, and Perl
+  modules all run from different working directories and are invoked in
+  different ways. Without a common bootstrap, each script would need to
+  independently calculate its own <code>@INC</code> path, set
+  <code>$ENV{PATH}</code>, and configure file handle encoding. TNEnv centralises
+  all of that so each consumer can simply say <code>use TNEnv;</code> and
+  proceed.
+</p>
+
+<p>
+  The module is self-locating. It uses <code>dirname(__FILE__)</code> to find
+  its own position on disk and derives all other paths from that anchor. It does
+  not use <code>FindBin</code>, <code>Cwd::getcwd</code>, or any path that
+  depends on where the calling script lives. This makes it chroot-safe: the
+  same module works identically whether the process sees
+  <code>/var/www/htdocs/tn/data/lib</code> (host) or
+  <code>/htdocs/tn/data/lib</code> (inside the chroot).
+</p>
+
+<h2>What Happens at Load Time</h2>
+
+<p>
+  Two <code>BEGIN</code> blocks run at compile time in order. The first cleans
+  the environment:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>$ENV{PATH} = '/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin';
+delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
+$ENV{LD_LIBRARY_PATH} = '/usr/local/lib:/usr/lib';</code></pre>
+</div>
+
+<p>
+  <code>PATH</code> is set to a known safe value before taint mode will allow
+  any external command. The shell injection vectors (<code>IFS</code>,
+  <code>CDPATH</code>, <code>ENV</code>, <code>BASH_ENV</code>) are removed.
+  <code>LD_LIBRARY_PATH</code> is set explicitly for shared library resolution
+  inside the chroot, where DBD::SQLite and other XS modules need to find
+  <code>libsqlite3</code> and <code>libpthread</code>.
+</p>
+
+<p>
+  I/O encoding is then set on all three standard handles:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>binmode(STDIN,  ':encoding(UTF-8)');
+binmode(STDOUT, ':raw');
+binmode(STDERR, ':encoding(UTF-8)');</code></pre>
+</div>
+
+<p>
+  STDOUT is set to raw (<code>:raw</code>) deliberately. The JSON serialiser
+  (<code>JSON-&gt;new-&gt;utf8-&gt;encode()</code>) produces raw UTF-8 octets.
+  Adding a <code>:encoding(UTF-8)</code> layer on top would cause Perl to treat
+  those octets as Latin-1 and double-encode them, corrupting non-ASCII output.
+  STDIN and STDERR use UTF-8 encoding layers because they handle text, not
+  binary CGI output.
+</p>
+
+<p>
+  The second <code>BEGIN</code> block locates the library directory, untaints
+  the path, and adds it to <code>@INC</code>:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>my $lib_path = dirname(__FILE__);
+$lib_path = abs_path($lib_path) if -d $lib_path;
+if ($lib_path =~ m{^([-/\w.]+)$}) {
+    unshift @INC, $1 unless grep { $_ eq $1 } @INC;
+}</code></pre>
+</div>
+
+<p>
+  The resolved path is stored in <code>$TNEnv::LIB_PATH</code> for other
+  modules to reference. All subsequent path functions derive from this anchor.
+</p>
+
+<h2>Path Resolution</h2>
+
+<p>
+  The directory layout the path functions assume:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>/var/www/htdocs/tn/          &lt;-- get_app_root()
+    cgi-bin/
+        control.pl
+        router.pl
+    data/
+        lib/                 &lt;-- $TNEnv::LIB_PATH  (TNEnv.pm lives here)
+        db/                  &lt;-- get_db_path()
+        keys/                &lt;-- get_keys_path()
+        config/              &lt;-- get_config_path()
+        logs/                &lt;-- get_logs_path()
+        scripts/</code></pre>
+</div>
+
+<p>
+  <code>get_app_root()</code> walks two levels up from LIB_PATH
+  (<code>data/lib/../.. = app root</code>). All other functions are aliases to
+  <code>get_data_path(subdir)</code>. The internal <code>_resolve_path()</code>
+  helper tries <code>Cwd::abs_path()</code> first -- authoritative when the
+  path exists -- and falls back to a pure-string segment-by-segment collapse
+  when the path does not yet exist (install time) or is unavailable inside the
+  chroot.
+</p>
+
+<p>The exported path functions:</p>
+
+<dl>
+  <dt><code>get_app_root()</code></dt>
+  <dd>Returns the application root: <code>/htdocs/tn</code> inside the chroot, <code>/var/www/htdocs/tn</code> outside.</dd>
+  <dt><code>get_data_dir()</code></dt>
+  <dd>Returns <code>app_root/data</code>.</dd>
+  <dt><code>get_db_path()</code></dt>
+  <dd>Returns <code>app_root/data/db</code>. Auth.db lives here.</dd>
+  <dt><code>get_keys_path()</code></dt>
+  <dd>Returns <code>app_root/data/keys</code>. HMAC and session key files live here.</dd>
+  <dt><code>get_config_path()</code></dt>
+  <dd>Returns <code>app_root/data/config</code>. security.conf lives here.</dd>
+  <dt><code>get_logs_path()</code></dt>
+  <dd>Returns <code>app_root/data/logs</code>.</dd>
+</dl>
+
+<h2>Taint Utilities</h2>
+
+<p>
+  Three untainting helpers are exported for use across all modules and scripts:
+</p>
+
+<dl>
+  <dt><code>untaint_path($path)</code></dt>
+  <dd>
+    Rejects any path containing <code>..</code> before the pattern match, then
+    allows only alphanumerics, forward slashes, underscores, hyphens, and dots.
+    Returns <code>undef</code> on failure.
+  </dd>
+  <dt><code>untaint_filename($filename)</code></dt>
+  <dd>
+    Rejects path separators and <code>..</code> sequences explicitly, then
+    allows only word characters, hyphens, and dots. Returns <code>undef</code>
+    on failure. Use for bare filenames, not full paths.
+  </dd>
+  <dt><code>untaint_identifier($id)</code></dt>
+  <dd>
+    Allows only <code>[a-zA-Z0-9_]</code>. Suitable for database IDs and
+    internal identifiers. Note: does not allow hyphens, so it is too
+    restrictive for usernames (use the <code>/^([a-zA-Z0-9_-]{3,32})$/</code>
+    pattern from TNSecurity for those).
+  </dd>
+</dl>
+
+<h2>Environment Verification</h2>
+
+<p>
+  <code>verify_environment()</code> checks that all required directories and
+  the config file exist. Returns an arrayref of error strings, or
+  <code>undef</code> if everything is in order. Used at startup by diagnostic
+  tools; not called during normal CGI request handling.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>use TNEnv;
+my $errors = TNEnv::verify_environment();
+if ($errors) {
+    for my $err (@$errors) { warn "ENV ERROR: $err\n" }
+    exit 1;
+}</code></pre>
+</div>
+
+<h2>Usage Pattern</h2>
+
+<p>
+  Every CGI script and every TN module loads TNEnv first. CGI scripts do it
+  via the bootstrap block in their <code>BEGIN</code>:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>#!/usr/bin/perl -T
+use strict;
+use warnings;
+use FindBin qw($RealBin);
+use File::Spec;
+
+BEGIN {
+    my $lib_path = File::Spec->catdir(
+        $RealBin, File::Spec->updir, 'data', 'lib'
+    );
+    # ... untaint and add to @INC ...
+}
+
+use TNEnv;    # must be first TN module
+use TNConfig;
+use TNSecurity;
+use TNAuth;</code></pre>
+</div>
+
+<p>
+  TN modules (TNSecurity, TNConfig, TNAuth, etc.) each have their own
+  <code>BEGIN</code> block that resolves the lib path from
+  <code>dirname(__FILE__)</code> for standalone use. When loaded through a CGI
+  script that has already set up <code>@INC</code>, the redundant path add is
+  a no-op because of the <code>unless grep { $_ eq $lib_path } @INC</code>
+  guard.
+</p>
+
+<div class="callout callout-note">
+  <p>
+    TNEnv exports <code>get_data_path</code>, <code>get_db_path</code>,
+    <code>get_keys_path</code>, <code>get_config_path</code>, and
+    <code>untaint_path</code> into the caller's namespace automatically on
+    <code>use TNEnv;</code>. All other functions must be called with the
+    package prefix: <code>TNEnv::get_app_root()</code>.
+  </p>
+</div>
+
+<!-- SUMMARY -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>TNEnv must be loaded first in every script and module. It sets PATH, removes shell injection vectors, sets LD_LIBRARY_PATH for chroot shared libs, and configures I/O encoding.</li>
+    <li>STDOUT is set to <code>:raw</code> deliberately. Adding a UTF-8 encoding layer on top of the JSON serialiser would double-encode non-ASCII output.</li>
+    <li>All path functions derive from <code>$TNEnv::LIB_PATH</code>, which is resolved from <code>dirname(__FILE__)</code>. The module is self-locating and chroot-safe.</li>
+    <li><code>get_app_root()</code> returns <code>/htdocs/tn</code> inside the chroot. All other path helpers call <code>get_data_path(subdir)</code> internally.</li>
+    <li>Three taint utilities are available: <code>untaint_path</code>, <code>untaint_filename</code>, <code>untaint_identifier</code>. Note that <code>untaint_identifier</code> does not allow hyphens and is unsuitable for usernames.</li>
+  </ul>
+</div>

@@ -1,0 +1,1043 @@
+<!-- BEGIN: Configurator -->
+<div id="app" class="animate-fade-in mx-auto max-w-[1600px] p-2">
+  <!-- BEGIN: Banner -->
+  <div class="sticky top-0 z-30 flex items-center justify-between border-b border-gray-200 bg-gray-50 p-2 backdrop-blur-md dark:border-gray-700 dark:bg-gray-900">
+    <div class="flex items-center gap-4">
+      <div class="rounded-xl bg-blue-700 p-2.5 shadow-lg shadow-red-500/20">
+        <svg class="h-6 w-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+          <path stroke="#ffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13v-2a1 1 0 0 0-1-1h-.757l-.707-1.707.535-.536a1 1 0 0 0 0-1.414l-1.414-1.414a1 1 0 0 0-1.414 0l-.536.535L14 4.757V4a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v.757l-1.707.707-.536-.535a1 1 0 0 0-1.414 0L4.929 6.343a1 1 0 0 0 0 1.414l.536.536L4.757 10H4a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h.757l.707 1.707-.535.536a1 1 0 0 0 0 1.414l1.414 1.414a1 1 0 0 0 1.414 0l.536-.535 1.707.707V20a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-.757l1.707-.708.536.536a1 1 0 0 0 1.414 0l1.414-1.414a1 1 0 0 0 0-1.414l-.535-.536.707-1.707H20a1 1 0 0 0 1-1Z" />
+          <path stroke="#ffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-lg font-extrabold tracking-tight text-gray-900 uppercase italic dark:text-white">Settings</h1>
+        <p class="text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400">Unified Security Policy Management</p>
+      </div>
+    </div>
+  </div>
+  <!-- END: Banner -->
+  <!-- BEGIN: Navigation Tabs -->
+  <div class="w-full bg-gray-50 p-2 dark:bg-gray-900">
+    <div class="flex w-fit items-center space-x-2 rounded-lg bg-gray-100 p-1 dark:bg-gray-800" role="group">
+      <!-- Remove "active" class from PF button -->
+      <button type="button" data-tab="pf" class="tab-btn rounded-md px-4 py-2 text-base font-medium whitespace-nowrap transition-all">PF</button>
+      <button type="button" data-tab="e2guardian" class="tab-btn rounded-md px-4 py-2 text-base font-medium whitespace-nowrap transition-all">e2guardian</button>
+      <button type="button" data-tab="unbound" class="tab-btn rounded-md px-4 py-2 text-base font-medium whitespace-nowrap transition-all">DNS</button>
+    </div>
+  </div>
+  <!-- END: Navigation Tabs -->
+  <!-- BEGIN: PF Firewall Content -->
+  <div id="pf-content" class="tab-content active">
+    <!-- BEGIN: Primary Policy Grid -->
+    <div class="grid grid-cols-1 gap-4 p-2 md:grid-cols-2 lg:grid-cols-4">
+      <!-- BEGIN: IP/CIDR Access Control -->
+      <div class="flex h-[560px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-gray-50 p-2 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+        <div class="bg-gray-50 p-4 dark:bg-gray-900">
+          <div class="mb-4 flex items-center gap-3">
+            <div class="mr-2 rounded-lg bg-blue-600 p-2 shadow-sm dark:bg-blue-500">
+              <svg class="h-5 w-5 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.872 9.687 20 6.56 17.44 4 4 17.44 6.56 20 16.873 9.687Zm0 0-2.56-2.56M6 7v2m0 0v2m0-2H4m2 0h2m7 7v2m0 0v2m0-2h-2m2 0h2M8 4h.01v.01H8V4Zm2 2h.01v.01H10V6Zm2-2h.01v.01H12V4Zm8 8h.01v.01H20V12Zm-2 2h.01v.01H18V14Zm2 2h.01v.01H20V16Z"></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">IP/CIDR Policy</h3>
+          </div>
+          <div class="flex gap-1 rounded-lg bg-gray-50 p-1 shadow-inner dark:bg-gray-900">
+            <label class="action-toggle flex-1 cursor-pointer">
+              <input type="radio" name="ip_action" value="block" class="hidden" checked="" />
+              <div class="rounded-md py-1.5 text-center text-[10px] font-black tracking-wider uppercase transition-all hover:opacity-90">Block</div>
+            </label>
+            <label class="action-toggle flex-1 cursor-pointer">
+              <input type="radio" name="ip_action" value="pass" class="hidden" />
+              <div class="rounded-md bg-transparent py-1.5 text-center text-[10px] font-black tracking-wider text-gray-700 uppercase transition-all hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700">Pass</div>
+            </label>
+          </div>
+        </div>
+        <div class="flex-grow overflow-y-auto bg-white p-4 dark:bg-gray-800">
+          <div class="space-y-2" id="ip-recent-entries">
+            <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/50 dark:bg-blue-900/20">
+              <p class="text-sm text-gray-700 dark:text-gray-300">
+                <span class="font-bold">User Input Only:</span> Enter IPs or CIDRs to block/pass. Each entry will be validated by Perl backend.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="dark:to-gray-850 border-t border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 dark:border-gray-700 dark:from-gray-800">
+          <div class="flex flex-col gap-2">
+            <input type="text" placeholder="192.0.2.0/24 or 1.1.1.1" class="mb-2 w-full rounded-lg border border-gray-300 bg-white p-2 font-mono text-sm text-gray-900 placeholder-gray-400 transition-shadow outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-400 dark:focus:ring-blue-400/30" id="ip-input" />
+            <div class="flex space-x-2">
+              <button class="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-bold text-white uppercase shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.98] dark:bg-blue-500 dark:hover:bg-blue-600" data-action="add-ip">Add</button>
+              <button class="flex-1 rounded-lg bg-green-600 py-2 text-xs font-bold text-white uppercase shadow-sm transition-all hover:bg-green-700 hover:shadow-md active:scale-[0.98] dark:bg-green-500 dark:hover:bg-green-600" data-action="pf-apply">Apply</button>
+            </div>
+          </div>
+          <p class="mt-2 text-[10px] text-gray-500 dark:text-gray-400">IPs or CIDRs up to /24 only. RFC791 blocks rejected.</p>
+        </div>
+      </div>
+      <!-- END: IP/CIDR Access Control -->
+      <!-- BEGIN: ASN Access Control -->
+      <div class="flex h-[560px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-gray-50 p-2 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+        <div class="dark:to-gray-850 border-b border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 dark:border-gray-700 dark:from-gray-800">
+          <div class="mb-4 flex items-center gap-3">
+            <div class="mr-2 rounded-lg bg-blue-600 p-2 shadow-sm dark:bg-blue-500">
+              <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">ASN Registry</h3>
+          </div>
+          <div class="flex gap-1 rounded-lg bg-gray-50 p-1 shadow-inner dark:bg-gray-900">
+            <label class="action-toggle flex-1 cursor-pointer">
+              <input type="radio" name="asn_action" value="block" class="hidden" checked="" />
+              <div class="rounded-md py-1.5 text-center text-[10px] font-black tracking-wider uppercase transition-all hover:opacity-90">Block</div>
+            </label>
+            <label class="action-toggle flex-1 cursor-pointer">
+              <input type="radio" name="asn_action" value="pass" class="hidden" />
+              <div class="rounded-md bg-transparent py-1.5 text-center text-[10px] font-black tracking-wider text-gray-700 uppercase transition-all hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700">Pass</div>
+            </label>
+          </div>
+        </div>
+        <div class="flex-grow overflow-y-auto bg-white p-4 dark:bg-gray-800">
+          <div class="space-y-2" id="asn-recent-entries">
+            <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/50 dark:bg-blue-900/20">
+              <p class="text-sm text-gray-700 dark:text-gray-300">
+                <span class="font-bold">User Input Only:</span> Enter AS numbers to block/pass. Format will be validated by Perl backend.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="dark:to-gray-850 border-t border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 dark:border-gray-700 dark:from-gray-800">
+          <div class="flex flex-col gap-2">
+            <input type="text" placeholder="AS15169 or 15169" class="mb-2 w-full rounded-lg border border-gray-300 bg-white p-2 font-mono text-sm text-gray-900 placeholder-gray-400 transition-shadow outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-400 dark:focus:ring-blue-400/30" id="asn-input" />
+            <div class="flex space-x-2">
+              <button class="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-bold text-white uppercase shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.98] dark:bg-blue-500 dark:hover:bg-blue-600" data-action="add-asn">Add</button>
+              <button class="flex-1 rounded-lg bg-green-600 py-2 text-xs font-bold text-white uppercase shadow-sm transition-all hover:bg-green-700 hover:shadow-md active:scale-[0.98] dark:bg-green-500 dark:hover:bg-green-600" data-action="pf-apply">Apply</button>
+            </div>
+          </div>
+          <p class="mt-2 text-[10px] text-gray-500 dark:text-gray-400">Enter AS numbers. Will validate format (ASN or numeric).</p>
+        </div>
+      </div>
+      <!-- END: ASN Access Control -->
+      <!-- BEGIN: GeoIP Country Policy -->
+      <div class="flex h-[560px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-gray-50 p-2 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+        <div class="dark:to-gray-850 border-b border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 dark:border-gray-700 dark:from-gray-800">
+          <div class="mb-4 flex items-center gap-3">
+            <div class="mr-2 rounded-lg bg-blue-600 p-2 shadow-sm dark:bg-blue-500">
+              <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 002 2h.5A2.5 2.5 0 0018 9.5V8.5a3.374 3.374 0 01-3-3.374V4M10 11h.1M15 11h.1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">GeoIP Policy</h3>
+          </div>
+          <div class="flex gap-1 rounded-lg bg-gray-100 p-1 shadow-inner dark:bg-gray-900">
+            <label class="action-toggle flex-1 cursor-pointer">
+              <input type="radio" name="geo_action" value="block" class="hidden" checked="" />
+              <div class="rounded-md py-1.5 text-center text-[10px] font-black tracking-wider uppercase transition-all hover:opacity-90">Block</div>
+            </label>
+            <label class="action-toggle flex-1 cursor-pointer">
+              <input type="radio" name="geo_action" value="pass" class="hidden" />
+              <div class="rounded-md bg-transparent py-1.5 text-center text-[10px] font-black tracking-wider text-gray-700 uppercase transition-all hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700">Pass</div>
+            </label>
+          </div>
+        </div>
+        <div class="flex-grow overflow-y-auto bg-white p-4 dark:bg-gray-800">
+          <div class="mb-3">
+            <div class="relative">
+              <input type="text" id="geoip-search" placeholder="Search countries..." class="mb-2 w-full rounded-lg border border-gray-300 bg-white p-2 pl-9 text-sm text-gray-900 placeholder-gray-400 transition-shadow outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-blue-400 dark:focus:ring-blue-400/30" />
+              <svg class="absolute h-4 w-4 p-2 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+            </div>
+          </div>
+          <div class="mb-3 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
+            <div id="geoip-list-container" class="geoip-scroll-container">
+              <div class="geoip-scroll-content"></div>
+            </div>
+          </div>
+          <div class="mt-2 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Selection:</span>
+            <span class="text-sm font-bold text-blue-600 dark:text-blue-400" id="selected-count">0 selected</span>
+          </div>
+        </div>
+        <div class="dark:to-gray-850 border-t border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 dark:border-gray-700 dark:from-gray-800">
+          <div class="flex flex-col gap-3">
+            <div class="mb-2 flex space-x-2 bg-gray-50 dark:bg-gray-900">
+              <button class="flex-1 rounded-lg border border-gray-300 bg-gray-50 py-2 text-xs font-bold text-gray-700 uppercase transition-all hover:bg-gray-600 active:scale-[0.98] dark:border-gray-600 dark:bg-gray-800 dark:text-white" data-action="select-all-geoip">Select All</button>
+              <button class="flex-1 rounded-lg border border-gray-300 bg-gray-50 py-2 text-xs font-bold text-gray-700 uppercase transition-all hover:bg-gray-600 active:scale-[0.98] dark:border-gray-600 dark:bg-gray-800 dark:text-white" data-action="clear-geoip">Clear</button>
+            </div>
+            <div class="flex space-x-2">
+              <button class="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-bold text-white uppercase shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.98] dark:bg-blue-500 dark:hover:bg-blue-600" data-action="apply-geoip">Save</button>
+              <button class="flex-1 rounded-lg bg-green-600 py-2 text-xs font-bold text-white uppercase shadow-sm transition-all hover:bg-green-700 hover:shadow-md active:scale-[0.98] dark:bg-green-500 dark:hover:bg-green-600" data-action="pf-apply">Apply</button>
+            </div>
+          </div>
+          <p class="mt-2 text-center text-[10px] text-gray-500 dark:text-gray-400">Select countries to block/pass. Search to filter.</p>
+        </div>
+      </div>
+      <!-- END: GeoIP Country Policy -->
+      <!-- BEGIN: IP List Sources -->
+      <div class="flex h-[560px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-gray-50 p-2 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+        <div class="dark:to-gray-850 border-b border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 dark:border-gray-700 dark:from-gray-800">
+          <div class="mb-4 flex items-center gap-3">
+            <div class="mr-2 rounded-lg bg-blue-600 p-2 shadow-sm dark:bg-blue-500">
+              <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+              </svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">IP List Feeds</h3>
+          </div>
+          <div class="flex gap-1 rounded-lg bg-gray-100 p-1 shadow-inner dark:bg-gray-900">
+            <label class="action-toggle flex-1 cursor-pointer">
+              <input type="radio" name="feed_action" value="block" class="hidden" checked="" />
+              <div class="rounded-md py-1.5 text-center text-[10px] font-black tracking-wider uppercase transition-all hover:opacity-90">Block</div>
+            </label>
+            <label class="action-toggle flex-1 cursor-pointer">
+              <input type="radio" name="feed_action" value="pass" class="hidden" />
+              <div class="rounded-md bg-transparent py-1.5 text-center text-[10px] font-black tracking-wider text-gray-700 uppercase transition-all hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700">Pass</div>
+            </label>
+          </div>
+        </div>
+        <div class="flex-grow overflow-y-auto bg-white p-4 dark:bg-gray-800">
+          <div class="space-y-2" id="feed-list">
+            <div class="feed-item flex items-center border-b border-gray-200 p-3 dark:border-gray-700"></div>
+          </div>
+        </div>
+        <div class="dark:to-gray-850 border-t border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 dark:border-gray-700 dark:from-gray-800">
+          <div class="flex flex-col gap-2">
+            <input type="url" placeholder="https://example.com/blocklist.txt" class="mb-2 w-full rounded-lg border border-gray-300 bg-white p-2 font-mono text-sm text-gray-900 placeholder-gray-400 transition-shadow outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-400 dark:focus:ring-blue-400/30" id="feed-input" />
+            <div class="flex space-x-2">
+              <button class="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-bold text-white uppercase shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.98] dark:bg-blue-500 dark:hover:bg-blue-600" data-action="add-feed">Add</button>
+              <button class="flex-1 rounded-lg bg-green-600 py-2 text-xs font-bold text-white uppercase shadow-sm transition-all hover:bg-green-700 hover:shadow-md active:scale-[0.98] dark:bg-green-500 dark:hover:bg-green-600" data-action="pf-apply">Apply</button>
+            </div>
+          </div>
+          <p class="mt-2 text-[10px] text-gray-500 dark:text-gray-400">Enter URL to IP/CIDR list. Will fetch and validate.</p>
+        </div>
+      </div>
+    </div>
+    <!-- BEGIN: DEFAULT PF RULES -->
+    <div class="pf-default-rules-accordion mb-6 overflow-hidden rounded-xl bg-gray-50 shadow-sm dark:bg-gray-900">
+      <!-- Accordion Header/Button -->
+      <button type="button" id="pf-default-rules-toggle" class="pf-accordion-btn flex w-full items-center justify-between p-4 font-bold text-gray-900 transition-colors duration-200 hover:bg-gray-50 dark:text-white dark:hover:bg-gray-700">
+        <div class="flex items-center space-x-2">
+          <svg class="h-5 w-5 text-blue-700 dark:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          <span class="text-sm tracking-wider uppercase">Default PF Rules (Read-Only)</span>
+          <span class="text-xs font-normal text-gray-500 dark:text-gray-400">from /etc/pf.conf</span>
+        </div>
+        <svg class="pf-accordion-icon h-5 w-5 rotate-180 text-gray-500 transition-transform duration-200 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 15 7-7 7 7"></path>
+        </svg>
+      </button>
+      <!-- Accordion Content -->
+      <div id="pf-default-rules-content" class="pf-accordion-content border-t border-gray-200 dark:border-gray-700">
+        <div class="bg-gray-50 p-4 dark:bg-gray-900">
+          <!-- Info Banner -->
+          <div class="mb-3 flex items-start space-x-2 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
+            <svg class="h-4 w-4 flex-shrink-0 text-blue-700 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-xs text-blue-800 dark:text-white">These are the currently active rules loaded from <span class="font-mono font-bold">/etc/pf.conf</span>. They are read-only and managed by the system administrator. </p>
+          </div>
+          <!-- Rules Container -->
+          <div class="pf-rules-container relative rounded-lg border border-gray-300 bg-gray-900 p-0 dark:border-gray-600">
+            <!-- Copy Button (Top Right) -->
+            <div class="absolute top-0 right-0 m-2">
+              <button type="button" id="pf-copy-rules-btn" class="pf-copy-btn flex items-center gap-1.5 rounded-md bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white transition-all duration-200 hover:bg-blue-800">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                </svg>
+                <span class="pf-copy-text">Copy</span>
+              </button>
+            </div>
+            <!-- Rules Code Block -->
+            <pre class="pf-rules-pre max-h-72 overflow-y-auto p-4 font-mono text-xs leading-relaxed text-gray-100" id="default-pf-rules">
+							<span class="text-red-400">Error loading rules from /data/services/queue/pf-rules/current</span>
+						</pre>
+          </div>
+          <!-- Stats Footer -->
+          <div class="mt-3 flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+            <div class="flex items-center space-x-2">
+              <span class="flex items-center space-x-2">
+                <span class="h-2 w-2 rounded-full bg-green-500"></span>
+                <span id="rule-count-pass">0 pass</span>
+              </span>
+              <span class="flex items-center space-x-2">
+                <span class="h-2 w-2 rounded-full bg-red-500"></span>
+                <span id="rule-count-block">0 block</span>
+              </span>
+              <span class="flex items-center space-x-2">
+                <span class="h-2 w-2 rounded-full bg-blue-500"></span>
+                <span id="rule-count-match">0 match</span>
+              </span>
+            </div>
+            <button type="button" id="pf-refresh-rules-btn" class="pf-refresh-btn flex items-center gap-1 px-2 py-1 text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200">
+              <svg class="pf-refresh-icon h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg> Refresh </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- END: DEFAULT PF RULES -->
+    <!-- BEGIN: PF RULE ENGINE -->
+    <div class="pf-rules-manager mx-auto overflow-hidden rounded-xl bg-gray-50 p-2 font-sans text-gray-700 shadow-sm dark:bg-gray-900 dark:text-white">
+      <!-- Header -->
+      <div class="mb-2 flex items-center justify-between border-b border-gray-100 bg-gray-50 p-2 dark:border-gray-800 dark:bg-gray-800">
+        <div class="space-y-1 p-2">
+          <div class="flex items-center space-x-2">
+            <h3 class="text-base font-bold tracking-widest text-gray-700 uppercase dark:text-white">PF Rule Editor</h3>
+          </div>
+          <span class="pl-4 font-mono text-xs text-gray-700 dark:text-white">OpenBSD 7.7+ (EXPERIMENTAL)</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <label class="group flex cursor-pointer items-center">
+            <input type="checkbox" name="quick" class="peer sr-only" checked="" />
+            <div class="peer relative h-4 w-7 rounded-full bg-gray-200 peer-checked:bg-gray-700 after:absolute after:top-[2px] after:left-[2px] after:h-3 after:w-3 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white dark:bg-gray-600"></div>
+            <span class="ml-2 text-[10px] font-bold text-gray-700 uppercase dark:text-white">Quick</span>
+          </label>
+          <label class="group flex cursor-pointer items-center">
+            <input type="checkbox" name="log" class="peer sr-only" />
+            <div class="peer relative h-4 w-7 rounded-full bg-gray-200 peer-checked:bg-gray-700 after:absolute after:top-[2px] after:left-[2px] after:h-3 after:w-3 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white dark:bg-gray-600"></div>
+            <span class="ml-2 text-[10px] font-bold text-gray-700 uppercase dark:text-white">Log</span>
+          </label>
+        </div>
+      </div>
+      <form id="rule-builder-form" class="space-y-2 p-4">
+        <!-- Row 1: Action, Direction, AF -->
+        <div class="mb-2 flex flex-wrap items-start space-x-2 pb-4">
+          <div class="space-y-2 space-x-2">
+            <label class="block text-[10px] leading-none font-bold tracking-tight text-gray-700 uppercase dark:text-white">Action</label>
+            <div class="inline-flex space-x-2 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+              <label class="cursor-pointer">
+                <input type="radio" name="action" value="pass" class="peer sr-only" />
+                <span class="mr-2 block rounded-md px-3 py-1.5 text-xs font-bold text-gray-500 transition-all peer-checked:bg-gray-700 peer-checked:text-white">PASS</span>
+              </label>
+              <label class="cursor-pointer">
+                <input type="radio" name="action" value="block" class="peer sr-only" />
+                <span class="mr-2 block rounded-md px-3 py-1.5 text-xs font-bold text-gray-500 transition-all peer-checked:bg-gray-700 peer-checked:text-white">BLOCK</span>
+              </label>
+              <label class="cursor-pointer">
+                <input type="radio" name="action" value="match" class="peer sr-only" />
+                <span class="mr-2 block rounded-md px-3 py-1.5 text-xs font-bold text-gray-500 transition-all peer-checked:bg-gray-700 peer-checked:text-white">MATCH</span>
+              </label>
+            </div>
+          </div>
+          <div class="space-y-2 space-x-2">
+            <label class="block text-[10px] leading-none font-bold tracking-tight text-gray-700 uppercase dark:text-white">Direction</label>
+            <div class="inline-flex space-x-2 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+              <label class="cursor-pointer">
+                <input type="radio" name="direction" value="" class="peer sr-only" />
+                <span class="mr-2 block rounded-md px-2 py-1.5 text-xs font-bold text-gray-500 transition-all peer-checked:bg-gray-700 peer-checked:text-white">ANY</span>
+              </label>
+              <label class="cursor-pointer">
+                <input type="radio" name="direction" value="in" class="peer sr-only" />
+                <span class="mr-2 block rounded-md px-2 py-1.5 text-xs font-bold text-gray-500 transition-all peer-checked:bg-gray-700 peer-checked:text-white">IN</span>
+              </label>
+              <label class="cursor-pointer">
+                <input type="radio" name="direction" value="out" class="peer sr-only" />
+                <span class="mr-2 block rounded-md px-2 py-1.5 text-xs font-bold text-gray-500 transition-all peer-checked:bg-gray-700 peer-checked:text-white">OUT</span>
+              </label>
+            </div>
+          </div>
+          <div class="w-32 space-y-2">
+            <label class="block bg-gray-50 text-[10px] leading-none font-bold tracking-tight text-gray-700 uppercase dark:bg-gray-900 dark:text-white">AF</label>
+            <select name="af" class="h-9 rounded-lg border-transparent bg-gray-50 bg-white px-3 text-xs font-medium outline-none dark:border-gray-700 dark:bg-gray-800">
+              <option value="">any</option>
+              <option value="inet">inet (IPv4)</option>
+              <option value="inet6">inet6 (IPv6)</option>
+            </select>
+          </div>
+          <div class="grid min-w-[200px] flex-1 grid-cols-2 space-x-2">
+            <div class="space-y-2">
+              <label class="block text-[10px] leading-none font-bold text-gray-700 uppercase dark:text-white">Interface</label>
+              <input type="text" name="interface" placeholder="%%EXT_IF%% / %%INT_IF%%" class="h-9 w-full rounded-lg border-transparent bg-white px-3 text-xs shadow-sm outline-none dark:bg-gray-800" />
+            </div>
+            <div class="space-y-2">
+              <label class="block text-[10px] leading-none font-bold text-gray-700 uppercase dark:text-white">Protocol</label>
+              <select name="proto" class="h-9 w-full rounded-lg border-transparent bg-white px-2 text-xs shadow-sm outline-none dark:bg-gray-800">
+                <option value="">any</option>
+                <option value="tcp">TCP</option>
+                <option value="udp">UDP</option>
+                <option value="icmp">ICMP</option>
+                <option value="icmp6">ICMP6</option>
+                <option value="esp">ESP (IPsec)</option>
+                <option value="ah">AH (IPsec)</option>
+                <option value="gre">GRE</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <!-- Row 2: Source → Destination -->
+        <div class="flex w-full items-start justify-between space-y-2 space-x-2 p-2 pt-2">
+          <!-- Source Parent -->
+          <div class="space-y-2">
+            <div class="font-mono text-sm font-bold uppercase">Source</div>
+            <input type="text" name="from_addr" placeholder="any, 10.0.0.0/24" class="h-9 w-48 rounded-lg border-transparent px-3 font-mono text-sm shadow-sm" />
+            <input type="text" name="from_port" placeholder="Port" class="h-9 w-20 rounded-lg border-transparent px-3 font-mono text-sm shadow-sm" />
+          </div>
+          <!-- Destination Parent -->
+          <div class="space-y-2">
+            <div class="font-mono text-sm font-bold uppercase">Destination</div>
+            <input type="text" name="to_addr" placeholder="any, 192.168.1.0/24" class="h-9 w-48 rounded-lg border-transparent px-3 font-mono text-sm shadow-sm" />
+            <input type="text" name="to_port" placeholder="Port" class="h-9 w-20 rounded-lg border-transparent px-3 font-mono text-sm shadow-sm" />
+          </div>
+        </div>
+        <!-- Row 3: Advanced Options Grid -->
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <!-- Column 1: State & Flags -->
+          <div class="space-y-3 rounded-xl bg-gray-50 p-4 dark:bg-gray-800">
+            <label class="mb-2 block border-b text-[10px] font-bold text-gray-700 uppercase dark:text-white">State Tracking &amp; Flags</label>
+            <div class="mb-2 space-y-2">
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">State Tracking</label>
+              <select name="state" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white">
+                <option value="">default (keep state)</option>
+                <option value="keep state">keep state</option>
+                <option value="modulate state">modulate state</option>
+                <option value="synproxy state">synproxy state</option>
+                <option value="no state">no state</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">TCP Flags</label>
+              <select name="flags" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white">
+                <option value="">none</option>
+                <option value="S/SA">S/SA (SYN/SYN-ACK)</option>
+                <option value="S/S">S/S (SYN only)</option>
+                <option value="any">any (no check)</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">Max Connections</label>
+              <input type="number" name="max_src_conn" placeholder="e.g., 100" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">Conn Rate Limit</label>
+              <div class="flex items-center gap-1">
+                <input type="number" name="max_src_conn_rate" placeholder="100" class="h-8 flex-1 rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+                <span class="mx-1 text-xs text-gray-500">/</span>
+                <input type="number" name="max_src_conn_rate_sec" placeholder="10" class="h-8 w-16 rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+                <span class="ml-2 text-[10px] text-gray-400">sec</span>
+              </div>
+            </div>
+          </div>
+          <!-- Column 2: QoS & Tagging -->
+          <div class="space-y-3 rounded-xl bg-gray-50 p-4 dark:bg-gray-800">
+            <label class="mb-2 block border-b text-[10px] font-bold text-gray-700 uppercase dark:text-white">QoS &amp; Tagging</label>
+            <div class="mb-2 space-y-2">
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">Queue (ALTQ/FQ-CoDel)</label>
+              <input type="text" name="queue" placeholder="qDefault, qSSH" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div class="mb-2 space-y-2">
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">Priority Queue</label>
+              <input type="text" name="queue_priority" placeholder="qSSH_bulk, qSSH_prio" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div class="mb-2">
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">Tag</label>
+              <input type="text" name="tag" placeholder="NO_WAN_OUT, TRUSTED" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">Set Priority</label>
+              <div class="flex items-center gap-1">
+                <input type="number" name="prio1" min="0" max="7" placeholder="3" class="h-8 flex-1 rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+                <span class="mx-1 text-xs text-gray-500">,</span>
+                <input type="number" name="prio2" min="0" max="7" placeholder="5" class="h-8 flex-1 rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+              </div>
+              <p class="mt-1 text-[9px] text-gray-400">0-7 (ACK/TOS lowdelay)</p>
+            </div>
+          </div>
+          <!-- Column 3: Routing & NAT -->
+          <div class="space-y-3 rounded-xl bg-gray-50 p-4 dark:bg-gray-800">
+            <label class="mb-2 block border-b text-[10px] font-bold text-gray-700 uppercase dark:text-white">Routing &amp; NAT</label>
+            <div class="mb-2 space-y-2">
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">Routing Policy</label>
+              <select name="route_type" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white">
+                <option value="">None</option>
+                <option value="route-to">route-to</option>
+                <option value="reply-to">reply-to</option>
+                <option value="dup-to">dup-to</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">Gateway</label>
+              <input type="text" name="route_gateway" placeholder="10.0.0.1, $gateway" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div class="mb-2">
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">NAT Translation</label>
+              <select name="nat_type" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white">
+                <option value="">None</option>
+                <option value="nat-to">nat-to</option>
+                <option value="rdr-to">rdr-to</option>
+                <option value="binat-to">binat-to</option>
+              </select>
+            </div>
+            <div>
+              <label class="mb-1 block text-[9px] font-bold text-gray-700 uppercase dark:text-white">NAT Address</label>
+              <input type="text" name="nat_addr" placeholder="($ext_if), 203.0.113.10" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+            </div>
+          </div>
+        </div>
+        <!-- Row 4: Scrub & Advanced (Single line grid) -->
+        <div class="mb-2 space-y-2 rounded-xl bg-gray-50 p-4 dark:bg-gray-800">
+          <label class="mb-2 block border-b pt-2 text-[10px] font-bold text-gray-700 uppercase dark:text-white">Scrub &amp; Advanced</label>
+          <div class="grid grid-cols-4 space-x-2">
+            <div>
+              <label class="mb-1 block text-[9px] text-gray-700 uppercase dark:text-white">Scrub Options</label>
+              <select name="scrub" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white">
+                <option value="">None</option>
+                <option value="no-df">no-df</option>
+                <option value="random-id">random-id</option>
+                <option value="reassemble tcp">reassemble tcp</option>
+                <option value="no-df random-id">no-df random-id</option>
+              </select>
+            </div>
+            <div>
+              <label class="mb-1 block text-[9px] text-gray-700 uppercase dark:text-white">Max MSS</label>
+              <input type="number" name="max_mss" placeholder="1440" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label class="mb-1 block text-[9px] text-gray-700 uppercase dark:text-white">Label</label>
+              <input type="text" name="label" placeholder="$dstaddr:$dstport" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label class="mb-1 block text-[9px] text-gray-700 uppercase dark:text-white">RTable</label>
+              <input type="number" name="rtable" placeholder="0" class="h-8 w-full rounded border-transparent bg-white px-2 text-xs text-gray-700 shadow-sm outline-none dark:bg-gray-800 dark:text-white" />
+            </div>
+          </div>
+        </div>
+        <!-- Live Syntax Preview -->
+        <div class="space-y-2 border-t-2 border-gray-200 p-2 pt-4 dark:border-gray-700">
+          <!-- Header with Add Button -->
+          <div class="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-2 pb-2 dark:border-gray-700 dark:bg-gray-900">
+            <div class="text-sm font-bold text-gray-700 uppercase dark:text-white">📋 LIVE PF SYNTAX</div>
+            <div class="flex items-center space-x-2">
+              <span id="rule-count" class="text-xs text-gray-500 dark:text-gray-400">0 rules</span>
+              <button type="button" data-action="add-current-rule" class="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-blue-700 active:scale-95">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg> Add This Rule </button>
+              <button type="button" data-action="clear-all-rules" class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-red-700 active:scale-95">Clear All</button>
+            </div>
+          </div>
+          <!-- Live current-rule syntax output -->
+          <div class="px-2 pb-2">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-[9px] font-bold text-gray-500 uppercase tracking-wider dark:text-gray-400">Current Rule</span>
+            </div>
+            <div id="rule-preview" class="min-h-[2rem] rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"> Configure a rule above to see live PF syntax here. </div>
+          </div>
+          <!-- Rules Preview Container -->
+          <div id="rules-preview-container" class="max-h-[300px] min-h-[100px] overflow-y-auto rounded-lg bg-gray-50 p-4 shadow-inner dark:bg-gray-800">
+            <div id="rules-list" class="space-y-2">
+              <!-- Placeholder when empty -->
+              <div id="rules-placeholder" class="py-8 text-center text-sm text-gray-500 italic dark:text-gray-400"> Configure a rule above, then click "Add This Rule" to build your ruleset. <div class="mt-2 text-xs">💡 You can add multiple rules that work together (tables, companions, etc.)</div>
+              </div>
+            </div>
+          </div>
+          <!-- Helper Text -->
+          <div class="px-2 text-xs text-gray-600 dark:text-gray-400">
+            <strong>Pro Tip:</strong> Build companion rules by adding multiple rules before validation. Example: Add a table definition, then add rules using that table.
+          </div>
+        </div>
+        <!-- Action Buttons -->
+        <div class="mb-2 flex items-center justify-between border-t border-gray-100 pt-2 dark:border-gray-800">
+          <div class="flex space-x-2">
+            <button type="reset" class="rounded-lg bg-gray-700 px-2 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 active:scale-95 dark:bg-gray-600 dark:hover:bg-gray-500">Discard</button>
+            <button type="button" data-action="pf-reset" class="rounded-lg bg-blue-700 px-2 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-red-800 active:scale-95 dark:bg-red-600 dark:hover:bg-red-700">Reset</button>
+          </div>
+          <div class="flex space-x-2">
+            <button type="button" data-action="validate" class="rounded-lg bg-gray-700 px-3 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 active:scale-95 dark:bg-gray-600 dark:hover:bg-gray-500">Validate</button>
+            <button type="submit" class="rounded-lg bg-gray-700 px-3 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-gray-800 active:scale-95 dark:bg-gray-600 dark:hover:bg-gray-500">APPLY</button>
+          </div>
+        </div>
+      </form>
+    </div>
+    <!-- END: PF RULE ENGINE -->
+    <!-- BEGIN: PF DELETE ANCHOR RULES -->
+    <!-- ================================================================
+  ACTIVE ADDON RULES PANEL  (active_addons_panel.html)
+  Replace the existing #active-addons-section div in manage
+  with this block. The outer <div id="active-addons-section">
+  wrapper and the card grid (#addon-rules-grid) are unchanged —
+  the new parsed-rules list is added as a second sub-section
+  below the existing grid.
+  ================================================================ -->
+    <div id="active-addons-section" class="mt-8 p-6">
+      <!-- Section header — unchanged -->
+      <div class="addon-rules-header">
+        <div class="addon-rules-header-left">
+          <div class="addon-rules-header-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="addon-rules-header-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <div>
+            <h2 class="addon-rules-title">Active Addon Rules</h2>
+            <p class="addon-rules-subtitle">Rules currently loaded in the <code class="addon-rules-code">addons</code> anchor. Select a block to inspect or remove it from the firewall. </p>
+          </div>
+        </div>
+        <button type="button" class="addon-rules-refresh-btn" id="addon-rules-refresh" aria-label="Refresh active rules">
+          <svg xmlns="http://www.w3.org/2000/svg" class="addon-rules-refresh-icon" id="addon-refresh-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
+      </div>
+      <!-- Anchor status banner — unchanged -->
+      <div id="addon-anchor-status" class="addon-anchor-status tn-hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" class="addon-anchor-status-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span id="addon-anchor-status-text">No rules currently loaded in the addons anchor.</span>
+      </div>
+      <!-- pfctl error banner — unchanged -->
+      <div id="addon-load-error" class="addon-load-error tn-hidden">
+        <div class="addon-load-error-header">
+          <svg xmlns="http://www.w3.org/2000/svg" class="addon-load-error-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span class="addon-load-error-label">Anchor Load Error</span>
+        </div>
+        <p id="addon-load-error-text" class="addon-load-error-text"></p>
+        <p class="addon-load-error-hint">Fix the issue via console, then click Refresh above.</p>
+      </div>
+      <!-- Block cards grid (IP/ASN/GeoIP/Feed blocks) — unchanged -->
+      <div id="addon-rules-grid" class="addon-rules-grid">
+        <!-- Populated by initActiveAddons() in pf.js -->
+      </div>
+      <!-- Loading skeleton — unchanged -->
+      <div id="addon-rules-loading" class="addon-rules-loading">
+        <div class="addon-rules-loading-spinner"></div>
+        <span class="addon-rules-loading-text">Loading active anchor rules…</span>
+      </div>
+      <!-- ============================================================
+    NEW: PARSED CUSTOM RULES LIST
+    Shown below the block cards. Populated by initParsedRules().
+    Only visible when parsed-rules.json contains custom rules.
+    ============================================================ -->
+      <div id="parsed-rules-section" class="parsed-rules-section tn-hidden">
+        <!-- Sub-header -->
+        <div class="parsed-rules-header">
+          <div class="parsed-rules-header-left">
+            <svg xmlns="http://www.w3.org/2000/svg" class="parsed-rules-header-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+            <div>
+              <h3 class="parsed-rules-title">Custom PF Rules</h3>
+              <p class="parsed-rules-subtitle">Select individual rules or entire sections to preview and remove.</p>
+            </div>
+          </div>
+          <div class="parsed-rules-header-right">
+            <span id="parsed-rules-sel-count" class="parsed-rules-sel-count">0 selected</span>
+            <button type="button" id="parsed-rules-refresh-btn" class="parsed-rules-refresh-btn" title="Refresh parsed rules">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width:0.9rem;height:0.9rem;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+            <button type="button" id="parsed-rules-preview-btn" class="parsed-rules-preview-btn" disabled>
+              <svg xmlns="http://www.w3.org/2000/svg" class="parsed-btn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg> Preview Removal </button>
+          </div>
+        </div>
+        <!-- Cascade warning banner — shown when dependent rules are auto-selected -->
+        <div id="cascade-warning" class="cascade-warning tn-hidden">
+          <svg xmlns="http://www.w3.org/2000/svg" class="cascade-warning-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span id="cascade-warning-text">Dependent rules have been automatically selected.</span>
+        </div>
+        <!-- Loading state for parsed rules -->
+        <div id="parsed-rules-loading" class="parsed-rules-loading tn-hidden">
+          <div class="parsed-rules-loading-spinner"></div>
+          <span>Loading parsed rules…</span>
+        </div>
+        <!-- Error state for parsed rules -->
+        <div id="parsed-rules-error" class="parsed-rules-error tn-hidden">
+          <span id="parsed-rules-error-text">Failed to load parsed rules.</span>
+        </div>
+        <!-- Rules list — one <section> per logical block -->
+        <div id="parsed-rules-list" class="parsed-rules-list">
+          <!-- Populated by renderParsedRules() in pf.js -->
+        </div>
+      </div>
+      <!-- END: PARSED CUSTOM RULES LIST -->
+    </div>
+    <!-- END: ACTIVE ADDON RULES PANEL -->
+    <!-- ================================================================
+  DIFF PREVIEW MODAL — native modal-overlay/modal-content structure
+  Matches the services restart modal and firewall log detail modal.
+  ================================================================ -->
+    <div id="deletion-preview-modal" class="modal-overlay tn-hidden" role="dialog" aria-modal="true" aria-labelledby="deletion-preview-title">
+      <div class="modal-content" style="max-width:700px;width:94%;max-height:88vh;">
+        <!-- Header: white, title left, close right — no colour band -->
+        <div class="modal-header">
+          <h2 id="deletion-preview-title">REMOVAL PREVIEW</h2>
+          <button type="button" id="deletion-preview-close" class="modal-close" aria-label="Close">&times;</button>
+        </div>
+        <!-- Body -->
+        <div class="modal-body">
+          <!-- Status indicator — icon + message, centred, like services modal -->
+          <div id="deletion-preview-status" class="dp-status dp-status--working">
+            <div class="dp-status-icon" id="deletion-preview-status-icon">
+              <!-- spinner, checkmark, or × set by JS -->
+              <svg class="dp-spinner" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="40 20" stroke-linecap="round" />
+              </svg>
+            </div>
+            <span id="deletion-preview-status-text" class="dp-status-text">Building proposed conf…</span>
+          </div>
+          <!-- Summary row: removed / kept counts -->
+          <div class="dp-summary-row">
+            <span id="deletion-preview-del-count" class="dp-badge dp-badge--del">0 rules removed</span>
+            <span id="deletion-preview-keep-count" class="dp-badge dp-badge--keep">0 rules kept</span>
+            <span class="dp-legend">
+              <span class="dp-legend-pip dp-legend-pip--del"></span>removed <span class="dp-legend-pip dp-legend-pip--keep"></span>kept <span class="dp-legend-pip dp-legend-pip--comment"></span>comment </span>
+          </div>
+          <!-- Diff area: dark code block, scrollable -->
+          <div id="deletion-preview-diff" class="dp-diff"></div>
+        </div>
+        <!-- Footer -->
+        <div class="modal-footer">
+          <button type="button" id="deletion-preview-cancel" class="pf-verdict-btn pf-verdict-btn--neutral">Cancel</button>
+          <button type="button" id="deletion-preview-confirm" class="pf-verdict-btn pf-verdict-btn--danger" disabled>Confirm Removal</button>
+        </div>
+      </div>
+    </div>
+    <!-- END: DIFF PREVIEW MODAL -->
+  </div>
+  <!-- END: PF Component -->
+  <!-- BEGIN: e2guardian Content -->
+  <div id="e2guardian-content" class="tab-content p-2">
+    <!-- BEGIN: e2guardian Feed Management -->
+    <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <!-- BEGIN: Header with Mode Tabs -->
+      <div class="flex items-center justify-between border-b border-gray-200 p-2 dark:border-gray-700">
+        <div class="flex items-center space-x-2">
+          <div class="h-6 w-1.5 rounded-full bg-blue-600 dark:bg-blue-500"></div>
+          <h2 class="text-xl font-bold text-gray-900 dark:text-white">Filters</h2>
+        </div>
+        <!-- BEGIN: Mode Switcher Tabs (General/ChildSafe/Custom) -->
+        <div class="flex items-center space-x-2">
+          <span class="cursor-pointer rounded-lg bg-gray-700 px-2 py-1 text-sm font-normal text-white transition-colors hover:bg-gray-600" data-tab="general">General</span>
+          <span class="cursor-pointer rounded-lg bg-gray-700 px-2 py-1 text-sm font-normal text-white transition-colors hover:bg-gray-600" data-tab="childsafe">ChildSafe</span>
+          <span class="cursor-pointer rounded-lg bg-gray-700 px-2 py-1 text-sm font-normal text-white transition-colors hover:bg-gray-600" data-tab="custom">Custom</span>
+        </div>
+      </div>
+      <!-- BEGIN: Active Status Display Handled by JS -->
+      <div class="border-b border-gray-200 p-6 dark:border-gray-700">
+        <div id="e2g-active-status">
+          <!-- NOTE: JavaScript will populate this with status info -->
+          <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Detecting active mode...</p>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-8 p-2 lg:grid-cols-3">
+        <!-- BEGIN: Active Feeds -->
+        <div class="lg:col-span-2">
+          <div class="mb-4 flex items-center justify-between">
+            <h3 class="text-xs font-black tracking-widest text-gray-500 uppercase dark:text-gray-400">Active Intelligence Feeds</h3>
+            <div class="mr-2 flex items-center space-x-2">
+              <!-- BEGIN: Refresh Button -->
+              <button class="rounded-lg bg-blue-700 px-2 py-2 text-xs font-medium text-white shadow-sm transition-all hover:bg-blue-800 hover:shadow-md dark:bg-blue-600 dark:hover:bg-blue-700" data-action="refresh" title="Refresh feeds">
+                <svg class="h-6 w-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <path stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"></path>
+                </svg>
+              </button>
+              <!-- BEGIN: Download Button -->
+              <button class="rounded-lg bg-blue-700 px-2 py-2 text-xs font-medium text-white shadow-sm transition-all hover:bg-blue-800 hover:shadow-md dark:bg-blue-600 dark:hover:bg-blue-700" data-action="download" title="Download feed list">
+                <svg class="h-6 w-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#fff" viewBox="0 0 24 24">
+                  <path fill-rule="evenodd" d="M13 11.15V4a1 1 0 1 0-2 0v7.15L8.78 8.374a1 1 0 1 0-1.56 1.25l4 5a1 1 0 0 0 1.56 0l4-5a1 1 0 1 0-1.56-1.25L13 11.15Z" clip-rule="evenodd"></path>
+                  <path fill-rule="evenodd" d="M9.657 15.874 7.358 13H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-2.358l-2.3 2.874a3 3 0 0 1-4.685 0ZM17 16a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2H17Z" clip-rule="evenodd"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <!-- BEGIN: Active Feeds Container -->
+          <div class="rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
+            <div class="h-[400px] overflow-y-auto p-1" id="active-feeds-container">
+              <div class="flex h-full items-center justify-center">
+                <div class="text-center">
+                  <div class="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600 dark:border-gray-600 dark:border-t-blue-500"></div>
+                  <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading feeds...</p>
+                </div>
+              </div>
+            </div>
+            <!-- BEGIN: Footer with Feed Counts -->
+            <div class="border-t border-gray-200 p-4 dark:border-gray-700">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                  <span id="feed-count">0</span> feeds loaded </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- BEGIN: dd Feed and Processing Status -->
+        <div class="space-y-6">
+          <div class="space-y-4">
+            <h3 class="text-center text-base font-black tracking-widest text-gray-500 uppercase dark:text-gray-400">Add Custom Feed</h3>
+            <!-- NOTE: Feeds are for Custom mode -->
+            <div class="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
+              <p class="text-xs text-gray-700 dark:text-gray-300">
+                <span class="font-bold underline">Custom Mode:</span> Feeds added here will be used when you activate <strong>Custom</strong> mode. Click the Custom tab above after adding feeds.
+              </p>
+            </div>
+            <!-- NOTE: AdGuard not supported -->
+            <div class="rounded-lg bg-yellow-50 p-3 dark:bg-yellow-900/20">
+              <p class="text-xs text-gray-700 dark:text-gray-300">
+                <span class="font-bold underline">AdGuard Not Supported:</span> Feeds with <code>||</code> pattern are rejected. Use standard HOSTS or DOMAIN format only.
+              </p>
+            </div>
+            <div class="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800">
+              <!-- BEGIN: Feed Category -->
+              <div>
+                <label class="mb-1 block text-[10px] font-black text-gray-600 uppercase dark:text-gray-400">Category *</label>
+                <select class="w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-400/30" id="feed-category">
+                  <option value="">-- Select --</option>
+                  <option value="HOSTFILE">HOSTFILE (hosts format)</option>
+                  <option value="DOMAIN">DOMAIN (one per line)</option>
+                  <option value="MIXED">MIXED (various formats)</option>
+                  <option value="ADVERTISER">ADVERTISER</option>
+                  <option value="CAPITOLE">CAPITOLE (archive)</option>
+                  <option value="PORN">PORN</option>
+                  <option value="MALWARE">MALWARE</option>
+                  <option value="PHISHING">PHISHING</option>
+                </select>
+              </div>
+              <!-- BEGIN: URL Input -->
+              <div>
+                <label class="mb-1 block text-[10px] font-black text-gray-600 uppercase dark:text-white">URL *</label>
+                <input type="url" id="feed-url" placeholder="https://example.com/list.txt" class="w-full rounded-lg border border-gray-300 bg-white p-2.5 font-mono text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-400 dark:focus:ring-blue-400/30" autocomplete="off" />
+                <div id="url-validation" class="mt-1 text-[10px]"></div>
+              </div>
+              <!-- BEGIN: Action Buttons -->
+              <div class="flex justify-between pt-2">
+                <button class="rounded-lg bg-blue-700 px-4 py-2.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-blue-800 hover:shadow-md dark:bg-blue-600 dark:hover:bg-blue-700" data-action="test-feed">Test</button>
+                <button class="rounded-lg bg-blue-600 px-6 py-2.5 text-xs font-bold text-white uppercase shadow-sm transition-all hover:bg-blue-700 hover:shadow-md active:scale-[0.98] dark:bg-blue-500 dark:hover:bg-blue-600" data-action="add-feed">Add Feed</button>
+              </div>
+              <!-- BEGIN: Processing Info -->
+              <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/50 dark:bg-blue-900/20">
+                <p class="text-xs text-gray-700 dark:text-gray-300">
+                  <span class="font-bold">Processing:</span> New feeds processed within next 15-minute cron cycle.
+                </p>
+              </div>
+            </div>
+          </div>
+          <!-- BEGIN: Processing Status -->
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800">
+            <h3 class="mb-3 text-xs font-black tracking-widest text-gray-500 uppercase dark:text-gray-400">Processing Status</h3>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-700 dark:text-gray-300">Last Processed</span>
+                <span class="font-mono text-sm font-bold text-gray-900 dark:text-white" id="last-processed">--:--</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-700 dark:text-gray-300">Next Process</span>
+                <span class="font-mono text-sm font-bold text-green-600 dark:text-green-400" id="next-cron">--:--</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-700 dark:text-gray-300">Config Age</span>
+                <span class="font-mono text-sm font-bold text-blue-600 dark:text-blue-400" id="config-age">--</span>
+              </div>
+              <div class="flex justify-end pt-2">
+                <button class="rounded-lg border border-transparent bg-blue-700 px-3 py-1.5 text-xs font-medium text-white transition-all hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-700" data-action="view-log">View Log</button>
+              </div>
+            </div>
+          </div>
+          <!-- END: Processing Status -->
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- BEGIN: MODAL -->
+  <div id="log-viewer-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+    <!-- NOTE: Backdrop overlay -->
+    <div class="fixed inset-0 bg-black bg-opacity-50"></div>
+    <div class="flex min-h-screen items-center justify-center p-4">
+      <div class="relative z-10 flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl dark:bg-gray-800">
+        <div class="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700">
+          <div class="min-w-0">
+            <h3 class="truncate text-base font-bold text-gray-800 dark:text-white">E2Guardian Log Viewer</h3>
+            <div id="log-info" class="truncate text-sm text-gray-600 dark:text-gray-400"></div>
+          </div>
+          <div class="ms-2 flex items-center gap-2">
+            <button id="download-log-btn" class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700" title="Download">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </svg>
+            </button>
+            <button id="copy-log-btn" class="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700" title="Copy">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            </button>
+            <button id="close-log-modal-btn" class="ms-1 rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="flex-1 overflow-hidden bg-gray-50 dark:bg-gray-700">
+          <div id="log-loading" class="hidden flex h-full items-center justify-center py-20">
+            <div class="animate-spin h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+          </div>
+          <div class="h-full overflow-y-auto p-4">
+            <pre id="log-content" class="text-sm font-mono bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-white whitespace-pre-wrap break-all"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- END: MODAL -->
+  <!-- END: e2Guardian Component -->
+  <!-- BEGIN: Unbound Content -->
+  <div id="unbound-content" class="tab-content">
+    <div class="grid grid-cols-1 gap-4 p-2 lg:grid-cols-3">
+      <!--BEGIN: LEFT COLUMN: Statistics Dashboard -->
+      <div class="space-y-4 lg:col-span-2">
+        <!--BEGIN: Stats Header -->
+        <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div class="flex items-center justify-between border-b border-gray-200 p-6 dark:border-gray-700">
+            <div class="flex items-center gap-3">
+              <div class="h-6 w-1.5 rounded-full bg-blue-600 dark:bg-blue-500"></div>
+              <h2 class="text-xl font-bold text-gray-900 dark:text-white">Unbound DNS Statistics</h2>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-blue-800 hover:shadow-md dark:bg-blue-600 dark:hover:bg-blue-700" data-action="refresh-stats">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <!-- BEGIN: Stats Grid -->
+          <div class="grid grid-cols-2 gap-4 p-6 md:grid-cols-4">
+            <!-- BEGIN: Total Queries -->
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+              <div class="mb-2 text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400">Total Queries</div>
+              <div class="text-2xl font-bold text-gray-900 dark:text-white" id="queries-total">--</div>
+            </div>
+            <!-- BEGIN: Cached Queries -->
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+              <div class="mb-2 text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400">Cached</div>
+              <div class="text-2xl font-bold text-green-600 dark:text-green-400" id="queries-cached">--</div>
+            </div>
+            <!-- BEGIN: Cache Hit Rate -->
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+              <div class="mb-2 text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400">Hit Rate</div>
+              <div class="text-2xl font-bold text-blue-600 dark:text-blue-400" id="cache-hit-rate">--</div>
+            </div>
+            <!-- BEGIN: Cache Size -->
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+              <div class="mb-2 text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400">Cache Size</div>
+              <div class="text-lg font-bold text-gray-900 dark:text-white" id="cache-size">--</div>
+            </div>
+            <!-- BEGIN: Uptime -->
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+              <div class="mb-2 text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400">Uptime</div>
+              <div class="text-lg font-bold text-gray-900 dark:text-white" id="uptime">--</div>
+            </div>
+            <!-- BEGIN: Rate Limited -->
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+              <div class="mb-2 text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400">Rate Limited</div>
+              <div class="text-lg font-bold text-orange-600 dark:text-orange-400" id="ratelimited">--</div>
+            </div>
+            <!-- BEGIN: Recursion -->
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+              <div class="mb-2 text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400">Recursion</div>
+              <div class="text-lg font-bold text-gray-900 dark:text-white" id="recursion">--</div>
+            </div>
+            <!-- BEGIN: Avg Response -->
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+              <div class="mb-2 text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400">Avg Response</div>
+              <div class="text-lg font-bold text-purple-600 dark:text-purple-400" id="avg-response">--</div>
+            </div>
+          </div>
+        </div>
+        <!-- BEGIN: DNS Lookup Test -->
+        <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div class="border-b border-gray-200 p-4 dark:border-gray-700">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">DNS Lookup Test</h3>
+          </div>
+          <div class="p-4">
+            <div class="mb-3 flex space-x-2">
+              <input type="text" id="test-domain-input" placeholder="example.com" class="flex-1 rounded-lg border border-gray-300 bg-white p-2.5 font-mono text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400" />
+              <button class="rounded-lg bg-blue-700 px-4 py-2.5 text-xs font-medium text-white uppercase shadow-sm transition-all hover:bg-blue-800 hover:shadow-md dark:bg-blue-600 dark:hover:bg-blue-700" data-action="test-lookup">Lookup</button>
+            </div>
+            <div class="min-h-[100px] rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900" id="lookup-result">
+              <div class="text-sm text-gray-500 dark:text-gray-400">Enter a domain and click Lookup to test DNS resolution</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- BEGIN: RIGHT COLUMN: Cache Management & Controls -->
+      <div class="space-y-4">
+        <!-- BEGIN: Cache Management -->
+        <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+            <h3 class="text-base font-bold tracking-tight text-gray-900 dark:text-white">Cache Management</h3>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Manage DNS cache operations</p>
+          </div>
+          <hr class="h-px my-8 bg-neutral-quaternary border-b">
+          <div class="space-y-4 p-4">
+            <!-- BEGIN: Purge All Cache -->
+            <div class="space-y-2">
+              <label class="mb-1.5 block text-xs font-semibold tracking-wide text-gray-700 uppercase dark:text-gray-300">Full Cache Purge</label>
+              <button class="w-32 rounded-lg bg-red-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-white uppercase shadow-sm transition-all hover:bg-red-700 hover:shadow dark:bg-red-500 dark:hover:bg-red-600" data-action="purge-cache">Purge Cache</button>
+              <p class="mt-1.5 text-[11px] text-gray-500 dark:text-gray-400">Clear all cached DNS records</p>
+            </div>
+            <hr class="h-px my-8 bg-neutral-quaternary border-b">
+            <!-- BEGIN: Flush Specific Domain -->
+            <div class="space-y-2">
+              <label class="mb-1.5 block text-xs font-semibold tracking-wide text-gray-700 uppercase dark:text-gray-300">Flush Domain</label>
+              <div class="mb-2.5">
+                <input type="text" id="flush-domain-input" placeholder="example.com" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 font-mono text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400" />
+              </div>
+              <button class="w-32 rounded-lg bg-green-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-white uppercase shadow-sm transition-all hover:bg-green-700 hover:shadow dark:bg-green-500 dark:hover:bg-green-600" data-action="flush-domain">Flush Domain</button>
+              <p class="mt-1.5 text-[11px] text-gray-500 dark:text-gray-400">Clear cache for specific domain</p>
+            </div>
+            <hr class="h-px my-8 bg-neutral-quaternary border-b">
+            <!-- BEGIN: Dump Cache -->
+            <div class="space-y-2">
+              <label class="mb-1.5 block text-xs font-semibold tracking-wide text-gray-700 uppercase dark:text-gray-300">Export Cache</label>
+              <button class="w-32 rounded-lg bg-blue-700 px-4 py-1.5 text-xs font-semibold tracking-wide text-white uppercase shadow-sm transition-all hover:bg-blue-800 hover:shadow dark:bg-blue-600 dark:hover:bg-blue-700" data-action="dump-cache">Export Cache</button>
+              <p class="mt-1.5 text-[11px] text-gray-500 dark:text-gray-400">Export cache contents to file</p>
+            </div>
+          </div>
+        </div>
+        <!-- BEGIN: Service Control -->
+        <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+            <h3 class="text-base font-bold tracking-tight text-gray-900 dark:text-white">Service Control</h3>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Manage Unbound service state</p>
+          </div>
+          <hr class="h-px my-8 bg-neutral-quaternary border-b">
+          <div class="space-y-4 p-4">
+            <!-- BEGIN: Reload Config -->
+            <div class="space-y-2">
+              <label class="mb-1.5 block text-xs font-semibold tracking-wide text-gray-700 uppercase dark:text-gray-300">Reload Configuration</label>
+              <button class="w-32 rounded-lg bg-green-600 px-4 py-1.5 text-xs font-semibold tracking-wide text-white uppercase shadow-sm transition-all hover:bg-green-700 hover:shadow dark:bg-green-500 dark:hover:bg-green-600" data-action="reload-unbound">Reload Service</button>
+              <p class="mt-1.5 text-[11px] text-gray-500 dark:text-gray-400">Reload config without service interruption</p>
+            </div>
+            <hr class="h-px my-8 bg-neutral-quaternary border-b">
+            <!-- BEGIN: Info Box -->
+            <div class="rounded-lg bg-blue-50 p-3.5 dark:bg-gray-800">
+              <p class="text-xs font-medium text-gray-700 dark:text-gray-300">Upstream Configuration</p>
+              <p class="mt-0.5 text-[11px] text-gray-600 dark:text-gray-400">Quad9 DNS-over-TLS (9.9.9.11) with threat blocking, DNSSEC, and ECS enabled.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- END: Unbound Component -->
+</div>
+<!-- END: Configuration SPA View -->
+<link rel="stylesheet" href="./assets/css/dynamic.css" />
+<link rel="stylesheet" href="./assets/css/anchor.css" />
+<script src="./assets/js/managenav.js" integrity="sha384-z/EwQt3P73H/XsHAQGanUFlE83238NaG4QeZXniyBeF2HaM+ROYfArf+VoOlsDBH" defer crossorigin="anonymous" data-view="manage"></script>
+<script src="./assets/js/ui.js" integrity="sha384-+Y8m2Uyky1CH8VYb9O4k8mYFuaN6t0m3pUNP+g4na/ROg2LuMAnQSeH8LGG5psRh" defer crossorigin="anonymous" data-view="manage"></script>
+<script src="./assets/js/e2g.js" integrity="sha384-KJq6lgB9xu1Nw54DPRwKTYjzBiugFX6/Ek8JJ9MKJ9Be0EdAoYBNuWkqjzwoWoY5" defer crossorigin="anonymous" data-view="manage"></script>
+<script src="./assets/js/unbound.js" integrity="sha384-slyQ3T0GITgO7qjxyo4sNUf9hAYPj8f5oFdPNwXjJnAWe6ynZz5rDCzsR11RVkhS" defer crossorigin="anonymous" data-view="manage"></script>
+<script src="./assets/js/pf.js" integrity="sha384-2xOAIt2KvMVXSUMfwrVyxspeal1W9591eV4pXLwExDhnsqc0z8oW7BRUeX+vKaK8" defer crossorigin="anonymous" data-view="manage"></script>

@@ -1,0 +1,213 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    This preface is for anyone reading this documentation for the first time,
+    whether you are evaluating the project, deploying it on your own hardware,
+    contributing to its development, or simply curious about what a
+    single-developer OpenBSD security gateway looks like from the inside.
+    It explains what Tangent Networks is, why it exists, and what this
+    documentation is trying to achieve.
+  </p>
+</div>
+
+<h1>Preface</h1>
+
+<h2>What This Is</h2>
+<p>
+  Tangent Networks is a full UTM, Unified Threat Management, gateway and
+  dashboard built entirely on OpenBSD. It runs on hardware as modest as a
+  Raspberry Pi or a $35 single-board computer with 512MB of RAM, and scales
+  comfortably to a Raspberry Pi 5 with 8GB or a small-form-factor x86 machine.
+  It requires no Node.js, no npm, no webpack, no build pipeline, no CDN, and
+  no external dependencies at runtime. It works completely air-gapped.
+</p>
+<p>
+  The stack it manages is not modest. In a single machine it combines a
+  dual-stack IPv4 and IPv6 router, a stateful packet filter, an intrusion
+  detection and prevention system, transparent SSL interception, web content
+  filtering, mail scanning, instant messaging proxying, SOCKS proxying, DNS
+  resolution, DHCP, network flow accounting, and a real-time web dashboard
+  for monitoring and controlling all of it. Every component is a real,
+  production-grade open source program, Snort, e2guardian, ClamAV, SSLproxy,
+  pmacct, collectd, unbound, and others, configured, patched where necessary,
+  and integrated into a coherent whole.
+</p>
+<p>
+  The dashboard itself is a single-page web application served by OpenBSD
+  httpd through slowcgi. The backend is Perl CGI. The frontend is vanilla
+  JavaScript. There is no framework on either side. The security model is
+  OpenBSD's own, pledge and unveil at every CGI layer, a custom WAF that
+  verifies file integrity server-side before serving any asset, CSRF
+  protection baked into every mutating request, and a session model built
+  on PBKDF2-HMAC-SHA256.
+</p>
+
+<h2>Why It Exists</h2>
+<p>
+  The honest answer is that nothing like it existed for OpenBSD at the price
+  point and philosophy this project targets. Commercial UTM appliances are
+  expensive, opaque, and designed for enterprises. Open source alternatives
+  on Linux are often excellent but carry the weight of their ecosystems,
+  large dependency trees, complex build systems, and architectures that assume
+  abundant RAM and fast storage. OpenBSD's security model and its clean,
+  auditable codebase make it an ideal foundation for a gateway that handles
+  sensitive traffic. But the tooling to manage such a gateway at the
+  application layer simply was not there.
+</p>
+<p>
+  There was also a specific technical frustration that shaped the project's
+  direction. Most dynamic firewall blocking tools available at the time
+  rejected IPv6 addresses or handled them poorly. Networks that run dual-stack,
+  IPv4 and IPv6 simultaneously, were effectively second-class citizens.
+  Tangent Networks treats IPv4 and IPv6 as equals throughout: in the firewall
+  rules, in the blocking tables, in the intrusion detection pipeline, in the
+  NAT64 configuration for IPv6-only LAN clients, and in snortsentry, the
+  project's own dynamic PF blocker which was written specifically because
+  existing tools failed this requirement.
+</p>
+<p>
+  Beyond the technical motivation, there is a broader one. Small networks,
+  home labs, small businesses, schools, community organisations, deserve
+  the same quality of network security that enterprises take for granted.
+  The hardware to run it costs less than a dinner out. The knowledge to
+  configure and operate it should not require a corporate budget or a team
+  of specialists. This documentation is part of that commitment.
+</p>
+
+<h2>Who This Documentation Is For</h2>
+<p>
+  This documentation is written for three audiences simultaneously, and it
+  tries to serve all three without condescending to any of them.
+</p>
+<p>
+  The first audience is the operator, someone running this system day to day.
+  They need to know what the dashboard panels mean, how to add firewall rules,
+  how to switch content filter modes, how to read the logs, and what to do
+  when something stops working. They may not have written a line of Perl or
+  configured PF by hand. The User Manual and the individual service documents
+  are written for them.
+</p>
+<p>
+  The second audience is the sysadmin, someone responsible for installing,
+  maintaining, and recovering the system. They need to understand the boot
+  sequence, the service dependencies, the log rotation framework, the MFS
+  memory filesystems, the cron schedule, and the recovery procedures. The
+  System Orchestration, Network Overview, Firewall, and Quick Reference
+  documents are written for them.
+</p>
+<p>
+  The third audience is the developer, someone who wants to extend the system,
+  add a new CGI endpoint, wire a new dashboard view, or understand why a
+  particular architectural decision was made. The Backend, Frontend, UI
+  Infrastructure, and Developer sections are written for them. The source
+  code itself is the final authority, but this documentation explains the
+  intent behind it.
+</p>
+
+<h2>Design Principles</h2>
+<p>
+  A few principles shaped every decision in this project and are worth stating
+  explicitly so that future contributors understand the constraints they are
+  working within.
+</p>
+<p>
+  <strong>Compartmentalisation over integration.</strong> Scripts write files.
+  The UI reads files. Nothing talks over TCP unnecessarily. Each component
+  does one job and writes its output to a predictable path. This makes the
+  system debuggable with basic Unix tools, cat, tail, grep, ls, without
+  needing to understand the full stack.
+</p>
+<p>
+  <strong>Security is not optional.</strong> OpenBSD's pledge and unveil
+  syscall restrictions are enforced at every CGI layer. Every CGI script
+  locks down its filesystem view and its system call surface before doing
+  any work. The WAF verifies the integrity of every served JavaScript file
+  server-side before it reaches the browser. CSRF tokens are generated
+  deterministically within a time window so they survive across page loads
+  without server-side storage. None of this is bolted on. It is structural.
+</p>
+<p>
+  <strong>Minimal dependencies, maximum auditability.</strong> The entire
+  backend is Perl with modules available in the OpenBSD package repository.
+  The frontend is vanilla JavaScript with no framework. A competent developer
+  can read the entire codebase in a day. There is no transpilation, no
+  minification in development, no generated code. What you read is what runs.
+</p>
+<p>
+  <strong>Hardware reality matters.</strong> Every performance decision,
+  the BPF buffer size in sysctl.conf, the MFS memory filesystems for
+  high-write log paths, the login.conf daemon class tuning, the pmacct
+  quarter-hour boundary alignment, was made with constrained hardware in
+  mind. The system is designed to run well on hardware most projects would
+  consider inadequate.
+</p>
+
+<h2>A Note on Custom Builds</h2>
+<p>
+  Several components in the stack are not vanilla packages. Snort,
+  e2guardian, imspector, and p3scan are all built with patches that integrate
+  them with SSLproxy, allowing them to inspect decrypted traffic. This was
+  necessary to make the inspection chain complete. Without it, encrypted
+  traffic passes through content filtering unexamined. The patches and build
+  procedures are documented alongside those components. snortsentry, the
+  dynamic PF blocker, is original code written for this project and is
+  documented with a full man page.
+</p>
+
+<h2>What This Documentation Does Not Cover</h2>
+<p>
+  This documentation covers the Tangent Networks dashboard and the services
+  it manages. It does not cover OpenBSD installation in depth. The OpenBSD
+  FAQ handles that authoritatively. It does not cover the upstream
+  configuration of the services themselves beyond what is specific to this
+  integration. Snort rule tuning, e2guardian category management, and ClamAV
+  signature updates are handled by their own upstream documentation. Where
+  this project diverges from upstream defaults, those divergences are
+  explained explicitly.
+</p>
+
+<h2>The Open Source Release</h2>
+<p>
+  This project is being released as open source on OpenBSD 7.9 launch day.
+  The release includes the full dashboard codebase, all management scripts,
+  configuration templates, and this documentation. A crowdfunding campaign
+  will run alongside the release to fund hardware for multi-architecture
+  build and test infrastructure, Raspberry Pi, ARM single-board computers,
+  and x86 small-form-factor machines, so that the project can be maintained
+  and tested across the hardware it is designed to run on.
+</p>
+<p>
+  If this project has been useful to you, the best ways to support it are
+  to use it, report issues, contribute improvements, and if you are able,
+  contribute to the hardware fund. Every milliwatt and every millisecond
+  on small hardware was considered. The goal is a gateway that anyone can
+  afford to run and anyone can afford to understand.
+</p>
+
+<!-- SUMMARY -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Tangent Networks is a full UTM gateway and dashboard built on OpenBSD,
+        designed to run on hardware from a $35 SBC to a Raspberry Pi 5.</li>
+    <li>No Node.js, no npm, no build pipeline, no CDN. Works completely
+        air-gapped on constrained hardware.</li>
+    <li>The stack includes IDS/IPS, SSL interception, web filtering, mail
+        scanning, IM proxying, SOCKS, DNS, DHCP, flow accounting, and a
+        real-time dashboard. All on one machine.</li>
+    <li>IPv4 and IPv6 are treated as equals throughout, in the firewall,
+        the blocking tables, and the intrusion detection pipeline.</li>
+    <li>OpenBSD pledge and unveil are enforced at every CGI layer.
+        Security is structural, not bolted on.</li>
+    <li>The codebase is fully auditable. Perl backend, vanilla JavaScript
+        frontend, no generated code, no transpilation.</li>
+    <li>Releasing as open source on OpenBSD 7.9 launch day.</li>
+  </ul>
+</div>

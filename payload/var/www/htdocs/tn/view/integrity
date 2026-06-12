@@ -1,0 +1,133 @@
+<!-- BEGIN: Banner -->
+<div class="top-0 border-gray-200 bg-gray-50 p-6 backdrop-blur-md dark:border-gray-700 dark:bg-gray-900 sticky z-30 flex w-full items-center justify-between border-b">
+  <div class="flex items-center">
+    <div class="rounded-xl bg-blue-700 p-2.5">
+      <svg class="h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"></path>
+      </svg>
+    </div>
+    <div class="ml-4">
+      <h1 class="text-lg font-extrabold tracking-tight text-gray-900 dark:text-white uppercase italic">System Integrity</h1>
+      <p id="last-updated" class="text-xs font-bold tracking-wider text-gray-500 dark:text-gray-400 uppercase">Ready</p>
+    </div>
+  </div>
+  <div class="flex items-center">
+    <div class="mr-4 md:block hidden text-right">
+      <p class="font-bold text-blue-500 dark:text-blue-300 text-[10px] uppercase">File Integrity</p>
+      <p class="text-xs text-gray-400">mtree Verification</p>
+    </div>
+    <button id="refresh-status" class="rounded-lg bg-blue-700 px-4 py-2 text-xs font-black text-white hover:bg-indigo-700 transition">REFRESH</button>
+  </div>
+</div>
+<!-- END: Banner -->
+<!-- BEGIN: System Check View -->
+<section class="max-w-7xl bg-gray-50 px-6 py-8 dark:bg-gray-900 mx-auto">
+  <!-- BEGIN: Status Summary -->
+  <div class="mb-6 gap-4 p-2 sm:grid-cols-2 lg:grid-cols-4 grid grid-cols-1">
+    <div class="m-2 rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="font-bold text-gray-600 dark:text-white text-[10px] uppercase">Files Monitored</p>
+      <p id="stat-files" class="text-2xl font-black">0</p>
+    </div>
+    <div class="m-2 rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="font-bold text-gray-600 dark:text-white text-[10px] uppercase">Status</p>
+      <p id="stat-status" class="text-2xl font-black text-amber-600">PENDING</p>
+    </div>
+    <div class="m-2 rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="font-bold text-gray-600 dark:text-white text-[10px] uppercase">Last Check</p>
+      <p id="stat-lastcheck" class="text-2xl font-black text-amber-600">--</p>
+    </div>
+    <div class="m-2 rounded-xl border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg hover:shadow-xl dark:border-gray-700 dark:bg-gray-800 border border-l-4 transition-shadow duration-200">
+      <p class="font-bold text-gray-600 dark:text-white text-[10px] uppercase">Violations</p>
+      <p id="stat-violations" class="text-2xl font-black text-red-600">0</p>
+    </div>
+  </div>
+  <!-- END: Status Summary -->
+  <!-- Card template - cloned by renderCards() in integrity.js for each check returned by the status API. Never shown directly. -->
+  <template id="check-card-tpl">
+    <div class="p-2 syscheck-card m-2" data-check="">
+      <div class="card-header">
+        <div class="title-container">
+          <div class="status-dot pending"></div>
+          <h3 class="check-name"></h3>
+        </div>
+        <span class="status-badge pending">PENDING</span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <p class="stat-label">Files</p>
+          <p class="stat-value" data-stat="files">--</p>
+        </div>
+        <div class="stat-box">
+          <p class="stat-label">Changes</p>
+          <p class="stat-value" data-stat="changes">--</p>
+        </div>
+        <div class="stat-box">
+          <p class="stat-label">Status</p>
+          <p class="stat-value" data-stat="status">--</p>
+        </div>
+      </div>
+      <div class="check-details">
+        <p class="detail-text path-text"></p>
+        <p class="detail-text desc-text"></p>
+      </div>
+      <div class="button-container">
+        <button data-action="verify" data-check="" class="ctrl-btn verify">Verify Now</button>
+      </div>
+    </div>
+  </template>
+  <!-- BEGIN: Verification Cards Grid - populated by renderCards() on load -->
+  <div id="integrity-grid" class="p-2 md:grid-cols-2 lg:grid-cols-3 grid grid-cols-1">
+  </div>
+  <!-- END: Verification Cards Grid -->
+  <!-- BEGIN: Full System Check -->
+  <div class="mt-6">
+    <div class="rounded-xl bg-white p-6 shadow-lg dark:bg-gray-800">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-lg font-black text-gray-900 dark:text-white uppercase">Full System Verification</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400">Check all components simultaneously</p>
+        </div>
+        <button id="verify-all" class="rounded-lg bg-blue-700 px-6 py-3 text-sm font-black text-white hover:bg-blue-800 transition disabled:opacity-50">VERIFY ALL</button>
+      </div>
+    </div>
+  </div>
+  <!-- END: Full System Check -->
+</section>
+<!-- END: System Check View -->
+<!-- BEGIN: Integrity Violations Accordion -->
+<div class="p-6">
+  <div class="files-accordion overflow-hidden rounded-xl bg-gray-50 shadow-sm dark:bg-gray-800">
+    <button type="button" class="files-accordion-btn flex w-full items-center justify-between p-4 font-bold text-gray-900 transition-colors duration-200 hover:bg-gray-50 dark:text-white dark:hover:bg-gray-700" data-check="all" aria-expanded="false">
+      <div class="flex items-center space-x-2">
+        <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+        <span class="text-sm tracking-wider uppercase">Integrity Violations</span>
+        <span class="file-count-badge text-xs font-normal text-gray-500 dark:text-white" id="violation-count-badge">(0 files)</span>
+      </div>
+      <svg class="accordion-icon h-5 w-5 text-gray-500 transition-transform duration-200 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 15 7-7 7 7"></path>
+      </svg>
+    </button>
+    <div class="files-accordion-content border-t border-gray-200 dark:border-gray-700 hidden">
+      <div class="bg-gray-50 p-4 dark:bg-gray-800">
+        <div class="mb-3 flex items-start space-x-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20">
+          <svg class="h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+          </svg>
+          <p class="text-xs text-red-800 dark:text-red-300">
+            Files whose current SHA256 does not match the stored baseline.
+            Review each entry and use Accept Changes on the relevant card to update the baseline if the change is authorised.
+          </p>
+        </div>
+        <div class="files-list-container">
+          <div class="loading-spinner">Loading violations...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- END: Integrity Violations Accordion -->
+<link rel="stylesheet" href="./assets/css/dynamic.css" />
+<script src="./assets/js/integrity.js" defer integrity="sha384-l+j7ayZ+ZSbLj396aMzsM1xywEPglbpyQdfmNJbFvxxybGPsk4MGKcI+dMucp8pf" crossorigin="anonymous"></script>
+<script src="./assets/js/integrity_list.js" defer integrity="sha384-51vmC55zsZHmRZ5jqfrEFfu4PF283sBH0K1VrtFf7D8CXa39SpAjZQ/joNiVsA33" crossorigin="anonymous"></script>

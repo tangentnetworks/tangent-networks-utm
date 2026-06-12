@@ -1,0 +1,73 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Take control of your network security with Tangent Networks Firewall and Router. Easily manage access, configure settings, and protect your devices.">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Tangent Networks">
+    <title>Tangent Networks | Web interface for managing your firewall and router</title>
+    <link rel="stylesheet" href="./assets/css/tangent.css">
+    <link rel="stylesheet" href="./assets/css/power.css">
+    <script src="./assets/js/maintenance.js" integrity="sha384-fUVAs/Oy0oZNh9oTDBQctm4VRVtp9gvDX0Cv30dQyOpSOFiDZHcTbsisd2nNSS1f" defer crossorigin="anonymous"></script>
+    <link rel="apple-touch-icon" sizes="57x57" href="./apple-icon-57x57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="./apple-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="./apple-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="./apple-icon-76x76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="./apple-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="./apple-icon-120x120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="./apple-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="./apple-icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-icon-180x180.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png">
+    <link rel="manifest" href="./manifest.json">
+    <meta name="msapplication-TileColor" content="#000000">
+    <meta name="theme-color" content="#000000">
+  </head>
+  <body>
+    <div class="card">
+      <div class="logo">Tangent Networks</div>
+      
+      <!-- BEGIN: Restart view -->
+      <div id="view-restart" class="hidden">
+        <div class="spinner-wrap">
+          <div class="spinner"></div>
+        </div>
+        <h1>Restarting System</h1>
+        <p class="subtitle">The system is rebooting. This page will automatically redirect you when it comes back online.</p>
+        <div class="status">
+          <div class="status-dot"></div>
+          <span id="status-text">Waiting for system...</span>
+        </div>
+        <p class="countdown">Checking in <span id="countdown">5</span>s</p>
+      </div>
+
+      <!-- BEGIN: Shutdown view -->
+      <div id="view-shutdown" class="hidden">
+        <div class="power-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9"/>
+          </svg>
+        </div>
+        <h1>System Shutdown</h1>
+        <p class="subtitle">
+          The system has been powered off.
+          <span class="block">Physical access is required to turn it back on.</span>
+        </p>
+        <div class="status">
+          <div class="status-dot offline"></div>
+          <span>System offline</span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

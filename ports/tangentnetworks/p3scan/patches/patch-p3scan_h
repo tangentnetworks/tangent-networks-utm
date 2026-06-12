@@ -1,0 +1,37 @@
+$ComixWall: patch-p3scan_h,v 1.3 2009/07/25 09:55:30 soner Exp $
+Index: p3scan.h
+--- p3scan.h.orig
++++ p3scan.h
+@@ -213,6 +213,17 @@ typedef struct proxycontext {
+    char          * dspamuser;
+    char *        actsvr;
+    int           actport;
++#define MAX_IPADDR_LEN 45
++#define MAX_PORT_LEN 5
++#define MAX_USER_LEN 31
++   char          sslproxy_addr[MAX_IPADDR_LEN + 1];
++   int           sslproxy_port;
++   char          sslproxy_src_addr[MAX_IPADDR_LEN + 1];
++   char          sslproxy_src_port[MAX_PORT_LEN + 1];
++   char          sslproxy_dst_addr[MAX_IPADDR_LEN + 1];
++   char          sslproxy_dst_port[MAX_PORT_LEN + 1];
++   int           sslproxy_ssl;
++   char          sslproxy_user[MAX_USER_LEN + 1];
+    int           extra;
+ } proxycontext;
+ 
+@@ -291,13 +302,10 @@ typedef struct memory_list {
+   struct memory_list *prev;
+ } memory_list;
+ 
+-// The global memory allocation list used by the memory management wrappers
+-memory_list *memory_list_head;
+-// The global couter indicating the number of bytes allocated
+-unsigned long global_memory_count;
+ // A one-time initialization function to setup the memory list and global memory count variables
+ void w_memory_init(void);
+ 
+ typedef void Sigfunc(int);
+ 
+ #endif
++

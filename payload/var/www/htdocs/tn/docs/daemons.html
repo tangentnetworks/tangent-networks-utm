@@ -1,0 +1,236 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>This document covers the Services panel from the operator perspective: what each service does, how start, stop, and restart work from the UI, what happens behind the scenes when you press a button, and how to diagnose problems when a service will not start. For the internal script architecture and queue pipeline see the system documentation at <code>/usr/local/share/doc/TN/services.md</code>. For the developer integration guide see <code>/usr/local/share/doc/TN/dev/services.md</code>.</p>
+</div>
+
+<h1>Service Management</h1>
+
+<p>The Services panel shows real-time status for 24 system services: whether each is running, its CPU and memory usage, and its process ID. From this panel you can restart or stop any service without touching the command line.</p>
+
+<p>Service control is asynchronous. When you press Restart or Stop, the UI submits a request to a queue. A privileged runner process picks up the request within one second, executes the action as root, and writes the result back. The panel updates automatically when the result arrives. You do not need to wait for the action to complete before navigating away.</p>
+
+<h2>The Service Grid</h2>
+
+<p>The header row shows four summary counters: total services configured (24), currently running count, aggregated CPU across all services, and total memory load. Below the counters, one card per service shows the service name, a running or stopped status badge, CPU percentage, memory percentage, process ID, and the Restart and Stop buttons.</p>
+
+<p>For pmacct the process field shows MULTI because pmacct runs as three concurrent instances. The memory and CPU figures shown for pmacct are aggregated across all three.</p>
+
+<h2>The 24 Services</h2>
+
+<h3>Security and Intrusion Detection</h3>
+
+<dl>
+  <dt>SNORT</dt>
+  <dd>Snort IDS (Intrusion Detection System). Monitors all traffic on the LAN interface (<code>%%INT_IF%%</code>) in passive mode. Generates alerts for known attack signatures but does not block traffic. Log output goes to syslog via the daemon facility tagged <code>snort_ids</code>.</dd>
+
+  <dt>SNORTINLINE</dt>
+  <dd>Snort IPS (Intrusion Prevention System). Runs in inline mode (<code>-Q</code>) and can actively block traffic matching critical signatures. Uses a separate configuration file (<code>snortinline.conf</code>) with a stricter rule set. Log output is tagged <code>snort_ips</code>.</dd>
+
+  <dt>SNORTSENTRY</dt>
+  <dd>SnortSentry. Reads Snort alert output and automatically adds offending source IPs to a PF blocklist table. This is the bridge between Snort detection and PF enforcement.</dd>
+
+  <dt>CLAMD</dt>
+  <dd>ClamAV daemon. Provides real-time virus scanning over a Unix socket at <code>data/tmp/clamav/clamd.socket</code>. Used by e2guardian for content scanning. Startup takes up to 90 seconds while ClamAV loads its signature databases into memory. Do not assume clamd has failed if it takes a minute to appear as running after a start.</dd>
+
+  <dt>FRESHCLAM</dt>
+  <dd>ClamAV signature updater. Runs as a daemon and checks for new virus database updates on a schedule. Keeps clamd's detection current without a service restart.</dd>
+
+  <dt>P3SCAN</dt>
+  <dd>P3Scan transparent email proxy. Intercepts POP3 traffic and passes messages through ClamAV for virus scanning before they reach the mail client.</dd>
+</dl>
+
+<h3>Content Filtering</h3>
+
+<dl>
+  <dt>E2GUARDIAN</dt>
+  <dd>E2Guardian web content filter. Intercepts HTTP and HTTPS traffic and applies category-based URL filtering, phrase matching, and MIME type controls. Works in conjunction with SSLproxy for HTTPS inspection.</dd>
+
+  <dt>SSLPROXY</dt>
+  <dd>SSLproxy transparent SSL/TLS proxy. Intercepts encrypted HTTPS connections to allow e2guardian to inspect and filter HTTPS content. Required for full web filtering coverage.</dd>
+
+  <dt>SOCKD</dt>
+  <dd>Dante SOCKS proxy daemon. Provides authenticated SOCKS5 proxy access for clients that require it. Configuration at <code>/usr/local/etc/sockd.conf</code>.</dd>
+
+  <dt>SMTP GATED</dt>
+  <dd>SMTP-gated transparent SMTP proxy. Intercepts outbound email and passes it through SpamAssassin and virus scanning before allowing delivery. Internal service name: <code>smtp-gated</code>.</dd>
+
+  <dt>SPAMD</dt>
+  <dd>SpamAssassin daemon. Provides spam scoring for email content. Used by smtp-gated to evaluate outbound messages before relay.</dd>
+</dl>
+
+<h3>Network Infrastructure</h3>
+
+<dl>
+  <dt>DHCPD</dt>
+  <dd>OpenBSD DHCP server. Assigns IP addresses, gateway, and DNS to LAN clients. RC-controlled via rcctl.</dd>
+
+  <dt>UNBOUND</dt>
+  <dd>Unbound caching DNS resolver. Provides recursive DNS for LAN clients with DNSSEC validation. Runs chrooted to <code>/var/unbound</code>. RC-controlled via rcctl.</dd>
+
+  <dt>NTPD</dt>
+  <dd>OpenBSD NTP daemon. Synchronises the system clock. RC-controlled via rcctl.</dd>
+
+  <dt>FTP PROXY</dt>
+  <dd>OpenBSD FTP proxy. Allows active-mode FTP through the PF stateful firewall. Internal service name: <code>ftpproxy</code>. RC-controlled via rcctl.</dd>
+
+  <dt>RAD</dt>
+  <dd>OpenBSD router advertisement daemon. Sends IPv6 router advertisements to LAN clients for stateless address autoconfiguration (SLAAC). RC-controlled via rcctl.</dd>
+
+  <dt>SLAACD</dt>
+  <dd>OpenBSD SLAAC daemon. Manages the system's own IPv6 address configuration on the WAN interface based on received router advertisements. RC-controlled via rcctl.</dd>
+</dl>
+
+<h3>System Services</h3>
+
+<dl>
+  <dt>HTTPD</dt>
+  <dd>OpenBSD httpd. The web server that serves the Tangent Networks dashboard. All requests pass through TNWAF before reaching any CGI script. RC-controlled via rcctl.</dd>
+
+  <dt>SMTPD</dt>
+  <dd>OpenBSD smtpd. The local mail transfer agent. Delivers mail for the root user and forwards TNWatch digest emails and alerts. RC-controlled via rcctl.</dd>
+
+  <dt>SYSLOGD</dt>
+  <dd>OpenBSD syslogd. System log daemon. Receives log output from services and the kernel and routes it to the appropriate log files. RC-controlled via rcctl.</dd>
+
+  <dt>CRON</dt>
+  <dd>OpenBSD cron daemon. Runs scheduled jobs including TNWatch parsing, TNAudit baselines, log rotation, and blocklist updates. RC-controlled via rcctl.</dd>
+
+  <dt>COLLECTD</dt>
+  <dd>Collectd system metrics collector. Gathers CPU, memory, network, and disk metrics and writes them to RRD files and a local socket. Used by the dashboard metrics system.</dd>
+
+  <dt>PMACCT</dt>
+  <dd>Passive network accounting daemon. Runs as three instances: two real-time MFS instances that capture traffic flow data from the WAN and LAN interfaces into a memory filesystem, and one logging instance that writes quarter-hourly summaries to disk. The process count field shows MULTI. Restart uses force-kill rather than graceful shutdown to prevent stale flow state from corrupting the next capture.</dd>
+
+  <dt>PFLOGD</dt>
+  <dd>PF packet log capture. Captures all traffic on the <code>pflog1</code> interface and writes it to <code>data/logs/pf/pflog1.log</code> on the MFS mount. Because this file lives on a memory filesystem it is empty after every reboot. Internal service name: <code>tcpdump</code>. Restart and stop operate on <code>pf_tcpdump_runner.sh</code> rather than the tcpdump process directly -- stopping the runner prevents it from relaunching tcpdump before any orphaned capture process is cleaned up.</dd>
+</dl>
+
+<h2>Restart and Stop Behaviour</h2>
+
+<p>For most services, Restart sends a TERM signal and waits up to ten seconds for the process to exit cleanly before issuing a force kill. It then pauses two seconds and starts the service again. The full cycle takes three to fifteen seconds depending on how quickly the service responds to TERM.</p>
+
+<p>Three services use fast restart instead: Snort IDS, Snort IPS, and pmacct. Fast restart sends SIGKILL immediately without waiting for a graceful exit. This is intentional: these services manage logger pipelines or live data capture streams, and a partial shutdown state is more harmful than an abrupt termination.</p>
+
+<p>Stop sends a TERM signal with the same ten-second graceful wait and force-kill fallback. For RC-controlled services (cron, dhcpd, httpd, ntpd, rad, slaacd, smtpd, syslogd, unbound and others), Stop delegates to <code>rcctl stop</code> rather than sending signals directly.</p>
+
+<div class="callout callout-warning">
+  <p>Stopping HTTPD will take the dashboard offline immediately. The runner process is separate from httpd and will continue processing the queue, but you will not be able to see the result or restart httpd from the UI. Restart httpd from the command line with <code>rcctl restart httpd</code> if you stop it accidentally.</p>
+</div>
+
+<div class="callout callout-warning">
+  <p>Stopping CRON will suspend all scheduled jobs: TNWatch will stop parsing logs and sending alerts, TNAudit baselines will not run, and log rotation will not fire. Restart cron promptly if you stop it for maintenance.</p>
+</div>
+
+<div class="callout callout-note">
+  <p>CLAMD startup takes up to 90 seconds. After pressing Restart, the status badge may remain in a stopped or pending state for over a minute while ClamAV loads signature databases. This is normal. Do not press Restart a second time during this window.</p>
+</div>
+
+<h2>Services Not Shown in the Panel</h2>
+
+<p>Three services are managed by the service manager but do not appear as UI cards: <code>ftpproxy6</code> (IPv6 FTP proxy), <code>slowcgi</code> (the FastCGI process spawner that serves the dashboard CGI scripts), and <code>imspector</code> (IM inspector). These can be controlled from the command line via <code>service_manager.sh</code> but are not represented in the 24-service grid.</p>
+
+<div class="callout callout-danger">
+  <p>Do not stop slowcgi from the command line unless you intend to take the dashboard offline. Slowcgi is the process that handles every CGI request including the queue processor that powers the Services panel itself. Stopping it will make all dashboard functionality unavailable until it is restarted via <code>rcctl start slowcgi</code>.</p>
+</div>
+
+<h2>Troubleshooting</h2>
+
+<p>If the status badge shows stopped for a service that should be running, first check whether the request reached the queue and was processed:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>tail -40 /var/log/queue_processor.log</code></pre>
+</div>
+
+<p>To check the manager log for the start or stop attempt (one log file per day):</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>tail -40 /var/www/htdocs/tn/data/logs/bootlog/manager_$(date '+%Y-%m-%d').log</code></pre>
+</div>
+
+<p>To check whether the queue runner itself is alive:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>cat /var/www/htdocs/tn/data/run/webui/queue_runner.pid
+kill -0 $(cat /var/www/htdocs/tn/data/run/webui/queue_runner.pid) &amp;&amp; echo alive</code></pre>
+</div>
+
+<p>To manually start or restart a service from the command line (bypassing the queue):</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>/usr/local/sbin/service_manager.sh restart clamd
+/usr/local/sbin/service_manager.sh start snort
+/usr/local/sbin/service_manager.sh status pmacct</code></pre>
+</div>
+
+<p>To check the current status of all services directly:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>for svc in $(/usr/local/sbin/service_manager.sh list); do
+    /usr/local/sbin/service_manager.sh status "$svc"
+done</code></pre>
+</div>
+
+<p>If a service fails to start and the manager log shows a binary-not-found error, confirm the package is installed:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># Example: confirm snort binary
+ls -l /usr/local/bin/snort
+
+# Example: confirm clamd binary
+ls -l /usr/local/sbin/clamd</code></pre>
+</div>
+
+<p>If the queue runner has died and requests are not being processed, restart it:</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>rm -f /var/www/htdocs/tn/data/run/webui/queue_runner.pid
+/usr/local/sbin/queue_processor_runner.sh &amp;</code></pre>
+</div>
+
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>The Services panel manages 24 services. Three additional services (ftpproxy6, slowcgi, imspector) are managed by the same infrastructure but have no UI cards.</li>
+    <li>Service control is queued and asynchronous. Pressing Restart or Stop submits a request that a privileged root process picks up within one second.</li>
+    <li>Snort IDS, Snort IPS, and pmacct use fast restart (SIGKILL) rather than graceful shutdown. All other services receive TERM and are given ten seconds to exit before being force-killed.</li>
+    <li>CLAMD startup takes up to 90 seconds. The status badge will remain stopped during this window. This is expected behaviour.</li>
+    <li>PFLOGD in the UI corresponds to the <code>tcpdump</code> service entry in the manager. Restart and stop target <code>pf_tcpdump_runner.sh</code> via its PID file at <code>data/run/webui/pflog_maint.pid</code>, not the tcpdump process directly.</li>
+    <li>Do not stop slowcgi from the command line. It serves all CGI requests including the queue pipeline that processes service control actions.</li>
+    <li>Queue log: <code>/var/log/queue_processor.log</code>. Manager log: <code>data/logs/bootlog/manager_YYYY-MM-DD.log</code>.</li>
+  </ul>
+</div>

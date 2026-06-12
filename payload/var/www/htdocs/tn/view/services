@@ -1,0 +1,76 @@
+<!-- BEGIN: Banner -->
+<div class="sticky top-0 z-30 flex items-center justify-between w-full border-b border-gray-200 bg-gray-50 p-6 backdrop-blur-md dark:border-gray-700 dark:bg-gray-900">
+  <div class="flex items-center gap-4">
+    <div class="rounded-xl bg-blue-700 p-2.5">
+      <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="#ffff" viewBox="0 0 24 24">
+        <path fill-rule="evenodd" d="M9.586 2.586A2 2 0 0 1 11 2h2a2 2 0 0 1 2 2v.089l.473.196.063-.063a2.002 2.002 0 0 1 2.828 0l1.414 1.414a2 2 0 0 1 0 2.827l-.063.064.196.473H20a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-.089l-.196.473.063.063a2.002 2.002 0 0 1 0 2.828l-1.414 1.414a2 2 0 0 1-2.828 0l-.063-.063-.473.196V20a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-.089l-.473-.196-.063.063a2.002 2.002 0 0 1-2.828 0l-1.414-1.414a2 2 0 0 1 0-2.827l.063-.064L4.089 15H4a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h.09l.195-.473-.063-.063a2 2 0 0 1 0-2.828l1.414-1.414a2 2 0 0 1 2.827 0l.064.063L9 4.089V4a2 2 0 0 1 .586-1.414ZM8 12a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z" clip-rule="evenodd"></path>
+      </svg>
+    </div>
+    <div>
+      <h1 class="text-lg font-extrabold tracking-tight uppercase italic text-gray-900 dark:text-white">Tangent Networks</h1>
+      <p id="last-updated" class="text-xs font-bold tracking-wider uppercase text-gray-500 dark:text-gray-400">Last Updated: 9:57:59 PM</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-4">
+    <div class="hidden text-right md:block">
+      <p class="text-[10px] font-bold uppercase text-green-500 dark:text-green-300">Live Monitoring</p>
+      <p class="text-xs text-gray-400">Merged Data Point</p>
+    </div>
+    <button id="refresh-services" class="rounded-lg bg-blue-700 px-4 py-2 text-xs font-black text-white transition hover:bg-indigo-700">
+      <span class="refresh-idle">REFRESH</span>
+      <span class="refresh-working hidden">
+        <svg class="w-3 h-3 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+          <path stroke="#ffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.651 7.65a7.131 7.131 0 0 0-12.68 3.15M18.001 4v4h-4m-7.652 8.35a7.13 7.13 0 0 0 12.68-3.15M6 20v-4h4"/>
+        </svg>
+      </span>
+    </button>    
+  </div>
+</div>
+<!-- END: Banner -->
+<!-- BEGIN: Slow-service notice -->
+<div id="notice-logs" class="dismissible-banner">
+  <div class="feed-info-box">
+    <p class="feed-info-box-text">
+      <span class="feed-info-box-label ml-2">Notice:</span>Some services may take several minutes to initialize. Cards will display Launching... while startup is in progress. Controls remain disabled until completion. Do not click Start again.
+    </p>
+    <button type="button" class="close-banner-btn flex-shrink-0 p-1 text-gray-400 hover:text-red-600 transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
+    </button>
+  </div>
+</div>
+<!-- END: Slow-service notice -->
+<!-- BEGIN: Services view -->
+<section class="mx-auto max-w-7xl bg-gray-50 px-6 py-8 dark:bg-gray-900">
+  <!-- BEGIN: Stats Summary -->
+  <div class="mb-6 grid grid-cols-1 gap-4 p-2 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <p class="text-[10px] font-bold text-gray-600 uppercase dark:text-white">System Services</p>
+      <p id="stat-total" class="text-2xl font-black">--</p>
+    </div>
+    <div class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <p class="text-[10px] font-bold text-gray-600 uppercase dark:text-white">Running</p>
+      <p id="stat-running" class="text-2xl font-black text-green-600">--</p>
+    </div>
+    <div class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <p class="text-[10px] font-bold text-gray-600 uppercase dark:text-white">Aggregated CPU</p>
+      <p id="stat-cpu" class="text-2xl font-black text-blue-600">--%</p>
+    </div>
+    <div class="rounded-xl border border-l-4 border-gray-200 border-l-blue-400 bg-white p-6 shadow-lg transition-shadow duration-200 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
+      <p class="text-[10px] font-bold text-gray-600 uppercase dark:text-white">Memory Load</p>
+      <p id="stat-mem" class="text-2xl font-black text-amber-600">--%</p>
+    </div>
+  </div>
+  <!-- END Stats Summary -->
+  <!-- BEGIN: Grid Container -->
+  <div id="services-grid" class="p-2 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+    <!-- BEGIN: Loading State -->
+    <div class="col-span-full py-20 text-center">
+      <p class="animate-pulse text-xs font-bold tracking-widest text-gray-400 uppercase">Awaiting data from CGI...</p>
+    </div>
+    <!-- END: Loading State -->
+  </div>
+</section>
+<!-- END: Services view -->
+<script src="./assets/js/services.js" integrity="sha384-8LXtnc8vDV+UBvLTq8UDbhr3P0M2Fl4BR+aD6AKugj8bmfCyMt+ulNaYI0/X4SvD" defer crossorigin="anonymous"></script>

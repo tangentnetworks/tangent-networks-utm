@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+*.md linguist-documentation
+LICENSE linguist-detectable=true

@@ -1,0 +1,11 @@
+#!/bin/ksh
+
+daemon="/usr/local/sbin/snortsentry"
+daemon_user="root"
+daemon_flags="-f /etc/snort/snortsentry.conf"
+
+. /etc/rc.d/rc.subr
+
+pexp="/usr/bin/perl -T ${daemon} ${daemon_flags}"
+
+rc_cmd $1

@@ -1,0 +1,1 @@
+9369 /usr/local/sbin/pmacctd -f /etc/pmacct/int_if_json_mfs.conf

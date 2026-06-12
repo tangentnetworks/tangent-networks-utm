@@ -1,0 +1,25 @@
+/*
+ * SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+#top-bar-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+#nav-system {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+#logout-btn { background-color: #15803d; }
+#restart-btn { background-color: #1d4ed8; }
+#poweroff-btn { background-color: #b91c1c; }
+
+#logout-btn:hover { background-color: #166534; }
+#restart-btn:hover { background-color: #1e40af; }
+#poweroff-btn:hover { background-color: #991b1b; }

@@ -1,0 +1,6 @@
+{
+  "success": true,
+  "request_id": "1774924720611_77793",
+  "output": "The following name servers are used for lookup of belllabs.com.\nforwarding request:\nDelegation with 0 names, of which 0 can be examined to query further addresses.\nIt provides 4 IP addresses.\n9.9.9.11        \tnot in infra cache.\n149.112.112.11  \tnot in infra cache.\n2620:fe::11     \texpired, rto 877127624 msec, tA 0 tAAAA 0 tother 0.\n2620:fe::fe:11  \texpired, rto 877127624 msec, tA 0 tAAAA 0 tother 0.",
+  "timestamp": 1774924721
+}

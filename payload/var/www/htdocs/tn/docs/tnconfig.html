@@ -1,0 +1,364 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    TNConfig reads and caches security.conf, controls the DEVEL mode toggle,
+    and enforces a fail-closed policy when the config file is absent or
+    unreadable. This document covers the config file format, every section and
+    key, the fail-closed behaviour, and the DEVEL mode credential contract.
+  </p>
+</div>
+
+<h1>TNConfig</h1>
+
+<p>
+  <strong>Location:</strong>
+  <code>/var/www/htdocs/tn/data/lib/TNConfig.pm</code><br>
+  <strong>Version:</strong> 2.1.0<br>
+  <strong>Config file:</strong>
+  <code>/var/www/htdocs/tn/data/config/security.conf</code>
+</p>
+
+<h2>Config File Format</h2>
+
+<p>
+  <code>security.conf</code> is an INI-style file. Sections are denoted by
+  <code>[section_name]</code> headers. Keys and values are separated by
+  <code>=</code>. Comments begin with <code>#</code>. Quoted values are
+  accepted but not required -- the parser strips leading and trailing
+  single and double quotes.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">ini</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>[mode]
+DEVEL = 0
+DEVEL_PASSWORD_HASH = pbkdf2:a3f8...
+DEVEL_PASSWORD_SALT = rXk2mN...
+
+[security]
+ENABLE_CSRF = 1
+ENABLE_SRI = 1
+ENABLE_RATE_LIMIT = 1
+ENABLE_SESSION_CHECK = 1
+ENABLE_ORIGIN_CHECK = 1
+
+[session]
+SESSION_LIFETIME = 7200
+SESSION_COOKIE_NAME = tn_session
+SESSION_SECURE = 0
+SESSION_HTTPONLY = 1
+SESSION_SAMESITE = Strict
+
+[csrf]
+TOKEN_LIFETIME = 3600
+
+[rate_limit]
+MAX_LOGIN_ATTEMPTS = 5
+MAX_RESET_ATTEMPTS = 3
+MAX_REQUESTS_PER_MINUTE = 60
+LOCKOUT_DURATION = 1800
+
+[logging]
+LOG_LEVEL = info
+LOG_TO_FILE = 1
+LOG_TO_SYSLOG = 0</code></pre>
+</div>
+
+<h2>Section Reference</h2>
+
+<h3>[mode]</h3>
+
+<dl>
+  <dt><code>DEVEL</code></dt>
+  <dd>
+    Set to <code>1</code> to enable DEVEL mode, <code>0</code> to disable.
+    This is the only value that changes at runtime (via the
+    <code>/devel/enable</code> and <code>/devel/disable</code> API endpoints).
+    See the DEVEL Mode section below.
+  </dd>
+  <dt><code>DEVEL_PASSWORD_HASH</code></dt>
+  <dd>
+    PBKDF2 hash of the DEVEL mode password, set by <code>init_db.pl</code> at
+    install time. Format: <code>pbkdf2:</code> followed by hex-encoded derived
+    key bytes. If blank, the DEVEL enable endpoint always returns 401.
+  </dd>
+  <dt><code>DEVEL_PASSWORD_SALT</code></dt>
+  <dd>
+    Salt for the DEVEL password hash. Must be set alongside
+    <code>DEVEL_PASSWORD_HASH</code>.
+  </dd>
+</dl>
+
+<h3>[security]</h3>
+
+<p>
+  Boolean flags (1 = enabled, 0 = disabled). All default to 1 if the section
+  is absent.
+</p>
+
+<dl>
+  <dt><code>ENABLE_CSRF</code></dt>
+  <dd>Enables CSRF token validation on all state-changing requests.</dd>
+  <dt><code>ENABLE_SRI</code></dt>
+  <dd>Enables server-side SRI hash verification in TNWAF before serving JS assets.</dd>
+  <dt><code>ENABLE_RATE_LIMIT</code></dt>
+  <dd>Enables per-IP rate limiting in TNWAF and per-username rate limiting for password reset.</dd>
+  <dt><code>ENABLE_SESSION_CHECK</code></dt>
+  <dd>Enables session validation in TNSecurityCheck.</dd>
+  <dt><code>ENABLE_ORIGIN_CHECK</code></dt>
+  <dd>Enables Origin/Referer header validation for non-GET requests.</dd>
+</dl>
+
+<div class="callout callout-danger">
+  <p>
+    These flags exist to support testing and debugging in isolated
+    environments. Setting any of them to 0 in production removes a security
+    layer. All five should be 1 in any deployment that handles real traffic.
+  </p>
+</div>
+
+<h3>[session]</h3>
+
+<dl>
+  <dt><code>SESSION_LIFETIME</code></dt>
+  <dd>
+    Session duration in seconds. Floored at 900 (15 minutes) and capped at
+    86400 (24 hours) by TNAuth regardless of the value here. Default: 7200.
+  </dd>
+  <dt><code>SESSION_COOKIE_NAME</code></dt>
+  <dd>Cookie name. Default: <code>tn_session</code>.</dd>
+  <dt><code>SESSION_SECURE</code></dt>
+  <dd>
+    Sets the <code>Secure</code> cookie attribute. Set to 1 when the UI is
+    served over HTTPS. Default: 0 (HTTP only, appropriate for LAN appliance
+    use).
+  </dd>
+  <dt><code>SESSION_HTTPONLY</code></dt>
+  <dd>Sets the <code>HttpOnly</code> cookie attribute. Default: 1.</dd>
+  <dt><code>SESSION_SAMESITE</code></dt>
+  <dd>
+    Cookie SameSite attribute. Accepted values: <code>Strict</code>,
+    <code>Lax</code>, <code>None</code>. An invalid value is rejected and
+    defaults to <code>Strict</code> with a warning logged. Default:
+    <code>Strict</code>.
+  </dd>
+</dl>
+
+<h3>[csrf]</h3>
+
+<dl>
+  <dt><code>TOKEN_LIFETIME</code></dt>
+  <dd>
+    CSRF token window in seconds. Floored at 60 seconds by TNSecurity.
+    TNSecurity validates the current window and the previous window, so a
+    token fetched just before a boundary remains valid just after it. Default:
+    3600.
+  </dd>
+</dl>
+
+<h3>[rate_limit]</h3>
+
+<dl>
+  <dt><code>MAX_LOGIN_ATTEMPTS</code></dt>
+  <dd>
+    Failed login attempts before account lockout. TNAuth enforces a floor of 3
+    and a ceiling of 10 regardless of this value. Default: 5.
+  </dd>
+  <dt><code>MAX_RESET_ATTEMPTS</code></dt>
+  <dd>
+    Password reset attempts before rate limit lockout. Default: 3.
+  </dd>
+  <dt><code>MAX_REQUESTS_PER_MINUTE</code></dt>
+  <dd>
+    Per-IP request rate limit enforced by TNWAF. Floor of 10 req/min enforced
+    regardless of this value. Default: 60.
+  </dd>
+  <dt><code>LOCKOUT_DURATION</code></dt>
+  <dd>
+    Duration in seconds for both account lockouts and rate-limit blocks. TNAuth
+    enforces a floor of 300 seconds for login lockouts. TNWAF enforces a floor
+    of 60 seconds for IP blocks. Default: 1800 (30 minutes).
+  </dd>
+</dl>
+
+<h3>[logging]</h3>
+
+<dl>
+  <dt><code>LOG_LEVEL</code></dt>
+  <dd>Minimum log level to write. Accepted values: <code>debug</code>, <code>info</code>, <code>warning</code>, <code>error</code>, <code>critical</code>. Default: <code>info</code>.</dd>
+  <dt><code>LOG_TO_FILE</code></dt>
+  <dd>Write security events to <code>data/logs/security.log</code>. Default: 1.</dd>
+  <dt><code>LOG_TO_SYSLOG</code></dt>
+  <dd>Write security events to syslog. Default: 0.</dd>
+</dl>
+
+<h2>Fail-Closed Behaviour</h2>
+
+<p>
+  When <code>load_config()</code> encounters any failure -- the file is absent,
+  unreadable, fails to open, or parses successfully but is missing the
+  mandatory <code>[mode]</code> section -- it calls <code>_fail_closed()</code>
+  rather than falling back to defaults.
+</p>
+
+<p>
+  <code>_fail_closed()</code> does the following:
+</p>
+
+<ul>
+  <li>Sets <code>DEVEL = 0</code>.</li>
+  <li>Sets <code>DEVEL_PASSWORD_HASH</code> and <code>DEVEL_PASSWORD_SALT</code> to empty strings, making the DEVEL enable endpoint permanently return 401.</li>
+  <li>Enables all five security flags.</li>
+  <li>Warns to STDERR with a <code>TNConfig CRITICAL:</code> prefix so the error appears in the web server error log.</li>
+  <li>Sets <code>$CONFIG_LOADED = 1</code> so subsequent calls do not retry.</li>
+</ul>
+
+<p>
+  This means a missing or corrupted config file results in a fully locked-down
+  system rather than a system that fails open with a known default password.
+  The failure is loud (STDERR warning visible in httpd logs) but safe.
+</p>
+
+<div class="callout callout-warning">
+  <p>
+    <code>set_defaults()</code> exists in the module and is used only by
+    <code>create_default_config()</code> during installation. It must never be
+    called from <code>load_config()</code>. Historically it set
+    <code>DEVEL = 1</code> and contained a known password. Calling it as a
+    fallback on a missing config file would expose that credential in
+    production.
+  </p>
+</div>
+
+<h2>Config Caching</h2>
+
+<p>
+  The config is loaded once per process and cached in the module-level
+  <code>%CONFIG</code> hash. The <code>$CONFIG_LOADED</code> flag prevents
+  re-reading on every call. In the CGI model, each slowcgi worker is a
+  separate process, so each worker loads the file once on its first request.
+  There is no shared memory between workers.
+</p>
+
+<p>
+  <code>TNConfig::reload_config()</code> clears the cache and forces a re-read
+  on the next call. It is not called during normal request handling but is
+  available for use in long-running scripts that need to pick up config
+  changes.
+</p>
+
+<h2>Runtime Write: DEVEL Toggle</h2>
+
+<p>
+  The only value that changes at runtime is <code>DEVEL</code>.
+  <code>write_config()</code> performs a targeted in-place replacement of the
+  <code>DEVEL = N</code> line rather than rewriting the entire file. This
+  preserves all comments, the <code>[paths]</code> section, and any operator
+  edits.
+</p>
+
+<p>
+  The write is protected by <code>flock(LOCK_EX)</code> on both the read and
+  write file handles to prevent interleaved writes from concurrent slowcgi
+  workers. The sequence is: shared-lock read, close (release lock), exclusive-
+  lock write, close (release lock).
+</p>
+
+<p>
+  If the <code>DEVEL = N</code> line is not found in the file,
+  <code>write_config()</code> logs a warning and returns 0 without writing.
+</p>
+
+<h2>DEVEL Mode</h2>
+
+<p>
+  DEVEL mode is a runtime bypass intended for local testing and development.
+  When active it disables CSRF validation, SRI verification, origin checks,
+  and session authentication. It also grants a static
+  <code>'DEVEL_BYPASS'</code> password that authenticates any username as
+  admin without a database lookup.
+</p>
+
+<p>
+  The DEVEL enable endpoint (<code>POST /devel/enable</code>) requires a
+  password that is verified against the PBKDF2 hash stored in
+  <code>security.conf [mode]</code>. If no hash is configured, the endpoint
+  always returns 401. The hash is set at install time by <code>init_db.pl</code>:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code># In init_db.pl (install time only):
+my ($hash, $salt) = TNSecurity::hash_password($devel_password_input);
+# Written to security.conf [mode]:
+# DEVEL_PASSWORD_HASH = $hash
+# DEVEL_PASSWORD_SALT = $salt</code></pre>
+</div>
+
+<p>
+  <code>router.pl</code> enforces an additional production guard: if DEVEL mode
+  is active and the server is bound to a non-loopback address, it returns 503
+  and refuses to route any request. This prevents an accidental production
+  deploy with security bypasses active.
+</p>
+
+<div class="callout callout-danger">
+  <p>
+    DEVEL mode must be <code>0</code> in any deployment that handles real
+    traffic. The security bypasses it enables are comprehensive -- authentication,
+    CSRF, SRI, and origin validation are all disabled simultaneously. The
+    production guard in router.pl catches the most common accident
+    (forgetting to disable it before go-live), but it is not a substitute for
+    verifying the config before deployment.
+  </p>
+</div>
+
+<h2>Accessing Config Values</h2>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">perl</span>
+    <button class="doc-code-copy" type="button"><span class="doc-code-copy-label">Copy</span></button>
+  </div>
+  <pre><code>use TNConfig;
+
+# Boolean test
+if (TNConfig::is_devel_mode()) { ... }
+
+# Read a value with fallback default
+my $lifetime = TNConfig::get_config('session', 'SESSION_LIFETIME') // 7200;
+
+# All values (for diagnostics)
+my $all = TNConfig::get_all_config();</code></pre>
+</div>
+
+<p>
+  <code>get_config()</code> returns <code>undef</code> if either the section or
+  the key is absent. Callers should always provide a <code>//</code> default.
+</p>
+
+<!-- SUMMARY -->
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Config is read from <code>data/config/security.conf</code>, loaded once per process, and cached. <code>reload_config()</code> forces a re-read for long-running scripts.</li>
+    <li>A missing, unreadable, or malformed config triggers fail-closed behaviour: DEVEL=0, all security flags on, no password set. The failure is logged to STDERR but does not crash the process.</li>
+    <li><code>set_defaults()</code> is for installation only. It must never be called as a fallback from <code>load_config()</code>.</li>
+    <li>The only runtime write is the DEVEL toggle. <code>write_config()</code> does a targeted in-place replacement of the <code>DEVEL = N</code> line with flock protection.</li>
+    <li>DEVEL mode requires a PBKDF2 password configured at install time. With no hash set, the enable endpoint always returns 401. The production guard in router.pl adds a second line of defence against accidental activation.</li>
+    <li>All floor and ceiling enforcement on rate limits and session lifetime happens in TNAuth and TNWAF, not in TNConfig. TNConfig returns the raw value from the file.</li>
+  </ul>
+</div>

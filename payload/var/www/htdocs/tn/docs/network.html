@@ -1,0 +1,981 @@
+<!--
+SPDX-FileCopyrightText: 2026 David Peter, Tangent Networks
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<!-- FOREWORD -->
+<div class="doc-foreword">
+  <h2>Foreword</h2>
+  <p>
+    This document covers the network layer of Tangent Networks: the physical
+    interfaces, dual-stack IPv4 and IPv6 addressing, DNS resolution, DHCP,
+    router advertisement, NAT, NAT64, and the kernel tuning that supports
+    sustained traffic under load. It is written for the operator who needs to
+    understand how the gateway is addressed, how traffic leaves and enters the
+    network, and what runs underneath the firewall rules documented separately
+    in the Firewall fragment.
+  </p>
+  <p>
+    Read this document before the Firewall fragment. The firewall depends on
+    every interface name, address, and table defined here. The Flow Accounting
+    fragment depends on the interface names and MFS paths described here.
+  </p>
+  <p>
+    All addresses shown in this documentation are for illustration purposes
+    only. They reflect the VM-based development and testing environment
+    (KVM/openSUSE host, libvirt networking) and will differ on your hardware.
+    Replace them with your actual WAN address, LAN prefix, and gateway before
+    deploying.
+  </p>
+</div>
+
+<h1>Network Overview</h1>
+
+<h2>Interface Layout</h2>
+<p>
+  Tangent Networks uses two physical network interfaces and two logical logging
+  interfaces. The WAN interface faces the upstream network or ISP. The LAN
+  interface serves the internal network. The two pflog interfaces are created
+  and managed by PF and are covered in detail in the Firewall document.
+</p>
+
+<dl>
+  <dt><code>%%EXT_IF%%</code> -- WAN</dt>
+  <dd>
+    Upstream-facing interface. Carries the public IPv4 address and the globally
+    routable IPv6 address assigned by the upstream network. All outbound NAT
+    and NAT64 translation happens on this interface. In the development
+    environment: <code>inet autoconf</code> and
+    <code>inet6 autoconf -temporary</code>. Replace with your actual WAN
+    addresses for static configuration.
+  </dd>
+  <dt><code>%%INT_IF%%</code> -- LAN</dt>
+  <dd>
+    Internal-facing interface. Carries the private IPv4 address
+    (<code>%%INT_NET4%%</code> in the development environment) and the ULA
+    IPv6 prefix (<code>%%INT_NET6%%</code>). DHCP, DNS, and router
+    advertisement are all served from this interface. Marked <code>up</code>
+    explicitly in <code>/etc/hostname.%%INT_IF%%</code>.
+  </dd>
+  <dt><code>pflog0</code>  -- Default pf log interface</dt>
+  <dd>
+    Managed by <code>pflogd</code>. Receives PF block events in binary pcap
+    format. Written to <code>/var/log/pflog</code> with a 160-byte snaplen.
+    Not touched by Tangent tooling; standard OpenBSD pflogd management only.
+  </dd>
+  <dt><code>pflog1</code> -- All-traffic log</dt>
+  <dd>
+    Sovereign interface. Created by <code>/etc/hostname.pflog1</code>
+    (contains only <code>up</code>). Receives every packet on real interfaces
+    via <code>match log (to pflog1) on { %%EXT_IF%% %%INT_IF%% }</code> in
+    <code>pf.conf</code>. Loopback is excluded -- proxy relay traffic has no
+    security value. Fed into the pf-tcpdump pipeline for real-time WebUI
+    display and 7-day archive. Full details in the Firewall document.
+  </dd>
+</dl>
+
+<div class="callout callout-note">
+  <p><strong>Interface names on real hardware.</strong>
+  On physical hardware the interface names will differ from the development
+  environment. Common names: <code>bge0</code>, <code>ure0</code> (USB
+  ethernet), <code>ix0</code> (Intel 10GbE).
+  Update <code>/etc/hostname.*</code>, <code>pf.conf</code> variable
+  declarations, <code>dhcpd.conf</code> flags in
+  <code>/etc/rc.conf.local</code>, and <code>rad.conf</code> accordingly.
+  The rest of the configuration is interface-name-agnostic.</p>
+</div>
+
+<h2>Hostname and Static Addressing</h2>
+<p>
+  The router's hostname is set at the OS level and resolved locally via
+  <code>/etc/hosts</code>. No external DNS entry is required for internal
+  resolution of the router itself.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/hosts
+127.0.0.1    localhost
+::1          localhost
+%%INT_IP4%%   tangent.localdomain tangent</code></pre>
+</div>
+
+<p>
+  The WAN interface is configured in <code>/etc/hostname.%%EXT_IF%%</code> and the
+  LAN in <code>/etc/hostname.%%INT_IF%%</code>. OpenBSD reads these at boot via
+  <code>netstart</code>. The subnet mask is specified in hex:
+  <code>0xffffff00</code> is equivalent to <code>255.255.255.0</code> (/24).
+  The NAT64 static route is added inline via the <code>!</code> directive.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/hostname.%%EXT_IF%%
+inet autoconf
+inet6 autoconf -temporary
+
+# /etc/hostname.%%INT_IF%%  (LAN)
+inet %%INT_IP4%% 0xffffff00
+inet6 %%INT_IP6%% 64
+!route add -inet6 %%NAT64_PFX%% %%INT_IP6%%
+mtu 1500
+up</code></pre>
+</div>
+
+<p>
+  Default gateways for IPv4 and IPv6 are declared per line in
+  <code>/etc/mygate</code>. Both are read by <code>/etc/netstart</code>
+  and applied after the interfaces come up.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/mygate
+%%WAN_GW4%%
+%%WAN_GW6%%</code></pre>
+</div>
+
+<h2>Dual-Stack Operation</h2>
+<p>
+  The gateway operates in full dual-stack mode. Both IPv4 and IPv6 forwarding
+  are enabled in <code>/etc/sysctl.conf</code> and take effect at boot.
+  LAN clients receive IPv4 addresses via DHCPv4 and IPv6 addresses via SLAAC
+  (Stateless Address Autoconfiguration). A client that supports both protocols
+  will have working connectivity on both simultaneously.
+</p>
+<p>
+  IPv6 connectivity for LAN clients operates in two modes depending on the
+  upstream. If the WAN address is globally routable IPv6, clients can reach
+  the IPv6 internet directly through the router. If the WAN has no usable
+  IPv6, clients with IPv6-only destinations are served through NAT64, which
+  translates their IPv6 traffic to IPv4 at the WAN boundary. Both modes are
+  active simultaneously; the firewall and routing table determine which path
+  a packet takes.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/sysctl.conf -- IP forwarding (router mode)
+net.inet.ip.forwarding=1
+net.inet6.ip6.forwarding=1</code></pre>
+</div>
+
+<h2>DNS Resolution -- Unbound</h2>
+<p>
+  DNS is handled entirely by Unbound running on the router itself.
+  <code>/etc/resolv.conf</code> points only to loopback; the router never
+  queries an upstream resolver directly from the system resolver.
+  All external queries are forwarded by Unbound over DNS-over-TLS (DoT) to
+  Quad9's threat-blocking ECS variant (<code>dns11.quad9.net</code>).
+  <code>resolvd</code> is disabled in <code>/etc/rc.conf.local</code> so it
+  cannot overwrite <code>resolv.conf</code> at runtime.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/resolv.conf
+nameserver 127.0.0.1
+nameserver ::1</code></pre>
+</div>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/rc.conf.local
+resolvd_flags=NO
+unbound_flags=</code></pre>
+</div>
+
+<p>
+  Unbound listens on four addresses: loopback IPv4 and IPv6 for the router
+  itself, and the LAN IPv4 and IPv6 addresses to serve LAN clients. Access
+  control allows all RFC 1918 ranges, ULA, link-local, and loopback. All
+  other sources are refused, which prevents the resolver from being used as
+  an amplification vector from the WAN side.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">unbound.conf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>server:
+    interface: 127.0.0.1
+    interface: ::1
+    interface: %%INT_IP4%%       # LAN IPv4
+    interface: %%INT_IP6%%       # LAN IPv6
+
+    access-control: 0.0.0.0/0 refuse
+    access-control: ::0/0 refuse
+    access-control: 192.168.0.0/16 allow
+    access-control: 172.16.0.0/12 allow
+    access-control: 10.0.0.0/8 allow
+    access-control: fe80::/10 allow
+    access-control: fc00::/7 allow
+    access-control: 127.0.0.0/8 allow
+    access-control: ::1/128 allow
+
+    insecure-lan-zones: yes
+    private-address: 10.0.0.0/8
+    private-address: 172.16.0.0/12
+    private-address: 192.168.0.0/16
+    private-domain: localdomain
+
+    hide-identity: yes
+    hide-version: yes
+    qname-minimisation: yes
+    module-config: "iterator"</code></pre>
+</div>
+
+<p>
+  DNSSEC validation is intentionally disabled (<code>module-config:
+  "iterator"</code>; the validator module is not loaded). The trust anchor
+  file is commented out. Quad9's <code>dns11</code> variant performs
+  DNSSEC validation upstream and applies threat blocking. Enabling local
+  validation would be redundant. To enable it: uncomment
+  <code>auto-trust-anchor-file</code>, change <code>module-config</code> to
+  <code>"validator iterator"</code>, and run
+  <code>unbound-anchor -a /var/unbound/etc/root.key</code> to initialise the
+  root trust anchor.
+</p>
+
+<p>
+  IPv6 upstream forwarders are commented out because the WAN IPv6 address in
+  the development environment is not globally routable; it is a documentation
+  prefix assigned by the VM host and cannot reach the public internet. On
+  hardware with a real globally routable IPv6 WAN address, the Quad9 IPv6
+  upstreams can be uncommented:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">unbound.conf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>forward-zone:
+    name: "."
+    forward-ssl-upstream: yes
+    forward-first: no
+
+    # Quad9 -- threat blocking, DNSSEC validation, ECS (dns11 variant)
+    forward-addr: 9.9.9.11@853#dns11.quad9.net
+    forward-addr: 149.112.112.11@853#dns11.quad9.net
+
+    # Uncomment when WAN IPv6 is globally routable:
+    # forward-addr: 2620:fe::11@853#dns11.quad9.net
+    # forward-addr: 2620:fe::fe:11@853#dns11.quad9.net</code></pre>
+</div>
+
+<p>
+  Unbound's cache is sized for a router handling sustained DNS query volume:
+  message cache at 128 MB, RRset cache at 256 MB, four threads, prefetch
+  enabled. Maximum TTL is capped at 7 days (604800 seconds), minimum at
+  30 minutes (1800 seconds) to reduce repeated upstream queries for
+  frequently resolved names.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">unbound.conf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>    # Cache
+    msg-cache-size: 128m
+    rrset-cache-size: 256m
+    cache-max-ttl: 604800
+    cache-min-ttl: 1800
+
+    # Performance
+    num-threads: 4
+    prefetch: yes
+    prefetch-key: yes
+    so-rcvbuf: 2m
+    so-sndbuf: 2m</code></pre>
+</div>
+
+<p>
+  Unbound's control socket is enabled at <code>/var/run/unbound.sock</code>.
+  This is used by the <code>unbound_control.pl</code> CGI backend to apply
+  DNS configuration changes from the WebUI without restarting the daemon.
+  The socket is accessible from the host and is not inside the chroot.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check Unbound status and cache statistics
+unbound-control status
+unbound-control stats_noreset
+
+# Flush a specific name from cache
+unbound-control flush example.com
+
+# View current forwarders
+unbound-control list_forwards</code></pre>
+</div>
+
+<h2>DHCPv4 -- dhcpd</h2>
+<p>
+  DHCPv4 is served by OpenBSD's <code>dhcpd</code>, bound to <code>%%INT_IF%%</code>
+  only. The pool covers the upper portion of the <code>%%INT_NET4%%</code> range,
+  leaving the low end for static assignments and the router's own address at
+  <code>%%INT_IP4%%</code>. The DNS server pushed to clients is the router's
+  own LAN address; all client DNS queries are handled by Unbound.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/dhcpd.conf
+option domain-name "tan.localdomain";
+option domain-name-servers %%INT_IP4%%;
+
+subnet %%INT_NET4_ADDR%% netmask 255.255.255.0 {
+    option routers           %%INT_IP4%%;
+    option subnet-mask       255.255.255.0;
+    option broadcast-address %%INT_BROADCAST4%%;
+    range %%INT_IP4%%0 %%DHCP_RANGE_END%%;
+}</code></pre>
+</div>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/rc.conf.local
+dhcpd_flags=%%INT_IF%%</code></pre>
+</div>
+
+<p>
+  Active leases are stored at <code>/var/db/dhcpd.leases</code>. This is the
+  ground truth for currently assigned addresses and is more reliable than the
+  WebUI LAN panel during the first minute after boot when the stats runner has
+  not yet produced output.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># View current DHCP leases
+cat /var/db/dhcpd.leases
+
+# Check dhcpd log
+tail -50 /var/www/htdocs/tn/data/logs/dhcpd/dhcpd.log</code></pre>
+</div>
+
+<h2>IPv6 Router Advertisement -- rad and slaacd</h2>
+<p>
+  IPv6 addresses are assigned to LAN clients via SLAAC. The
+  <code>rad</code> daemon sends Router Advertisement messages on
+  <code>%%INT_IF%%</code>, announcing the ULA prefix <code>%%INT_NET6%%</code>
+  and the router as the default IPv6 gateway. Clients use the announced prefix
+  combined with their interface identifier (EUI-64 or privacy extension) to
+  self-assign a <code>%%INT_NET6%%</code> address with no server-side lease
+  management.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/rad.conf
+interface %%INT_IF%% {
+    default router yes
+    prefix %%INT_NET6%%
+    mtu 1472
+
+    dns {
+        lifetime 604800
+        nameserver %%INT_IP6%%
+        search home.arpa
+    }
+}
+nat64 prefix %%NAT64_PFX%%
+</code></pre>
+</div>
+
+<p>
+  The DNS section in <code>rad.conf</code> distributes the router's LAN IPv6
+  address as the DNS server (RDNSS, Recursive DNS Server option, RFC 8106).
+  The lifetime of 604800 seconds (7 days) prevents clients from discarding the
+  DNS configuration if a single RA is missed. The search domain
+  <code>home.arpa</code> is the IANA-reserved local-use search domain for home
+  networks (RFC 8375).
+</p>
+<p>
+  The MTU value in <code>rad.conf</code> is populated by
+  <code>tn-mtu-probe.sh</code> at boot from <code>/etc/tn-interfaces</code>.
+  SLAAC clients self-limit to this MTU and never construct packets larger than
+  the gateway can forward, which mitigates the NAT66 PMTUD limitation described
+  in the Firewall document.
+</p>
+
+<p>
+  <code>slaacd</code> runs on the router to process incoming Router
+  Advertisements on <code>%%EXT_IF%%</code>; it is the SLAAC client for the WAN
+  interface. It is not listed in <code>/etc/rc.conf.local</code> because it is
+  enabled by default in the base <code>rc.conf</code>. The router acts as both
+  a SLAAC server (via <code>rad</code> on <code>%%INT_IF%%</code>) and a SLAAC
+  client (via <code>slaacd</code> on <code>%%EXT_IF%%</code>) simultaneously.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/rc.conf.local
+rad_flags=    # enabled, no extra flags needed</code></pre>
+</div>
+
+<h2>NAT -- IPv4 Masquerading</h2>
+<p>
+  Standard IPv4 NAT is applied to all traffic leaving on the WAN interface.
+  The match rule translates the source address of any packet from the LAN
+  network to the WAN interface's current address. Using
+  <code>($ext_if)</code> with parentheses rather than a literal address means
+  the NAT rule automatically tracks a dynamically assigned WAN address, so no
+  rule reload is needed if the WAN address changes.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># pf.conf -- NAT44
+match out on $ext_if inet from $int_net4 to any nat-to ($ext_if)</code></pre>
+</div>
+
+<h2>NAT66 -- IPv6 ULA Masquerading</h2>
+<p>
+  NAT66 masquerades LAN ULA clients behind the WAN IPv6 GUA. LAN clients use
+  addresses from the ULA prefix <code>%%INT_NET6%%</code>, which are not
+  globally routable. The match rule translates the source to the current WAN
+  GUA at egress time.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># pf.conf -- NAT66
+match out on $ext_if inet6 from $int_net6 to any nat-to ($ext_if)
+pass out quick on $ext_if inet6 from ($ext_if) to any keep state</code></pre>
+</div>
+
+<div class="callout callout-note">
+  <p><strong>Production: prefer native IPv6 routing over NAT66.</strong>
+  If your ISP delegates a DHCPv6-PD prefix, assign it to $int_if, advertise
+  it via <code>rad</code>, and remove the NAT66 match rule. Native routing is
+  always preferred. The NAT66 PMTUD limitation (the OpenBSD kernel does not
+  generate ICMPv6 Packet Too Big for oversized forwarded packets) does not
+  apply when using native prefix delegation.</p>
+</div>
+
+<h2>NAT64 -- IPv6 LAN to IPv4 Internet</h2>
+<p>
+  NAT64 allows IPv6-only LAN clients to reach IPv4 internet destinations.
+  The NAT64 prefix in use is the well-known prefix <code>%%NAT64_PFX%%</code>
+  defined in RFC 6052, stored in the pf.conf variable <code>nat64_pfx</code>.
+  Unbound's DNS64 module synthesises AAAA records under this prefix for
+  IPv4-only destinations. When a client sends a packet to an address in that
+  prefix, PF rewrites the source to the WAN IPv4 address via
+  <code>af-to inet</code> and forwards it as a regular IPv4 packet. NAT44
+  masquerades the outbound packet.
+</p>
+<p>
+  Using the well-known prefix means clients can synthesise NAT64 addresses
+  automatically for any IPv4 destination without explicit configuration, which
+  is not possible with a locally defined prefix.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">pf</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># pf.conf -- NAT64 (nat64_pfx = "%%NAT64_PFX%%")
+pass in on $int_if inet6 from $int_net6 to $nat64_pfx \
+    af-to inet from ($ext_if) keep state
+
+pass out on $ext_if inet from ($ext_if) to any keep state</code></pre>
+</div>
+
+<p>
+  A prerequisite static route is added at boot via
+  <code>/etc/hostname.%%INT_IF%%</code>:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/hostname.%%INT_IF%%
+!route add -inet6 %%NAT64_PFX%% %%INT_IP6%%</code></pre>
+</div>
+
+<p>
+  To validate NAT64 from a client on the LAN, ping an IPv4 address using its
+  NAT64-mapped form. The mapping embeds the IPv4 address in the last 32 bits
+  of the NAT64 prefix:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># From a LAN client -- test NAT64 by pinging 8.8.8.8 via the NAT64 prefix
+# 8.8.8.8 in hex = 08.08.08.08 => embedded as ::808:808
+ping6 64:ff9b::808:808
+
+# From the router -- verify the static route is in place
+route -n show -inet6 | grep 64:ff9b</code></pre>
+</div>
+
+<h2>FTP Proxy</h2>
+<p>
+  Active-mode FTP requires the server to initiate a data connection back to
+  the client, a pattern that breaks through NAT without special handling.
+  OpenBSD's <code>ftp-proxy</code> intercepts FTP control connections and
+  dynamically opens the required PF pass rules for data connections. Both
+  IPv4 and IPv6 variants are running, covering outbound FTP from LAN clients.
+  Inbound (reverse) proxy rules are present in <code>pf.conf</code> but
+  commented out; uncomment to support external FTP clients connecting to
+  servers behind the router.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/rc.conf.local -- FTP proxy instances
+ftpproxy_flags="-b 127.0.0.1 -p 8021"
+ftpproxy_reverse_flags="-r -b 127.0.0.1 -p 8022"
+ftpproxy6_flags="-b ::1 -p 8021"
+ftpproxy6_reverse_flags="-r -b ::1 -p 8022"</code></pre>
+</div>
+
+<h2>Kernel Network Tuning</h2>
+<p>
+  <code>/etc/sysctl.conf</code> contains tuning values applied at boot.
+  All values are ground-truth verified against a running system; the file
+  header notes which values were confirmed and which require hardware-specific
+  adjustment.
+</p>
+
+<h3>Kernel limits</h3>
+<dl>
+  <dt><code>kern.maxfiles=65536</code></dt>
+  <dd>Maximum open file descriptors system-wide. Raised from the default
+  to support the number of concurrent log file handles, socket connections,
+  and BPF captures that the full service stack requires.</dd>
+
+  <dt><code>kern.maxproc=8192</code></dt>
+  <dd>Maximum processes. The default is adequate for most deployments but
+  this value gives headroom for all 17 WebUI runners, the full proxy chain,
+  and any operator sessions running simultaneously.</dd>
+
+  <dt><code>kern.maxclusters=524288</code></dt>
+  <dd>Network memory buffer clusters. Set to approximately 25% of 8 GB RAM
+  (524288 × 4096 bytes = 2 GB). On a 4 GB system or QEMU with less RAM,
+  use 262144. Undersizing this value causes mbuf allocation failures under
+  sustained traffic; the symptom is silent packet drops with no PF state
+  exhaustion.</dd>
+</dl>
+
+<h3>BPF capture buffer</h3>
+<dl>
+  <dt><code>net.bpf.bufsize=2097152</code></dt>
+  <dt><code>net.bpf.maxbufsize=2097152</code></dt>
+  <dd>BPF read buffer size, 2 MB. The default 32 KB causes buffer overruns
+  and silent packet drops when both pflog0 and pflog1 are active under load,
+  and when pmacct is capturing on both interfaces simultaneously. This is a
+  silent failure with no error message; packets are simply not delivered to
+  the capturing process. After a sysupgrade, verify these values are still
+  in <code>/etc/sysctl.conf</code>; this is listed as a critical dependency
+  in the boot warnings.</dd>
+</dl>
+
+<div class="callout callout-danger">
+  <p><strong>Critical -- BPF buffer loss after sysupgrade.</strong>
+  OpenBSD sysupgrade may reset <code>/etc/sysctl.conf</code> or merge
+  conflicts silently. After every upgrade, verify
+  <code>net.bpf.bufsize</code> and <code>net.bpf.maxbufsize</code> are
+  still set to 2097152. If they revert to the default, pflog1 and pmacct
+  will drop packets silently under load and the WebUI will show incomplete
+  traffic data with no error indication.</p>
+</div>
+
+<h3>TCP tuning</h3>
+<dl>
+  <dt><code>net.inet.tcp.mssdflt=1460</code></dt>
+  <dd>Default maximum segment size for outgoing TCP connections. Matches
+  standard Ethernet MTU minus IP and TCP headers. PF's scrub rule also
+  clamps TCP MSS on ingress to handle PPPoE and tunnel overhead.</dd>
+
+  <dt><code>net.inet.tcp.keepidle=300</code></dt>
+  <dd>Seconds before keepalive probes begin on idle connections. Reduced
+  from the 7200-second (2-hour) default. A router sees many short-lived
+  connections, and detecting dead peers in 5 minutes rather than 2 hours
+  reclaims PF state table entries promptly.</dd>
+
+  <dt><code>net.inet.tcp.keepinittime=30</code></dt>
+  <dd>Seconds to wait for a SYN-ACK before dropping half-open connections.
+  Reduced from 75 seconds. Limits resource consumption during SYN floods.</dd>
+
+  <dt><code>net.inet.tcp.keepintvl=10</code></dt>
+  <dd>Seconds between keepalive probes once they begin. Reduced from
+  75 seconds. Combined with <code>keepidle=300</code>, a dead connection is
+  detected within approximately 5 minutes plus a small number of 10-second
+  probe intervals.</dd>
+
+  <dt><code>net.inet.tcp.ecn=1</code></dt>
+  <dd>Explicit Congestion Notification enabled. Allows routers to signal
+  congestion without dropping packets. Beneficial on networks that support
+  ECN end-to-end.</dd>
+</dl>
+
+<h3>UDP tuning</h3>
+<dl>
+  <dt><code>net.inet.udp.recvspace=1048576</code></dt>
+  <dt><code>net.inet.udp.sendspace=262144</code></dt>
+  <dd>UDP socket receive and send buffers. Raised from defaults for
+  Unbound's DNS resolver workload. Unbound serves DNS for all LAN clients
+  and forwards to upstream over DoT; at peak it handles hundreds of
+  concurrent queries. Undersized buffers cause query timeouts under load.</dd>
+</dl>
+
+<h3>Shared memory</h3>
+<dl>
+  <dt><code>kern.shminfo.shmmax=536870912</code></dt>
+  <dd>Maximum shared memory segment size, 512 MB. Required by
+  e2guardian, which uses POSIX shared memory for its filter engine. If this
+  value is too low, e2guardian fails silently at startup; it starts and accepts
+  connections but does not filter content. This is listed as a critical
+  dependency in the boot warnings.</dd>
+</dl>
+
+<h2>login.conf -- Daemon Resource Class</h2>
+<p>
+  The <code>daemon</code> class in <code>/etc/login.conf</code> sets resource
+  limits for all daemons started by <code>rc.d</code> and <code>rc.local</code>.
+  Tangent Networks raises these limits significantly from the OpenBSD defaults
+  to support the full service stack running simultaneously on a single machine.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">text</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/login.conf -- daemon class
+daemon:\
+    :ignorenologin:\
+    :datasize=8192M:\
+    :maxproc=infinity:\
+    :openfiles-max=65536:\
+    :openfiles-cur=8192:\
+    :stacksize-cur=16M:\
+    :tc=default:</code></pre>
+</div>
+
+<p>
+  After editing <code>/etc/login.conf</code>, the binary database must be
+  rebuilt before the changes take effect:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>cap_mkdb /etc/login.conf</code></pre>
+</div>
+
+<div class="callout callout-danger">
+  <p><strong>Critical -- daemon class limits are silent failures.</strong>
+  If the <code>daemon</code> class is missing or has default values,
+  e2guardian and ClamAV start without error but operate incorrectly:
+  e2guardian cannot allocate shared memory and ClamAV hits open file limits.
+  The install script checks for the daemon class and adds it if missing,
+  followed by <code>cap_mkdb</code>. After a sysupgrade, verify the daemon
+  class is still present with the correct values.</p>
+</div>
+
+<h2>GeoIP Data -- get_geoip_data.pl</h2>
+<p>
+  Country-level IP allocations and ASN prefix lists are maintained by
+  <code>get_geoip_data.pl</code>, a taint-mode Perl script that runs daily
+  at 12:30 via cron. It fetches the RIPE NCC delegated statistics file
+  and splits it into per-country prefix files used by the WebUI firewall
+  panel for GeoIP-based blocking rules.
+</p>
+<p>
+  Output is written to three directories under
+  <code>/var/www/htdocs/tn/data/db/GeoIP/</code>:
+</p>
+
+<dl>
+  <dt><code>GeoIP/ipv4/CC.txt</code></dt>
+  <dd>One file per country code. Each line is an IPv4 CIDR allocated or
+  assigned to that country according to the RIPE registry.</dd>
+
+  <dt><code>GeoIP/ipv6/CC.txt</code></dt>
+  <dd>Same structure for IPv6 prefixes.</dd>
+
+  <dt><code>GeoIP/ASN/ASxxxx.txt</code></dt>
+  <dd>Per-ASN prefix files for a hardcoded set of large CDN and cloud
+  providers (Google AS15169, Cloudflare AS13335, Amazon AS16509). Fetched
+  from the RIPE Stat API. Overlapping prefixes are merged using an integer
+  range sort-and-merge algorithm before writing; the output contains the
+  minimum number of non-overlapping CIDRs that cover the same address space.</dd>
+</dl>
+
+<p>
+  The script runs in taint mode (<code>#!/usr/bin/perl -T</code>) with a
+  cleaned environment and validated paths. No user input reaches it; the
+  configuration is entirely hardcoded. External fetches use OpenBSD's
+  <code>ftp</code> utility in pipe mode (<code>ftp -o -</code>) via a list-form
+  <code>open</code> call to avoid shell injection. Log output goes to
+  <code>/var/log/geoip_update.log</code>.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Run manually (as root)
+/usr/local/sbin/get_geoip_data.pl
+
+# Check last run log
+tail -30 /var/log/geoip_update.log
+
+# Verify output directories
+ls /var/www/htdocs/tn/data/db/GeoIP/ipv4/ | head -10
+ls /var/www/htdocs/tn/data/db/GeoIP/ASN/</code></pre>
+</div>
+
+<div class="callout callout-note">
+  <p><strong>ASN list is hardcoded.</strong>
+  The three ASNs (Google, Cloudflare, Amazon) are defined directly in the
+  script at <code>my @TARGET_ASNS</code>. To add or remove ASNs, edit the
+  array and re-run the script. The WebUI GeoIP panel reads whatever files
+  are present in <code>GeoIP/ASN/</code>; no configuration change is
+  needed in the UI layer when the ASN list changes.</p>
+</div>
+
+<h2>Snort Rule Updates -- oinkmaster_update_snortinline.sh</h2>
+<p>
+  Snort inline rules are updated daily at 11:30 via
+  <code>oinkmaster_update_snortinline.sh</code>. The script is a single
+  invocation of <code>oinkmaster</code> pointing at the Snort rules directory
+  and its configuration file. Output is captured to the Snort log directory
+  for review.
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code>/usr/local/bin/oinkmaster \
+    -o /etc/snort/rules \
+    -C /etc/oinkmaster.conf \
+    > /var/www/htdocs/tn/data/logs/snort/oinkmaster.log 2>&1</code></pre>
+</div>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">sh</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># Check last oinkmaster run
+cat /var/www/htdocs/tn/data/logs/snort/oinkmaster.log
+
+# Run manually
+/usr/local/sbin/oinkmaster_update_snortinline.sh</code></pre>
+</div>
+
+<p>
+  Oinkmaster configuration, rule source URL, and suppression lists are in
+  <code>/etc/oinkmaster.conf</code>. Snort must be restarted after a rule
+  update for the new rules to take effect; this is not done automatically
+  by the script. Use the Services panel in the WebUI or
+  <code>rcctl restart snort</code> from the shell.
+</p>
+
+<h2>Scheduled Network Maintenance</h2>
+<p>
+  Network-related cron jobs run as root from <code>/etc/crontab</code>. The
+  full schedule including all system jobs is in the System Orchestration
+  document. Network-specific entries:
+</p>
+
+<div class="doc-code-block">
+  <div class="doc-code-header">
+    <span class="doc-code-lang">cron</span>
+    <button class="doc-code-copy" type="button">
+      <span class="doc-code-copy-label">Copy</span>
+    </button>
+  </div>
+  <pre><code># /etc/crontab -- network maintenance
+0  11 * * *   root  /usr/local/sbin/pfblock.sh
+30 11 * * *   root  /usr/local/sbin/oinkmaster_update_snortinline.sh
+30 12 * * *   root  /usr/local/sbin/get_geoip_data.pl</code></pre>
+</div>
+
+<p>
+  The stagger between these jobs (11:00, 11:30, 12:30) is intentional.
+  Each job involves network fetches and file writes that compete for
+  bandwidth and I/O, and running them sequentially avoids contention.
+  <code>pfblock.sh</code> runs first because an updated blocklist is more
+  time-sensitive than updated GeoIP data or Snort rules.
+</p>
+
+<h2>MFS Paths -- Network Layer Relevance</h2>
+<p>
+  Two memory filesystem mounts are relevant to the network layer.
+  Both are declared in <code>/etc/fstab</code> and mounted at boot before
+  any network service starts. Full MFS lifecycle documentation is in the
+  System Orchestration fragment.
+</p>
+
+<dl>
+  <dt><code>/var/www/htdocs/tn/data/logs/pf/</code> -- 128 MB MFS</dt>
+  <dd>Receives the tcpdump output from <code>pflog1</code>. The rolling
+  window file (<code>pflog1.log</code>) holds the last 500 lines for
+  real-time WebUI display. The archive pipeline writes to persistent storage
+  separately. This path is empty after every reboot.</dd>
+
+  <dt><code>/var/www/htdocs/tn/data/pipes/pmacct/</code> -- 64 MB MFS</dt>
+  <dd>Receives JSON flow records from the two pmacct MFS instances
+  (<code>ext_if_json_mfs</code> and <code>int_if_json_mfs</code>). Read by
+  the WebUI dashboard for live WAN and LAN traffic display. This path is
+  empty after every reboot.</dd>
+</dl>
+
+<div class="callout callout-warning">
+  <p><strong>Both MFS paths are empty after every reboot.</strong>
+  The WebUI will show empty traffic panels and no PF log entries until
+  rc.local completes and the respective runners start producing output.
+  This is normal. If the MFS entries are absent from
+  <code>/etc/fstab</code>, these paths become regular disk directories with
+  no size limit and will eventually fill the root filesystem.</p>
+</div>
+
+<div class="doc-summary">
+  <h2>Summary</h2>
+  <ul>
+    <li>Two interfaces: <code>%%EXT_IF%%</code> (WAN) and <code>%%INT_IF%%</code> (LAN).
+    All interface names, addresses, and gateways must be updated for real
+    hardware before deployment. All addresses in this documentation are
+    for illustration only and reflect the VM-based development environment.</li>
+    <li>Full dual-stack IPv4 and IPv6. LAN clients receive IPv4 via DHCPv4
+    and IPv6 via SLAAC. Both protocols are forwarded to the internet
+    simultaneously.</li>
+    <li>DNS is handled entirely by Unbound on the router. All queries are
+    forwarded over DoT to Quad9's threat-blocking resolver. resolvd is
+    disabled. No client ever queries a public resolver directly.</li>
+    <li>NAT64 uses the well-known prefix <code>%%NAT64_PFX%%</code> (RFC 6052),
+    stored in pf.conf as <code>nat64_pfx</code>. This allows clients to
+    synthesise NAT64 addresses for IPv4-only destinations automatically.
+    The static route for the prefix is installed at boot via
+    <code>/etc/hostname.%%INT_IF%%</code>.</li>
+    <li>NAT66 masquerades LAN ULA clients behind the WAN GUA. It is a
+    fallback for ISPs without DHCPv6-PD. If a delegated prefix is available,
+    prefer native routing and remove the NAT66 match rule.</li>
+    <li>The <code>rad.conf</code> MTU value is set by
+    <code>tn-mtu-probe.sh</code> at boot. SLAAC clients self-limit to this
+    MTU, mitigating the NAT66 PMTUD limitation.</li>
+    <li>Three kernel values are silent critical failures if wrong or missing:
+    <code>net.bpf.bufsize</code>, <code>kern.shminfo.shmmax</code>, and the
+    <code>daemon</code> login class. Verify all three after every sysupgrade.</li>
+    <li>GeoIP data is fetched daily from RIPE NCC by a taint-mode Perl script.
+    Snort rules are updated daily via oinkmaster. Both are staggered in cron
+    to avoid I/O and network contention with the pfblock intelligence update.</li>
+  </ul>
+</div>

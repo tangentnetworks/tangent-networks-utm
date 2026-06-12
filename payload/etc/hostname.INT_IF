@@ -1,0 +1,5 @@
+inet %%INT_IP4%% 255.255.255.0
+inet6 fd0a0a:0a00::1 64
+mtu 1472
+up
+!route add -inet6 64:ff9b::/96 fd0a0a:0a00::1
