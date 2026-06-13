@@ -13,7 +13,7 @@ SPDX-License-Identifier: BSD-3-Clause
 > [!NOTE]
 > Back up your existing system configuration before installation, including `/etc/rc.local`, `/etc/httpd.conf`, `/etc/hostname.*`, `/etc/mygate`, `/etc/syslog.conf`, `/etc/newsyslog.conf`, `/etc/rc.conf.local`, `/etc/rc`, `/etc/pf.conf`, and related files. While the installer incorporates safeguards, an independent backup remains the most reliable recovery mechanism.
 
-A Unified Threat Management platform built on OpenBSD 7.9. Self-hosted, open source (BSD 3-Clause), zero cloud dependency.
+A Unified Threat Management platform built on OpenBSD 7.8 / 7.9. Self-hosted, open source (BSD 3-Clause), zero cloud dependency.
 
 This is not a wrapper around an existing firewall distribution. It is a ground-up implementation of a privilege-separated UTM stack with a browser-based management interface, written on top of a stock OpenBSD install. Every component -- the boot orchestration, the WebUI, the inspection chain, the privilege separation model, the log rotation framework -- is purpose-built for this platform.
 
