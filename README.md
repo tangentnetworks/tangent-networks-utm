@@ -10,6 +10,9 @@ SPDX-License-Identifier: BSD-3-Clause
 >
 > This software is provided "as is", without warranty of any kind, express or implied. The authors and contributors accept no responsibility or liability for any damage, data loss, system instability, or other adverse outcomes arising from its use. It is not intended for general use outside this project or closely related derivative systems. Use at your own risk.
 
+> [!NOTE]
+> Back up your existing system configuration before installation, including `/etc/rc.local`, `/etc/httpd.conf`, `/etc/hostname.*`, `/etc/mygate`, `/etc/syslog.conf`, `/etc/newsyslog.conf`, `/etc/rc.conf.local`, `/etc/rc`, `/etc/pf.conf`, and related files. While the installer incorporates safeguards, an independent backup remains the most reliable recovery mechanism.
+
 A Unified Threat Management platform built on OpenBSD 7.9. Self-hosted, open source (BSD 3-Clause), zero cloud dependency.
 
 This is not a wrapper around an existing firewall distribution. It is a ground-up implementation of a privilege-separated UTM stack with a browser-based management interface, written on top of a stock OpenBSD install. Every component -- the boot orchestration, the WebUI, the inspection chain, the privilege separation model, the log rotation framework -- is purpose-built for this platform.
@@ -103,19 +106,45 @@ SSLproxy acts as the IPv6/IPv4 protocol boundary. IPv6 LAN flows are diverted to
 
 ## Requirements
 
-**Operating system:** OpenBSD 7.8 or 7.9 (amd64, arm64). No other OS or architecture is supported.
+**Operating system:** OpenBSD 7.8 or 7.9 (`amd64`, `arm64`).
+
+**Required installation sets:**
+* `bsd`
+* `bsd.mp`
+* `bsd.rd`
+* `manXX.tgz`
+* `baseXX.tgz`
+* `xbaseXX.tgz`
+
+Where `XX` corresponds to the installed OpenBSD release (e.g. `base79.tgz`, `xbase79.tgz`).
 
 **Hardware minimum:**
-- 2-core x86-64 CPU
-- 4 GB RAM
-- 128 GB SSD
-- 2 network interfaces -- Intel `em`, `igb`, or `ix` family strongly preferred for OpenBSD driver stability. Wireless interfaces are supported. USB NICs are not recommended.
 
-**Hardware recommended (production):**
-- 4-core x86-64 CPU
-- 8 GB RAM
-- 256 GB SSD
-- 2 Intel NICs
+* 2-core CPU
+* 4 GB RAM
+* 128 GB SSD
+* 2 or more network interfaces
+
+**Hardware recommended:**
+
+* 4-core CPU
+* 8 GB RAM
+* 256 GB SSD
+* 2 or more Intel Ethernet adapters
+
+**Network interfaces:**
+
+* Any OpenBSD-supported network interface may be used.
+* A minimum of two interfaces is required to establish ingress and egress networks.
+* Supported deployments include wired/wired, wired/wireless, wireless/wireless, `vether(4)`, and `bridge(4)`-based configurations.
+* Intel `em(4)`, `igc(4)`, `igb(4)`, and `ix(4)` adapters are recommended for production environments.
+* Wireless interfaces are supported where appropriate.
+* USB network adapters are not recommended.
+
+**Dependencies:**
+
+* Required: `git`
+* Optional but recommended: `nano`, `most`, `colorls`, `colordiff` and `truncate`
 
 **Critical kernel dependencies** (applied by `UTM_INSTALL.sh`, lost after sysupgrade -- see [Silent Hard Dependencies](#silent-hard-dependencies)):
 
