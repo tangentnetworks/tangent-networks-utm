@@ -40,6 +40,17 @@ platform worth building on.
 To the pf, httpd, and pledge/unveil teams in particular:
 the right constraints make better software.
 
+## Acknowledgements
+
+This project was developed and validated primarily on OpenBSD virtual
+machines hosted on the KVM/QEMU virtualization stack via libvirt.
+
+Appreciation is extended to the OpenBSD, openSUSE, QEMU, KVM, and
+libvirt communities, as well as the countless maintainers, package
+builders, documentation authors, and testers whose work makes projects
+such as this possible.
+
+
 The open source community, mailing lists, man pages, and the quiet
 generosity of people who document what they learned so others do not
 have to suffer the same failures twice.
