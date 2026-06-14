@@ -723,8 +723,6 @@ mount | grep mfs
 
 ## Contributing
 
-The project is in active development. Source code, contribution guidelines, and issue templates will be published here as the first public release is prepared.
-
 For bug reports and security issues, use the GitLab issue tracker. For security-sensitive reports, contact via the website before opening a public issue.
 
 Code style conventions:
