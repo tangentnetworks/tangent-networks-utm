@@ -18,9 +18,10 @@ SPDX-License-Identifier: BSD-3-Clause
 `rc.local` is the single authoritative entry point for the Tangent appliance's
 boot sequence. OpenBSD's base `rc` script handles the kernel, network
 interfaces, and system daemons (sshd, httpd, dhcpd, unbound, rad, ftp-proxy)
-via `rcctl`. Everything above that -- the security stack, the proxy layer, the
-traffic accounting system, and the entire WebUI service infrastructure -- is
-started here.
+via `rcctl`. It also invokes `reorder_libs` and runs `tangent_logrotate.sh`
+before starting network daemons. Everything above that -- the security stack,
+the proxy layer, the traffic accounting system, and the entire WebUI service
+infrastructure -- is started here in `rc.local`.
 
 The script is written in ksh with `set -euo pipefail` enforced from the first
 line. This means any unhandled error, unset variable reference, or failed pipe
@@ -59,6 +60,29 @@ the environment is minimal and inherited PATH cannot be trusted to include
 
 ## Global Initialisation
 
+### truncate Availability Check
+
+Before anything else, the script verifies that the `truncate` binary is present:
+
+```sh
+if ! command -v truncate > /dev/null 2>&1; then
+  echo "$(date) [WARN] truncate not found -- installing via pkg_add"
+  pkg_add -Iv truncate
+  if command -v truncate > /dev/null 2>&1; then
+    echo "$(date) [INFO] truncate successfully installed and verified"
+  else
+    echo "$(date) [ERROR] truncate installation attempt completed but binary not in PATH"
+  fi
+fi
+```
+
+`truncate` is used later to zero out PID files and logs without deleting them.
+If it is not present, the script installs it immediately via `pkg_add`. This
+guard exists because the rest of the script depends on it and there is no
+graceful fallback.
+
+### Logging Setup
+
 ```sh
 SERVICE_LOG_DIR="/var/www/htdocs/tn/data/logs/bootlog"
 RCLOGFILE="/var/www/htdocs/tn/data/logs/bootlog/rc.local.log"
@@ -94,7 +118,7 @@ running.
 ### Log Truncation
 
 ```sh
-find /var/www/tmp -type f -name 'control-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].log' -exec rm -v {} \;
+find /var/www/tmp -type f -name 'control-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].log' -exec rm -f {} \;
 find /var/www/tmp -type f -name "*.log" -exec truncate -s 0 {} +
 ```
 
@@ -136,6 +160,32 @@ Log output format:
 
 ---
 
+## What Happens Before rc.local
+
+The base `rc` script runs `reorder_libs` to rebuild the shared library cache,
+then immediately invokes `tangent_logrotate.sh` before any network daemons are
+started:
+
+```sh
+reorder_libs 2>&1 |&
+# Tangent Log Rotation Hook
+if [ -x /usr/local/sbin/tangent_logrotate.sh ]; then
+        echo -n 'rotating logs'
+        /usr/local/sbin/tangent_logrotate.sh >/dev/null 2>&1
+        echo '.'
+fi
+start_daemon slaacd dhcpleased resolvd >/dev/null 2>&1
+echo 'starting network'
+```
+
+`tangent_logrotate.sh` runs synchronously in this window, before the network
+stack is up and before any appliance daemons exist. This makes it the
+appropriate place for log rotation that must not race with running services.
+Only after it completes does `rc` bring up SLAAC, DHCP, and the resolver, and
+only after all of that does `rc.local` execute.
+
+---
+
 ## Boot Sequence
 
 Services are started in dependency order. The security and inspection layer
@@ -152,16 +202,16 @@ detection (IDS) and one for inline intrusion prevention (IPS).
 **IDS instance:**
 
 ```sh
-/usr/local/bin/snort -i vio1 -d -c /etc/snort/snort.conf \
+/usr/local/bin/snort -i em1 -d -c /etc/snort/snort.conf \
     -u _snort -g _snort -b -l /var/www/htdocs/tn/data/logs/snort \
     --pid-path /var/www/htdocs/tn/data/run/snort \
     2>&1 | logger -t snort_ids -p daemon.info
 ```
 
-Snort IDS listens passively on `vio1` (the LAN interface) in binary logging
+Snort IDS listens passively on `em1` (the LAN interface) in binary logging
 mode (`-b`). It runs as `_snort:_snort`. Output is piped to `logger` which
 forwards it to syslog under the `daemon.info` facility with the tag
-`snort_ids`. The PID file written is `snort_vio1.pid` -- the interface name is
+`snort_ids`. The PID file written is `snort_em1.pid` -- the interface name is
 appended by Snort automatically.
 
 Startup verification polls for the PID file for up to 15 seconds (1 second
@@ -213,7 +263,7 @@ is set to `_e2guardian:_clamav` -- e2guardian integrates with ClamAV for
 antivirus scanning of web content, requiring group access to ClamAV's socket.
 
 e2guardian does not have a startup polling loop here -- it daemonises quickly
-and its WebUI runner (`e2g_status_writer_runner.sh`,
+and its WebUI runners (`e2g_status_writer_runner.sh`,
 `e2g_queue_processor_runner.sh`, `e2g_user_filter_runner.sh`) handle ongoing
 status monitoring.
 
@@ -252,7 +302,7 @@ Startup verification waits up to 90 seconds for the clamd Unix socket to
 appear at `/var/www/htdocs/tn/data/tmp/clamav/clamd.socket`. A progress dot
 is logged every 10 seconds. ClamAV loads its full virus signature database
 into memory at startup -- on the target hardware with a current signature set
-this takes 30–60 seconds. The 90-second timeout accommodates this without
+this takes 30-60 seconds. The 90-second timeout accommodates this without
 failing prematurely.
 
 Once the socket appears, `freshclam -d` is started as a background daemon to
@@ -419,16 +469,16 @@ directory. Run synchronously (not backgrounded) so the web UI has current PF
 state before the runner services start. Output is suppressed -- errors are
 silent at boot but logged by the script itself.
 
-### PF Logging (tcpdump on pflog1)
+### PF Logging (tcpdump on em1)
 
 ```sh
 TCPDUMP="/usr/sbin/tcpdump"
-PFIF="pflog1"
+PFIF="em1"
 $TCPDUMP -n -e -ttt -i "$PFIF" >> "$PFLOG_FILE" 2>&1 &
 ```
 
-A `tcpdump` process is started to capture all traffic logged to `pflog1` (the
-all-traffic pflog interface) and write it in human-readable form to
+A `tcpdump` process is started to capture all traffic logged through `em1`
+and write it in human-readable form to
 `/var/www/htdocs/tn/data/logs/pf/pflog1.log`. This feeds the web UI's traffic
 viewer and the pmacct traffic accounting pipeline.
 
@@ -443,9 +493,6 @@ process is still running before logging success.
 
 The log file is owned `www:wheel` mode `644` so the web UI's httpd process can
 read it directly.
-
-Note: `pflog0` (blocks only) is managed separately by the `pf_tcpdump_runner`
-WebUI service started later via `start_service()`.
 
 ---
 
@@ -467,9 +514,9 @@ WebUI service started later via `start_service()`.
 ) >/dev/null 2>&1 &
 ```
 
-`process_monitor.pl` is a fast service status checker (0.66 seconds real
-execution time) that generates a service status report. It is scheduled to run
-at 1 minute past the next wall-clock quarter-hour boundary.
+`process_monitor.pl` is a fast service status checker that generates a service
+status report. It is scheduled to run at 1 minute past the next wall-clock
+quarter-hour boundary.
 
 The timing is deliberate and coordinates with pmacct. The `ext_if_json_log`
 pmacct instance starts at the quarter-hour boundary and takes up to 15 seconds
@@ -485,6 +532,21 @@ The entire scheduling and execution block runs in a background subshell with
 output redirected to `/dev/null` -- it must not interfere with the main boot
 log's `exec` redirect. The status report is written to its own dedicated file
 `/var/www/htdocs/tn/data/logs/bootlog/services.log`.
+
+---
+
+## PF Table Population
+
+```sh
+if [ -x /usr/local/sbin/pf_tables_load.sh ]; then
+    /usr/local/sbin/pf_tables_load.sh
+fi
+```
+
+Run synchronously after the IPv6 route check. Populates PF's persistent tables
+(blocklists, allowlists, geographic address sets) from disk before any traffic
+reaches the rule set. Running this before the WebUI runners start ensures the
+firewall is in a consistent state from the moment services become available.
 
 ---
 
@@ -575,7 +637,7 @@ and table sizes for the firewall dashboard.
 
 `pf_tcpdump_runner.sh` (registered as `pflog_maint`) -- Manages the tcpdump
 process on `pflog0` (blocks only) and handles log maintenance for the block
-log. Distinct from the pflog1 tcpdump started directly earlier in the script.
+log. Distinct from the em1 tcpdump started directly earlier in the script.
 
 `pmacct_mfs_manage_runner.sh` -- Manages the pmacct MFS log files, handling
 rotation and cleanup of the in-memory traffic records.
@@ -612,26 +674,27 @@ with network ownership information.
 DHCP lease file for changes and updates the web UI's client list in real time.
 
 `pf_anchor_sync_runner.sh` -- Synchronises PF anchor contents between the
-running ruleset and persistent storage, ensuring addons anchor rules survive
+running ruleset and persistent storage, ensuring addon anchor rules survive
 reloads.
 
 ---
 
-## IPv6 Default Route Recovery
+## RRD Map Self-Healer
 
 ```sh
-if [ -x /usr/local/sbin/ipv6-route-check.sh ]; then
-    /usr/local/sbin/ipv6-route-check.sh \
-        > /var/www/htdocs/tn/data/logs/bootlog/ipv6-route-check.log 2>&1
+if [ -f /etc/collectd_reconciler.pm ]; then
+    /usr/bin/perl -T /etc/collectd_reconciler.pm
 fi
 ```
 
-Run synchronously as the final boot step before `exit 0`. Verifies the IPv6
-default route is present and correctly configured, restoring it if absent. This
-covers the edge case where the IPv6 gateway is not reachable at the moment the
-network interfaces come up but becomes reachable shortly after -- a common
-occurrence with SLAAC and DHCPv6 timing on some upstream configurations. Output
-goes to its own log file separate from the main boot log.
+Run synchronously as the final step before `exit 0`. `collectd_reconciler.pm`
+reconciles the RRD file map at boot time, ensuring the set of RRD files on
+disk matches what collectd is currently configured to produce. Any RRD files
+for metrics that no longer exist are retired, and any missing RRD files for
+active metrics are created with correct schema. Running this after all runners
+are up means collectd has had time to create any new RRD files before the
+reconciler inspects them. The `-T` flag enables taint mode, consistent with
+the rest of the appliance's Perl execution policy.
 
 ---
 
