@@ -163,7 +163,7 @@ Where `XX` corresponds to the installed OpenBSD release (e.g. `base79.tgz`, `xba
 Clone the repository and run the install script as root on a fresh OpenBSD version 7.8 or 7.9 install.
 
 ```ksh
-git clone https://gitlab.com/tangentnetworks/tangent-networks-utm.git
+git clone https://github.com/tangentnetworks/tangent-networks-utm.git
 cd tangent-networks-utm
 chmod +x *.sh *.pl
 ```
