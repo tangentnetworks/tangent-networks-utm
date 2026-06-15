@@ -1420,7 +1420,7 @@ probe_nic_capabilities() {
 # =============================================================================
 print_header "Tangent Networks UTM -- Network Setup v${VERSION}"
 info "Log: $LOG_FILE"
-[ "$(id -u)" -ne 0 ] && err "Must run as root: doas ksh $0" && exit 1
+[ "$(id -u)" -ne 0 ] && err "Must run as root: ksh $0" && exit 1
 [ "$(uname -s)" != "OpenBSD" ] && err "OpenBSD only" && exit 1
 
 probe_hal
