@@ -40,7 +40,7 @@
 # Verify   No unresolved tokens
 #   Fails if any %%TOKEN%% pattern remains in any text file in the payload.
 #
-# Usage: doas ksh TN_SUBSTITUTE.sh [--dry-run]
+# Usage: ksh TN_SUBSTITUTE.sh [--dry-run]
 # =============================================================================
 
 set -e
