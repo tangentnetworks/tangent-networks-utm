@@ -33,8 +33,8 @@
 #                       TNWatch: init-db, parse-all, test-email
 #
 # Run modes:
-#   doas ksh TN_CHROOT_SETUP.sh           -- full setup (writes manifest on first run)
-#   doas ksh TN_CHROOT_SETUP.sh --verify  -- check only, no changes
+#   ksh TN_CHROOT_SETUP.sh           -- full setup (writes manifest on first run)
+#   ksh TN_CHROOT_SETUP.sh --verify  -- check only, no changes
 #
 # Manifest (chroot-manifest.txt + chroot-manifest.sha256, next to this script):
 #   First run  -- host is pristine; every host source path copied is recorded.
@@ -405,7 +405,7 @@ info "Arch: $PERL_ARCH"
 echo ""
 
 if [ "$(id -u)" -ne 0 ]; then
-  note_err "Must run as root: doas ksh $0"
+  note_err "Must run as root: ksh $0"
   trap - EXIT
   exit 1
 fi
