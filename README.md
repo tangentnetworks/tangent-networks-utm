@@ -207,7 +207,7 @@ After installation, reboot. The full service stack starts from `/etc/rc.local`. 
 **Post-install configuration required:**
 
 - Edit `/etc/hostname.vio0` and `/etc/hostname.vio1` with your actual interface names and addresses
-- Edit `/etc/mygate` and `/etc/mygate6` with your gateway addresses
+- Edit `/etc/mygate` with your gateway addresses
 - Set the `ext_if` and `int_if` variables at the top of `/etc/pf.conf`
 - Access the WebUI at `https://10.10.10.1` from a LAN client to complete initial setup
 
