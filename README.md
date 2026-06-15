@@ -10,10 +10,7 @@ SPDX-License-Identifier: BSD-3-Clause
 >
 > This software is provided "as is", without warranty of any kind, express or implied. The authors and contributors accept no responsibility or liability for any damage, data loss, system instability, or other adverse outcomes arising from its use. It is not intended for general use outside this project or closely related derivative systems. Use at your own risk.
 
-> [!NOTE]
-> Back up your existing system configuration before installation, including `/etc/rc.local`, `/etc/httpd.conf`, `/etc/hostname.*`, `/etc/mygate`, `/etc/syslog.conf`, `/etc/newsyslog.conf`, `/etc/rc.conf.local`, `/etc/rc`, `/etc/pf.conf`, and related files. While the installer incorporates safeguards, an independent backup remains the most reliable recovery mechanism.
-
-A Unified Threat Management platform built on OpenBSD 7.8 / 7.9. Self-hosted, open source (BSD 3-Clause), zero cloud dependency.
+A Unified Threat Management platform built on OpenBSD 7.9. Self-hosted, open source (BSD 3-Clause), zero cloud dependency.
 
 This is not a wrapper around an existing firewall distribution. It is a ground-up implementation of a privilege-separated UTM stack with a browser-based management interface, written on top of a stock OpenBSD install. Every component -- the boot orchestration, the WebUI, the inspection chain, the privilege separation model, the log rotation framework -- is purpose-built for this platform.
 
@@ -106,47 +103,21 @@ SSLproxy acts as the IPv6/IPv4 protocol boundary. IPv6 LAN flows are diverted to
 
 ## Requirements
 
-**Operating system:** OpenBSD 7.8 or 7.9 (`amd64`, `arm64`).
-
-**Required installation sets:**
-* `bsd`
-* `bsd.mp`
-* `bsd.rd`
-* `manXX.tgz`
-* `baseXX.tgz`
-* `xbaseXX.tgz`
-
-Where `XX` corresponds to the installed OpenBSD release (e.g. `base79.tgz`, `xbase79.tgz`).
+**Operating system:** OpenBSD 7.8 or 7.9 (amd64, arm64). No other OS or architecture is supported.
 
 **Hardware minimum:**
+- 2-core x86-64 CPU
+- 4 GB RAM
+- 128 GB SSD
+- 2 network interfaces -- Intel `em`, `igb`, or `ix` family strongly preferred for OpenBSD driver stability. Wireless interfaces are supported. USB NICs are not recommended.
 
-* 2-core CPU
-* 4 GB RAM
-* 128 GB SSD
-* 2 or more network interfaces
+**Hardware recommended (production):**
+- 4-core x86-64 CPU
+- 8 GB RAM
+- 256 GB SSD
+- 2 Intel NICs
 
-**Hardware recommended:**
-
-* 4-core CPU
-* 8 GB RAM
-* 256 GB SSD
-* 2 or more Intel Ethernet adapters
-
-**Network interfaces:**
-
-* Any OpenBSD-supported network interface may be used.
-* A minimum of two interfaces is required to establish ingress and egress networks.
-* Supported deployments include wired/wired, wired/wireless, wireless/wireless, `vether(4)`, and `bridge(4)`-based configurations.
-* Intel `em(4)`, `igc(4)`, `igb(4)`, and `ix(4)` adapters are recommended for production environments.
-* Wireless interfaces are supported where appropriate.
-* USB network adapters are not recommended.
-
-**Dependencies:**
-
-* Required: `git`
-* Optional but recommended: `nano`, `most`, `colorls`, `colordiff` and `truncate`
-
-**Critical kernel dependencies** (applied by `UTM_INSTALL.sh`, lost after sysupgrade -- see [Silent Hard Dependencies](#silent-hard-dependencies)):
+**Critical kernel dependencies** (applied by `TN_PKG_INSTALL.sh`, lost after sysupgrade -- see [Silent Hard Dependencies](#silent-hard-dependencies)):
 
 | Parameter | Required value | Default | Effect if wrong |
 |---|---|---|---|
@@ -160,13 +131,8 @@ Where `XX` corresponds to the installed OpenBSD release (e.g. `base79.tgz`, `xba
 
 ## Installation
 
-Clone the repository and run the install script as root on a fresh OpenBSD version 7.8 or 7.9 install.
+Copy the installer directory to the target machine and run the master orchestrator as root on a fresh OpenBSD 7.8 or 7.9 install.
 
-```ksh
-git clone https://github.com/tangentnetworks/tangent-networks-utm.git
-cd tangent-networks-utm
-chmod +x *.sh *.pl
-```
 > **For further instructions, see [INSTALL.md](INSTALL.md).**
 
 **Before running the installer, place your Snort oinkcode in the project root:**
@@ -185,31 +151,13 @@ If the file is absent or contains an invalid value, Stage 1 will fall back to pr
 ksh TN_UTM_INSTALLER.sh
 ```
 
-`UTM_INSTALL.sh` performs the following in order:
+The orchestrator runs four stages in sequence. Stages 1, 2, and 4 are dot-sourced in a subshell; Stage 3 runs as a child process (see `TN_UTM_INSTALLER.sh` header for the full rationale). Two operator confirmation pauses are inserted after Stages 1 and 3 so each stage's output can be reviewed before the next stage consumes it.
 
-1. Validates the running OpenBSD version and hardware
-2. Installs all required packages via `pkg_add`
-3. Writes `/etc/sysctl.conf` with required kernel tuning values
-4. Patches `/etc/login.conf` for the `daemon` resource class and runs `cap_mkdb`
-5. Creates the full directory tree under `/var/www/htdocs/tn/`
-6. Installs and configures all service binaries and their config files
-7. Installs the WebUI source under the chroot
-8. Configures `/etc/pf.conf`, `/var/unbound/etc/unbound.conf`, `/etc/dhcpd.conf`, `/etc/rad.conf`
-9. Creates `/etc/hostname.pflog1` containing `up`
-10. Adds MFS entries to `/etc/fstab`
-11. Injects the `tangent_logrotate.sh` hook into `/etc/rc`
-12. Writes `/etc/rc.local`
-13. Runs `rcctl enable` for all required base system daemons
-14. Performs an initial boot sequence dry-run check
+Together the four stages cover: hardware probe and firmware update; WAN/LAN selection and subnet assignment; SSL CA and server certificate generation; all `%%TOKEN%%` substitution across payload files; `syspatch`, `pkg_add`, and full package verification; directory tree creation, config merges, AuthDB initialisation, and service smoke tests; `pf.conf` deploy; and chroot population with Perl and all required libraries.
 
 After installation, reboot. The full service stack starts from `/etc/rc.local`. Check `/var/www/htdocs/tn/data/logs/bootlog/rc.local.log` if anything is wrong after the first boot.
 
-**Post-install configuration required:**
-
-- Edit `/etc/hostname.vio0` and `/etc/hostname.vio1` with your actual interface names and addresses
-- Edit `/etc/mygate` with your gateway addresses
-- Set the `ext_if` and `int_if` variables at the top of `/etc/pf.conf`
-- Access the WebUI at `https://10.10.10.1` from a LAN client to complete initial setup
+Access the WebUI at `https://<LAN_IP>/register.html` from a device on the LAN to complete initial registration. The LAN IP is the address assigned to your LAN interface during Stage 1.
 
 ---
 
@@ -286,7 +234,7 @@ Both are declared in `/etc/fstab`. If missing from fstab, these become regular d
 
 ## Dependencies
 
-All installed via `pkg_add` by `UTM_INSTALL.sh`.
+All installed via `pkg_add` by `TN_PKG_INSTALL.sh`.
 
 **Security and inspection:**
 
@@ -509,15 +457,15 @@ The `tangent_logrotate.sh` hook in `/etc/rc` runs before step 1, injected after 
 ```
 rc.local start order:
 
- 1. PID file truncation + /var/www/tmp housekeeping
- 2. Snort IDS          -- waits up to 15s for snort_vio1.pid
- 3. Snort IPS          -- waits up to 10s for snort_.pid
- 4. snortsentry        -- waits up to 5s for PID file
- 5. e2guardian
- 6. collectd           -- sleeps 2s after start for socket readiness
- 7. p3scan
- 8. ClamAV / clamd     -- polls up to 90s for clamd.socket (not a hang)
- 9. freshclam          -- starts only after clamd.socket is confirmed present
+01. PID file truncation + /var/www/tmp housekeeping
+02. Snort IDS          -- waits up to 15s for snort_em1.pid
+03. Snort IPS          -- waits up to 10s for snort_.pid
+04. snortsentry        -- waits up to 5s for PID file
+05. e2guardian
+06. collectd           -- sleeps 2s after start for socket readiness
+07. p3scan
+08. ClamAV / clamd     -- polls up to 90s for clamd.socket (not a hang)
+09. freshclam          -- starts only after clamd.socket is confirmed present
 10. pmacct ext_if_json_mfs   -- starts immediately
 11. pmacct int_if_json_mfs   -- starts immediately
 12. pmacct ext_if_json_log   -- delayed to next quarter-hour boundary
@@ -558,7 +506,7 @@ rc.local start order:
 | `/etc/login.conf` | Resource limits | `daemon` class -- verify after sysupgrade, run `cap_mkdb` after edits |
 | `/etc/fstab` | MFS mount entries | If missing, MFS paths become regular disk directories |
 | `/etc/hostname.pflog1` | pflog1 interface | Must contain `up` -- if missing, all traffic logging is dark |
-| `/etc/rc.conf.local` | Base daemon flags | `resolvd_flags=NO`, `dhcpd_flags=vio1` |
+| `/etc/rc.conf.local` | Base daemon flags | `dhcpd_flags="<INT_IF>"` (set from `%%INT_IF%%` token), `resolvd_flags=NO`, `pflogd_flags=-s 160 -i pflog0 -f /var/log/pflog`, `apmd_flags=-H` |
 | `/etc/mygate` | IPv4 default gateway | |
 | `/var/db/snortsentry.state` | snortsentry block state | Persists across reboots |
 | `/var/db/dhcpd.leases` | DHCP lease ground truth | More reliable than WebUI in first minute after boot |
@@ -604,7 +552,7 @@ All CGI scripts run under Perl `-T` (taint mode). Every value from the browser m
 | `dashboard_stats_runner.sh` | `dashboard_stats_runner.pid` | collectd metrics export | CPU, memory, network, disk panels go stale |
 | `service_monitor_runner.sh` | `service_monitor_runner.pid` | Runs monitor.pl, writes services.json | Services panel shows last known state |
 | `pf_stats_runner.sh` | `pf_stats_runner.pid` | PF firewall statistics | PF stats panel goes stale |
-| `pf_tcpdump_runner.sh` | `pflog_maint.pid` | pflog1 MFS feed and archiving | PF log panel goes dark |
+| `pf_tcpdump_runner.sh` | `pflog_maint.pid` | pflog0 block log management and archiving | PF log panel goes dark |
 | `pmacct_mfs_manage_runner.sh` | `pmacct_mfs_manage_runner.pid` | MFS trim before 64MB fills | MFS fills within hours, flow accounting dark |
 | `pf_change_detector_runner.sh` | `pf_change_detector.pid` | Detects external PF rule changes | Dashboard PF state drifts from actual ruleset |
 | `e2g_user_filter_runner.sh` | `e2g_user_filter_detector.pid` | Per-user filter change detection | Per-user overrides do not apply |
@@ -645,7 +593,7 @@ Rotated files are renamed to `name_YYYY-MM-DD.log` and kept for 7 days. The scri
 
 After rotating httpd logs, `USR1` is sent to httpd via `pkill -USR1` to reopen log file descriptors. This is required because TNWAF.pm writes httpd logs directly rather than through syslog.
 
-The two MFS paths use newsyslog for in-place truncation rather than rotation.
+Both MFS paths are managed by the appliance's own log rotation and runner infrastructure, not newsyslog.
 
 ---
 
@@ -655,8 +603,8 @@ Two swap-backed memory filesystems are mounted at boot and their contents are de
 
 | Path | Size | Contents | Truncation |
 |---|---|---|---|
-| `data/logs/pf/` | 128 MB | `pflog1.log` -- live tcpdump of all PF traffic | newsyslog at 64MB, calls `pf-tcpdump.sh` before truncation |
-| `data/pipes/pmacct/` | 64 MB | `ext_if_json.log`, `int_if_json.log` | newsyslog at ~16MB each, sends SIGHUP to pmacctd |
+| `data/logs/pf/` | 128 MB | `pflog1.log` -- live tcpdump of all PF traffic | Rotation handled by appliance log management, not newsyslog |
+| `data/pipes/pmacct/` | 64 MB | `ext_if_json.log`, `int_if_json.log` | Managed by `pmacct_mfs_manage_runner.sh` |
 
 Both paths are declared in `/etc/fstab`. If the MFS entries are missing, these become regular disk directories with no size limit and the disk will eventually fill.
 
@@ -721,6 +669,8 @@ mount | grep mfs
 ---
 
 ## Contributing
+
+The project is in active development. Source code, contribution guidelines, and issue templates will be published here as the first public release is prepared.
 
 For bug reports and security issues, use the GitLab issue tracker. For security-sensitive reports, contact via the website before opening a public issue.
 
@@ -789,7 +739,7 @@ Code style conventions:
 > 3. Service orchestration dynamically spawns tagged instances
 > 4. `monitor.pl` discovers and tracks active runtime state automatically
 >
-> ```bash
+> ```ksh
 > for iface in $(get_tn_interfaces); do
 >     spawn_instance "snort" "$iface" \
 >         --mode "$(get_role "$iface")"
