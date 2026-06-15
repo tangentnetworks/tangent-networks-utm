@@ -503,7 +503,7 @@ warn "Do NOT delete or overwrite: $LOGFILE"
 echo ""
 
 if [ "$(id -u)" -ne 0 ]; then
-  err "Must run as root: doas ksh $0"
+  err "Must run as root: ksh $0"
   exit 1
 fi
 
