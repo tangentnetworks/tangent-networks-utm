@@ -22,7 +22,7 @@
 #   master orchestrator TN_UTM_INSTALLER.sh.
 #
 # USAGE:
-#   doas ksh TN_UTM_UNINSTALLER.sh
+#   ksh TN_UTM_UNINSTALLER.sh
 #
 #   Must be run as root from the installer directory (the same directory
 #   that contains the four installer scripts and net-backup/).
@@ -223,7 +223,7 @@ confirm() {
 print_header "TN_UTM_UNINSTALLER v1.2.0"
 log "Uninstall log: ${UNINSTALL_LOG}"
 
-[ "$(id -u)" -ne 0 ] && die "Must run as root: doas ksh $0"
+[ "$(id -u)" -ne 0 ] && die "Must run as root: ksh $0"
 [ "$(uname -s)" != "OpenBSD" ] && die "OpenBSD only"
 
 # =============================================================================
