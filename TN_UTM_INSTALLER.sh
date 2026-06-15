@@ -19,7 +19,7 @@
 #   Stage 3 is executed as a child process (see EXECUTION STRATEGY below).
 #
 # USAGE:
-#   doas ksh TN_UTM_INSTALLER.sh
+#   ksh TN_UTM_INSTALLER.sh
 #
 #   Must be run as root from the directory that contains all four child
 #   scripts.  The installer will refuse to start otherwise.
@@ -125,10 +125,10 @@
 # RESUMING A FAILED INSTALL:
 #   This script has no checkpoint system of its own.  On failure, re-run
 #   the specific child script directly from the same directory:
-#     doas ksh TN_NET_SET.sh
-#     doas ksh TN_SUBSTITUTE.sh
-#     doas ksh TN_PKG_INSTALL.sh    (has its own phase checkpoint system)
-#     doas ksh TN_CHROOT_SETUP.sh   (idempotent, safe to re-run)
+#     ksh TN_NET_SET.sh
+#     ksh TN_SUBSTITUTE.sh
+#     ksh TN_PKG_INSTALL.sh    (has its own phase checkpoint system)
+#     ksh TN_CHROOT_SETUP.sh   (idempotent, safe to re-run)
 #
 #   TN_PERL_TRACER.pl is not run directly -- it is invoked automatically
 #   by TN_CHROOT_SETUP.sh at Stage 4 Step 3.  It scans the live CGI tree
@@ -212,7 +212,7 @@ run_stage_exec() {
 log "TN_UTM_INSTALLER started."
 log "Master log: ${MASTER_LOG}"
 
-[ "$(id -u)" -ne 0 ] && die "Must run as root: doas ksh $0"
+[ "$(id -u)" -ne 0 ] && die "Must run as root: ksh $0"
 [ "$(uname -s)" = "OpenBSD" ] || die "OpenBSD only"
 
 for _s in TN_NET_SET.sh TN_SUBSTITUTE.sh TN_PKG_INSTALL.sh TN_CHROOT_SETUP.sh; do
