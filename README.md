@@ -560,7 +560,6 @@ rc.local start order:
 | `/etc/hostname.pflog1` | pflog1 interface | Must contain `up` -- if missing, all traffic logging is dark |
 | `/etc/rc.conf.local` | Base daemon flags | `resolvd_flags=NO`, `dhcpd_flags=vio1` |
 | `/etc/mygate` | IPv4 default gateway | |
-| `/etc/mygate6` | IPv6 default gateway | |
 | `/var/db/snortsentry.state` | snortsentry block state | Persists across reboots |
 | `/var/db/dhcpd.leases` | DHCP lease ground truth | More reliable than WebUI in first minute after boot |
 
