@@ -55,11 +55,11 @@ This is not a wrapper around an existing firewall distribution. It is a ground-u
 
 | System Dashboard | Proxy & Content Filtering |
 | :---: | :---: |
-| ![Dashboard Layout](./Screenshots/01_Screenshot_20260620_091126.png) <br> *Real-time traffic accounting and interface states* | ![Proxy Management](./Screenshots/04-Screenshot_20260621_214048.png) <br> *Deep URL filtering and Squid/E2guardian rules* |
+| ![Dashboard Layout](./Screenshots/01-db.png) <br> *Real-time traffic accounting and interface states* | ![Service Management](./Screenshots/10-services.png) <br> *Service Management* |
 
 | Packet Filter Rules Engine | Network Topology Configuration |
 | :---: | :---: |
-| ![PF Configuration](./Screenshots/25-pf.png) <br> *Deterministic anchor orchestration rules* | ![Interfaces Setup](./Screenshots/03-Screenshot_20260621_211228.png) <br> *Dual-stack IPv4/IPv6 boundary assignments* |
+| ![PF Configuration](./Screenshots/25-pf.png) <br> *Deterministic anchor orchestration rules* | ![FIM](./Screenshots/03-Screenshot_20260621_211228.png) <br> *File Integrity Manager* |
 
 ---
 
