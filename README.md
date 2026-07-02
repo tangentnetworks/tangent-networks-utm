@@ -49,6 +49,36 @@ This is not a wrapper around an existing firewall distribution. It is a ground-u
 
 ---
 
+## 📸 User Interface Preview
+
+> **Note:** Tangent Networks UTM features a fully integrated, zero-dependency management interface. The interface is completely responsive, self-contained, and runs entirely without external cloud dependencies, metrics tracking, or third-party telemetries.
+
+| System Dashboard | Proxy & Content Filtering |
+| :---: | :---: |
+| ![Dashboard Layout](./screenshots/01_Screenshot_20260620_091126.png) <br> *Real-time traffic accounting and interface states* | ![Proxy Management](./screenshots/04-Screenshot_20260621_214048.png) <br> *Deep URL filtering and Squid/E2guardian rules* |
+
+| Packet Filter Rules Engine | Network Topology Configuration |
+| :---: | :---: |
+| ![PF Configuration](./screenshots/25-pf.png) <br> *Deterministic anchor orchestration rules* | ![Interfaces Setup](./screenshots/03-Screenshot_20260621_211228.png) <br> *Dual-stack IPv4/IPv6 boundary assignments* |
+
+---
+
+
+## 🌟 What Sets Tangent Networks Apart?
+
+Unlike standard commercial or open-source firewall distributions that rely on complex, monolithic system overlays, mandatory cloud check-ins, or bloated PHP web shells, Tangent Networks UTM runs directly on top of a **pristine, stock OpenBSD installation**. 
+
+### 1. Deterministic System Uninstaller
+Virtually no security vendor provides an uninstaller because they want total vendor lock-in. Tangent Networks includes a rigorous, compliance-grade uninstaller script. It steps backward through every sentinel gate, cleanly dismounts processing spaces, and purges every configuration modification—handing you back a pristine, untouched OpenBSD base installation.
+
+### 2. Lockout-Proof Packet Filter Templates
+Modifying live firewall rules over an SSH terminal can result in unexpected dropouts and permanent administrative lockouts. Tangent Networks utilizes an immutable core `pf.conf` template. Dynamic rules are isolated to dedicated, sandboxed **anchors** managed by a custom Directed Acyclic Graph (DAG) state verification engine. If a broken syntax configuration is introduced, your baseline operational plumbing remains completely unaffected.
+
+### 3. Integrated Perl WAF
+The entire administration UI is actively defended at the server runtime boundary. `TNWAF.pm` runs a custom Web Application Firewall directly inside the privilege-separated web container. It actively sanitizes inputs under strict Perl Taint mode (`-T`) and enforces compile-time **Subresource Integrity (SRI)**. If an attacker tampers with a single byte of a static JavaScript asset on disk, the WAF catches the checksum shift instantly, locks execution, and logs an `SRI_TAMPER` fatal exception.
+
+---
+
 ## Table of Contents
 
 - [Platform Overview](#platform-overview)
