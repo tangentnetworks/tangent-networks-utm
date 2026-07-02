@@ -53,13 +53,13 @@ This is not a wrapper around an existing firewall distribution. It is a ground-u
 
 > **Note:** Tangent Networks UTM features a fully integrated, zero-dependency management interface. The interface is completely responsive, self-contained, and runs entirely without external cloud dependencies, metrics tracking, or third-party telemetries.
 
-| System Dashboard | Proxy & Content Filtering |
+| System Dashboard | Service Managament |
 | :---: | :---: |
 | ![Dashboard Layout](./Screenshots/01-db.png) <br> *Real-time traffic accounting and interface states* | ![Service Management](./Screenshots/10-services.png) <br> *Service Management* |
 
-| Packet Filter Rules Engine | Network Topology Configuration |
+| Packet Filter Rules Engine | FILE INTEGRITY MONITORING |
 | :---: | :---: |
-| ![PF Configuration](./Screenshots/25-pf.png) <br> *Deterministic anchor orchestration rules* | ![FIM](./Screenshots/32-fim.png) <br> *File Integrity Manager* |
+| ![PF Configuration](./Screenshots/25-pf.png) <br> *Deterministic anchor orchestration rules* | ![FIM](./Screenshots/32-fim.png) <br> *File Integrity Monitoring* |
 
 ---
 
