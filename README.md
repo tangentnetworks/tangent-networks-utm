@@ -59,7 +59,7 @@ This is not a wrapper around an existing firewall distribution. It is a ground-u
 
 | Packet Filter Rules Engine | Network Topology Configuration |
 | :---: | :---: |
-| ![PF Configuration](./Screenshots/25-pf.png) <br> *Deterministic anchor orchestration rules* | ![FIM](./Screenshots/03-Screenshot_20260621_211228.png) <br> *File Integrity Manager* |
+| ![PF Configuration](./Screenshots/25-pf.png) <br> *Deterministic anchor orchestration rules* | ![FIM](./Screenshots/32-fim.png) <br> *File Integrity Manager* |
 
 ---
 
