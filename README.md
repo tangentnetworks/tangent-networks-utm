@@ -57,7 +57,7 @@ This is not a wrapper around an existing firewall distribution. It is a ground-u
 | :---: | :---: |
 | ![Dashboard Layout](./Screenshots/01-db.png) <br> *Real-time traffic accounting and interface states* | ![Service Management](./Screenshots/10-services.png) <br> *Service Management* |
 
-| Packet Filter Rules Engine | FILE INTEGRITY MONITORING |
+| Packet Filter Rules Engine | File Integrity Monitoring |
 | :---: | :---: |
 | ![PF Configuration](./Screenshots/25-pf.png) <br> *Deterministic anchor orchestration rules* | ![FIM](./Screenshots/32-fim.png) <br> *File Integrity Monitoring* |
 
